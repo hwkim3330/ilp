@@ -3,650 +3,465 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TSN TAS ILP Scheduler Visualization</title>
+    <title>TSN TAS ILP Scheduling Example</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #eee;
             min-height: 100vh;
             padding: 20px;
         }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
-            color: #00d4ff;
-            font-size: 2em;
-        }
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #00d4ff; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.9em; }
         .card {
             background: rgba(255,255,255,0.05);
             border-radius: 15px;
             padding: 20px;
+            margin-bottom: 20px;
             border: 1px solid rgba(255,255,255,0.1);
         }
         .card h2 {
             color: #00d4ff;
             margin-bottom: 15px;
-            font-size: 1.2em;
+            font-size: 1.1em;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 10px;
         }
-        .param-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+        /* ILP Section */
+        .ilp-box {
+            background: #0a0a1a;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.8;
         }
-        .param {
-            background: rgba(0,212,255,0.1);
-            padding: 12px;
-            border-radius: 8px;
-        }
-        .param label {
-            display: block;
-            font-size: 0.85em;
-            color: #888;
-            margin-bottom: 5px;
-        }
-        .param input {
-            width: 100%;
-            padding: 8px;
-            border: none;
-            border-radius: 5px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            font-size: 1em;
-        }
-        .param .value {
-            font-size: 1.2em;
-            color: #00d4ff;
-            font-weight: bold;
-        }
-        .param .unit {
-            font-size: 0.8em;
-            color: #888;
-        }
-        button {
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            color: #fff;
-            font-size: 1em;
-            cursor: pointer;
-            margin-top: 15px;
-            width: 100%;
-            transition: transform 0.2s;
-        }
-        button:hover {
-            transform: scale(1.02);
-        }
-        .tas-timeline {
+        .obj { color: #ff6b6b; }
+        .constraint { color: #4ecdc4; }
+        .var { color: #ffd93d; }
+        .comment { color: #666; }
+
+        /* Timeline */
+        .timeline {
             background: #0a0a1a;
             border-radius: 10px;
             padding: 20px;
             overflow-x: auto;
         }
-        .timeline-header {
+        .time-axis {
             display: flex;
-            margin-bottom: 10px;
-            padding-left: 80px;
+            margin-left: 100px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
         }
-        .time-marker {
+        .time-tick {
             flex: 1;
             text-align: center;
             font-size: 0.75em;
             color: #666;
         }
-        .queue-row {
+        .flow-row {
             display: flex;
             align-items: center;
-            margin-bottom: 5px;
+            margin: 8px 0;
         }
-        .queue-label {
-            width: 80px;
+        .flow-label {
+            width: 100px;
             font-size: 0.85em;
             color: #888;
         }
-        .queue-slots {
+        .flow-bar-container {
             flex: 1;
-            display: flex;
-            height: 30px;
-            background: rgba(255,255,255,0.05);
+            height: 35px;
+            background: rgba(255,255,255,0.03);
             border-radius: 5px;
-            overflow: hidden;
+            position: relative;
         }
-        .slot {
+        .flow-bar {
+            position: absolute;
             height: 100%;
+            border-radius: 5px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.7em;
+            font-size: 0.75em;
+            color: #fff;
             transition: all 0.3s;
         }
-        .slot.active {
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
-        }
-        .slot.tsn {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
-        }
-        .slot.be {
-            background: linear-gradient(135deg, #4ecdc4, #44a08d);
-        }
-        .slot:hover {
-            filter: brightness(1.2);
-        }
-        .ilp-result {
-            background: rgba(0,212,255,0.05);
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 15px;
-        }
-        .ilp-equation {
-            font-family: 'Courier New', monospace;
-            background: #0a0a1a;
-            padding: 15px;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-size: 0.9em;
-            line-height: 1.8;
-        }
-        .highlight {
-            color: #00d4ff;
-        }
-        .constraint {
-            color: #ff6b6b;
-        }
-        .variable {
-            color: #4ecdc4;
-        }
-        .legend {
-            display: flex;
-            gap: 20px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85em;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-        }
-        .metrics {
+        .flow-bar:hover { filter: brightness(1.2); transform: scaleY(1.1); }
+        .flow-bar.tsn { background: linear-gradient(90deg, #ff6b6b, #ee5a5a); }
+        .flow-bar.be { background: linear-gradient(90deg, #4ecdc4, #44a08d); }
+        .flow-bar.guard { background: rgba(255,255,255,0.1); }
+
+        /* Results */
+        .result-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
-            margin-top: 15px;
         }
-        .metric {
+        .result-item {
             text-align: center;
             padding: 15px;
-            background: rgba(255,255,255,0.05);
+            background: rgba(0,212,255,0.1);
             border-radius: 10px;
         }
-        .metric .value {
-            font-size: 1.8em;
+        .result-item .value {
+            font-size: 1.5em;
             color: #00d4ff;
             font-weight: bold;
         }
-        .metric .label {
+        .result-item .label {
             font-size: 0.8em;
             color: #888;
             margin-top: 5px;
         }
-        .flow-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        .flow-table th, .flow-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .flow-table th {
-            color: #00d4ff;
-            font-weight: normal;
-            font-size: 0.85em;
-        }
-        .flow-table tr:hover {
-            background: rgba(255,255,255,0.05);
-        }
-        .priority-7 {
-            color: #ff6b6b;
-            font-weight: bold;
-        }
-        .status-scheduled {
-            color: #4ecdc4;
-        }
-        canvas {
-            max-height: 300px;
-        }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { color: #00d4ff; font-weight: normal; font-size: 0.85em; }
+        .tsn-priority { color: #ff6b6b; font-weight: bold; }
+        .check { color: #4ecdc4; }
+
+        /* Legend */
+        .legend { display: flex; gap: 20px; margin-top: 15px; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; }
+
+        canvas { max-height: 250px; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>TSN TAS ILP Scheduler</h1>
-        <p class="subtitle">Time-Aware Shaper Gate Control List Optimization using Integer Linear Programming</p>
+        <h1>TSN TAS ILP Scheduling</h1>
+        <p class="subtitle">Time-Aware Shaper를 위한 Integer Linear Programming 스케줄링 예제</p>
+
+        <!-- Problem Definition -->
+        <div class="card">
+            <h2>📋 Problem: 4개의 Flow를 1ms Cycle에 스케줄링</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flow</th>
+                        <th>Priority</th>
+                        <th>Payload</th>
+                        <th>Deadline</th>
+                        <th>Period</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>f₁</td>
+                        <td class="tsn-priority">7 (TSN)</td>
+                        <td>1024 B</td>
+                        <td>500 µs</td>
+                        <td>1000 µs</td>
+                        <td>Control</td>
+                    </tr>
+                    <tr>
+                        <td>f₂</td>
+                        <td class="tsn-priority">7 (TSN)</td>
+                        <td>512 B</td>
+                        <td>300 µs</td>
+                        <td>1000 µs</td>
+                        <td>Sensor</td>
+                    </tr>
+                    <tr>
+                        <td>f₃</td>
+                        <td>3</td>
+                        <td>1500 B</td>
+                        <td>-</td>
+                        <td>1000 µs</td>
+                        <td>Video</td>
+                    </tr>
+                    <tr>
+                        <td>f₄</td>
+                        <td>0</td>
+                        <td>256 B</td>
+                        <td>-</td>
+                        <td>1000 µs</td>
+                        <td>Best Effort</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="margin-top: 15px; color: #888; font-size: 0.85em;">
+                Link Speed: 1 Gbps | Cycle Time: 1000 µs | Guard Band: 12.3 µs (Max Frame)
+            </p>
+        </div>
 
         <div class="grid">
-            <!-- QoS Parameters -->
-            <div class="card">
-                <h2>QoS Parameters (Time-Sensitive Topic)</h2>
-                <div class="param-grid">
-                    <div class="param">
-                        <label>LatencyBudgetQoS</label>
-                        <input type="number" id="latencyBudget" value="500">
-                        <span class="unit">µs</span>
-                    </div>
-                    <div class="param">
-                        <label>TransportPriorityQoS</label>
-                        <input type="number" id="transportPriority" value="7" min="0" max="7">
-                    </div>
-                    <div class="param">
-                        <label>PayloadQoS</label>
-                        <input type="number" id="payload" value="1024">
-                        <span class="unit">Bytes</span>
-                    </div>
-                    <div class="param">
-                        <label>Link Speed</label>
-                        <input type="number" id="linkSpeed" value="1000">
-                        <span class="unit">Mbps</span>
-                    </div>
-                </div>
-                <div class="param-grid" style="margin-top: 10px;">
-                    <div class="param">
-                        <label>TimeAwareQoS - Earliest</label>
-                        <input type="number" id="earliest" value="0">
-                        <span class="unit">µs</span>
-                    </div>
-                    <div class="param">
-                        <label>TimeAwareQoS - Latest</label>
-                        <input type="number" id="latest" value="1000">
-                        <span class="unit">µs</span>
-                    </div>
-                    <div class="param">
-                        <label>TimeAwareQoS - Jitter</label>
-                        <input type="number" id="jitter" value="100">
-                        <span class="unit">µs</span>
-                    </div>
-                    <div class="param">
-                        <label>Cycle Time</label>
-                        <input type="number" id="cycleTime" value="1000">
-                        <span class="unit">µs</span>
-                    </div>
-                </div>
-                <button onclick="calculateILP()">Calculate ILP Schedule</button>
-            </div>
-
             <!-- ILP Formulation -->
             <div class="card">
-                <h2>ILP Formulation</h2>
-                <div class="ilp-equation" id="ilpFormulation">
-                    <div><span class="highlight">Minimize:</span> Σ (slot_end[i] - slot_start[i]) for BE traffic</div>
+                <h2>📐 ILP Formulation</h2>
+                <div class="ilp-box">
+                    <div class="comment">/* Decision Variables */</div>
+                    <div><span class="var">s[i]</span> = start time of flow i</div>
+                    <div><span class="var">x[i,j]</span> ∈ {0,1} = flow i before j</div>
                     <br>
-                    <div><span class="highlight">Subject to:</span></div>
-                    <div class="constraint">  ∀ TSN flow f:</div>
-                    <div>    <span class="variable">tx_time[f]</span> ≥ earliest[f]</div>
-                    <div>    <span class="variable">tx_time[f]</span> + <span class="variable">duration[f]</span> ≤ latest[f]</div>
-                    <div>    <span class="variable">duration[f]</span> = payload[f] / link_speed</div>
+                    <div class="comment">/* Objective: Minimize total latency */</div>
+                    <div><span class="obj">min</span> Σ (s[i] + d[i]) for TSN flows</div>
                     <br>
-                    <div class="constraint">  No overlap constraint:</div>
-                    <div>    <span class="variable">tx_time[i]</span> + <span class="variable">duration[i]</span> ≤ <span class="variable">tx_time[j]</span></div>
-                    <div>    OR <span class="variable">tx_time[j]</span> + <span class="variable">duration[j]</span> ≤ <span class="variable">tx_time[i]</span></div>
+                    <div class="comment">/* Constraints */</div>
+                    <div><span class="constraint">C1:</span> s[i] + d[i] ≤ deadline[i]</div>
+                    <div><span class="constraint">C2:</span> s[i] ≥ 0</div>
+                    <div><span class="constraint">C3:</span> s[i] + d[i] ≤ s[j] + M(1-x[i,j])</div>
+                    <div><span class="constraint">C4:</span> s[j] + d[j] ≤ s[i] + M·x[i,j]</div>
+                    <div><span class="constraint">C5:</span> s[i] + d[i] + guard ≤ cycle</div>
+                </div>
+            </div>
+
+            <!-- Solution -->
+            <div class="card">
+                <h2>✅ ILP Solution</h2>
+                <div class="ilp-box">
+                    <div class="comment">/* Computed Transmission Times */</div>
+                    <div><span class="var">d[f₁]</span> = (1024+38)×8 / 1000 = <span class="obj">8.50 µs</span></div>
+                    <div><span class="var">d[f₂]</span> = (512+38)×8 / 1000 = <span class="obj">4.40 µs</span></div>
+                    <div><span class="var">d[f₃]</span> = (1500+38)×8 / 1000 = <span class="obj">12.30 µs</span></div>
+                    <div><span class="var">d[f₄]</span> = (256+38)×8 / 1000 = <span class="obj">2.35 µs</span></div>
                     <br>
-                    <div class="constraint">  Jitter constraint:</div>
-                    <div>    |<span class="variable">tx_time[f]</span> - <span class="variable">expected[f]</span>| ≤ jitter[f]</div>
+                    <div class="comment">/* Optimal Start Times */</div>
+                    <div><span class="var">s[f₁]</span> = <span class="constraint">0.00 µs</span></div>
+                    <div><span class="var">s[f₂]</span> = <span class="constraint">20.80 µs</span></div>
+                    <div><span class="var">s[f₃]</span> = <span class="constraint">37.50 µs</span></div>
+                    <div><span class="var">s[f₄]</span> = <span class="constraint">62.10 µs</span></div>
+                    <br>
+                    <div class="comment">/* Objective Value */</div>
+                    <div>Total TSN Latency = <span class="obj">33.70 µs</span></div>
                 </div>
             </div>
         </div>
 
-        <!-- TAS Timeline Visualization -->
+        <!-- GCL Timeline -->
         <div class="card">
-            <h2>TAS Gate Control List (GCL) Timeline</h2>
-            <div class="tas-timeline">
-                <div class="timeline-header" id="timelineHeader"></div>
-                <div id="queueRows"></div>
+            <h2>📊 Gate Control List (GCL) Timeline</h2>
+            <div class="timeline">
+                <div class="time-axis">
+                    <div class="time-tick">0</div>
+                    <div class="time-tick">100</div>
+                    <div class="time-tick">200</div>
+                    <div class="time-tick">300</div>
+                    <div class="time-tick">400</div>
+                    <div class="time-tick">500</div>
+                    <div class="time-tick">600</div>
+                    <div class="time-tick">700</div>
+                    <div class="time-tick">800</div>
+                    <div class="time-tick">900</div>
+                    <div class="time-tick">1000 µs</div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="flow-label">f₁ (TSN)</div>
+                    <div class="flow-bar-container">
+                        <div class="flow-bar tsn" style="left: 0%; width: 0.85%;">f₁</div>
+                        <div class="flow-bar guard" style="left: 0.85%; width: 1.23%;"></div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="flow-label">f₂ (TSN)</div>
+                    <div class="flow-bar-container">
+                        <div class="flow-bar tsn" style="left: 2.08%; width: 0.44%;">f₂</div>
+                        <div class="flow-bar guard" style="left: 2.52%; width: 1.23%;"></div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="flow-label">f₃ (Video)</div>
+                    <div class="flow-bar-container">
+                        <div class="flow-bar be" style="left: 3.75%; width: 1.23%;">f₃</div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="flow-label">f₄ (BE)</div>
+                    <div class="flow-bar-container">
+                        <div class="flow-bar be" style="left: 6.21%; width: 0.24%;">f₄</div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="flow-label" style="color: #00d4ff;">Combined</div>
+                    <div class="flow-bar-container" style="height: 45px;">
+                        <div class="flow-bar tsn" style="left: 0%; width: 0.85%; height: 100%;">f₁</div>
+                        <div class="flow-bar guard" style="left: 0.85%; width: 1.23%; height: 100%;"></div>
+                        <div class="flow-bar tsn" style="left: 2.08%; width: 0.44%; height: 100%;">f₂</div>
+                        <div class="flow-bar guard" style="left: 2.52%; width: 1.23%; height: 100%;"></div>
+                        <div class="flow-bar be" style="left: 3.75%; width: 1.23%; height: 100%;">f₃</div>
+                        <div class="flow-bar be" style="left: 6.21%; width: 0.24%; height: 100%;">f₄</div>
+                    </div>
+                </div>
             </div>
             <div class="legend">
                 <div class="legend-item">
-                    <div class="legend-color" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);"></div>
+                    <div class="legend-color" style="background: linear-gradient(90deg, #ff6b6b, #ee5a5a);"></div>
                     <span>TSN Traffic (Priority 7)</span>
                 </div>
                 <div class="legend-item">
-                    <div class="legend-color" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);"></div>
+                    <div class="legend-color" style="background: linear-gradient(90deg, #4ecdc4, #44a08d);"></div>
                     <span>Best Effort Traffic</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: rgba(255,255,255,0.1);"></div>
-                    <span>Guard Band / Idle</span>
+                    <span>Guard Band (12.3 µs)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="card">
+            <h2>📈 Schedule Results</h2>
+            <div class="result-grid">
+                <div class="result-item">
+                    <div class="value">6.45%</div>
+                    <div class="label">Link Utilization</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">2</div>
+                    <div class="label">TSN Slots</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">33.7 µs</div>
+                    <div class="label">Max TSN Latency</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">✓</div>
+                    <div class="label">All Deadlines Met</div>
                 </div>
             </div>
         </div>
 
         <div class="grid">
-            <!-- Scheduled Flows -->
+            <!-- Deadline Check -->
             <div class="card">
-                <h2>Scheduled Flows</h2>
-                <table class="flow-table">
+                <h2>⏱️ Deadline Verification</h2>
+                <table>
                     <thead>
                         <tr>
-                            <th>Flow ID</th>
-                            <th>Priority</th>
-                            <th>Payload</th>
-                            <th>TX Start</th>
-                            <th>TX End</th>
+                            <th>Flow</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Deadline</th>
+                            <th>Slack</th>
                             <th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="flowTable"></tbody>
+                    <tbody>
+                        <tr>
+                            <td>f₁</td>
+                            <td>0.00 µs</td>
+                            <td>8.50 µs</td>
+                            <td>500 µs</td>
+                            <td>491.5 µs</td>
+                            <td class="check">✓ OK</td>
+                        </tr>
+                        <tr>
+                            <td>f₂</td>
+                            <td>20.80 µs</td>
+                            <td>25.20 µs</td>
+                            <td>300 µs</td>
+                            <td>274.8 µs</td>
+                            <td class="check">✓ OK</td>
+                        </tr>
+                        <tr>
+                            <td>f₃</td>
+                            <td>37.50 µs</td>
+                            <td>49.80 µs</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td class="check">✓ BE</td>
+                        </tr>
+                        <tr>
+                            <td>f₄</td>
+                            <td>62.10 µs</td>
+                            <td>64.45 µs</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td class="check">✓ BE</td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
 
-            <!-- Metrics -->
+            <!-- Chart -->
             <div class="card">
-                <h2>Schedule Metrics</h2>
-                <div class="metrics">
-                    <div class="metric">
-                        <div class="value" id="metricUtilization">-</div>
-                        <div class="label">Link Utilization</div>
-                    </div>
-                    <div class="metric">
-                        <div class="value" id="metricTsnSlots">-</div>
-                        <div class="label">TSN Slots</div>
-                    </div>
-                    <div class="metric">
-                        <div class="value" id="metricBeSlots">-</div>
-                        <div class="label">BE Slots</div>
-                    </div>
-                    <div class="metric">
-                        <div class="value" id="metricGuardBand">-</div>
-                        <div class="label">Guard Band</div>
-                    </div>
-                </div>
-                <canvas id="utilizationChart" style="margin-top: 20px;"></canvas>
+                <h2>📉 Latency vs Deadline</h2>
+                <canvas id="latencyChart"></canvas>
             </div>
         </div>
 
-        <!-- Latency Analysis -->
+        <!-- GCL Output -->
         <div class="card">
-            <h2>Latency Analysis</h2>
-            <canvas id="latencyChart"></canvas>
+            <h2>🔧 Generated GCL Configuration</h2>
+            <div class="ilp-box">
+                <div class="comment">/* IEEE 802.1Qbv Gate Control List */</div>
+                <div>cycle_time = <span class="var">1000 µs</span></div>
+                <div>base_time = <span class="var">0</span></div>
+                <br>
+                <div class="comment">/* Gate Control Entries */</div>
+                <div>GCE[0]: gate=<span class="obj">10000000</span> time=<span class="var">8.50 µs</span>  <span class="comment">// Q7 open (f₁)</span></div>
+                <div>GCE[1]: gate=<span class="obj">00000000</span> time=<span class="var">12.30 µs</span> <span class="comment">// Guard band</span></div>
+                <div>GCE[2]: gate=<span class="obj">10000000</span> time=<span class="var">4.40 µs</span>  <span class="comment">// Q7 open (f₂)</span></div>
+                <div>GCE[3]: gate=<span class="obj">00000000</span> time=<span class="var">12.30 µs</span> <span class="comment">// Guard band</span></div>
+                <div>GCE[4]: gate=<span class="obj">00001111</span> time=<span class="var">962.50 µs</span> <span class="comment">// Q0-Q3 open (BE)</span></div>
+            </div>
         </div>
     </div>
 
     <script>
-        let utilizationChart = null;
-        let latencyChart = null;
-
-        function calculateTransmissionTime(payloadBytes, linkSpeedMbps) {
-            // Ethernet overhead: 8 preamble + 14 header + 4 FCS + 12 IFG = 38 bytes
-            const overhead = 38;
-            const totalBytes = payloadBytes + overhead;
-            const bits = totalBytes * 8;
-            const timeUs = bits / linkSpeedMbps;
-            return timeUs;
-        }
-
-        function calculateILP() {
-            const latencyBudget = parseFloat(document.getElementById('latencyBudget').value);
-            const priority = parseInt(document.getElementById('transportPriority').value);
-            const payload = parseInt(document.getElementById('payload').value);
-            const linkSpeed = parseInt(document.getElementById('linkSpeed').value);
-            const earliest = parseFloat(document.getElementById('earliest').value);
-            const latest = parseFloat(document.getElementById('latest').value);
-            const jitter = parseFloat(document.getElementById('jitter').value);
-            const cycleTime = parseFloat(document.getElementById('cycleTime').value);
-
-            // Calculate transmission duration
-            const txDuration = calculateTransmissionTime(payload, linkSpeed);
-
-            // Guard band (typically one max frame)
-            const guardBand = calculateTransmissionTime(1522, linkSpeed); // Max Ethernet frame
-
-            // Generate TSN flows (Priority 7 only gets dedicated slots)
-            const flows = [];
-
-            // Main TSN flow
-            flows.push({
-                id: 'TSN-1',
-                priority: 7,
-                payload: payload,
-                txStart: earliest,
-                txEnd: earliest + txDuration,
-                type: 'tsn',
-                status: 'scheduled'
-            });
-
-            // Add some example BE flows
-            const beStart = earliest + txDuration + guardBand;
-            flows.push({
-                id: 'BE-1',
-                priority: 0,
-                payload: 512,
-                txStart: beStart,
-                txEnd: beStart + calculateTransmissionTime(512, linkSpeed),
-                type: 'be',
-                status: 'scheduled'
-            });
-
-            flows.push({
-                id: 'BE-2',
-                priority: 1,
-                payload: 256,
-                txStart: flows[1].txEnd + 5,
-                txEnd: flows[1].txEnd + 5 + calculateTransmissionTime(256, linkSpeed),
-                type: 'be',
-                status: 'scheduled'
-            });
-
-            // Update timeline visualization
-            renderTimeline(flows, cycleTime, guardBand);
-
-            // Update flow table
-            renderFlowTable(flows);
-
-            // Update metrics
-            updateMetrics(flows, cycleTime, guardBand, txDuration);
-
-            // Update charts
-            updateCharts(flows, latencyBudget, cycleTime);
-        }
-
-        function renderTimeline(flows, cycleTime, guardBand) {
-            const header = document.getElementById('timelineHeader');
-            const rows = document.getElementById('queueRows');
-
-            // Time markers
-            const numMarkers = 10;
-            header.innerHTML = '';
-            for (let i = 0; i <= numMarkers; i++) {
-                const time = (cycleTime * i / numMarkers).toFixed(0);
-                header.innerHTML += `<div class="time-marker">${time}µs</div>`;
-            }
-
-            // Queue rows (8 queues for TSN)
-            rows.innerHTML = '';
-            for (let q = 7; q >= 0; q--) {
-                const queueFlows = flows.filter(f => f.priority === q);
-
-                let slotsHtml = '';
-                let currentPos = 0;
-
-                queueFlows.forEach(f => {
-                    // Gap before this flow
-                    if (f.txStart > currentPos) {
-                        const gapWidth = ((f.txStart - currentPos) / cycleTime * 100);
-                        slotsHtml += `<div class="slot" style="width: ${gapWidth}%"></div>`;
-                    }
-
-                    // The flow itself
-                    const flowWidth = ((f.txEnd - f.txStart) / cycleTime * 100);
-                    const flowClass = f.type === 'tsn' ? 'tsn' : 'be';
-                    slotsHtml += `<div class="slot active ${flowClass}" style="width: ${flowWidth}%" title="${f.id}: ${f.txStart.toFixed(1)}-${f.txEnd.toFixed(1)}µs">${f.id}</div>`;
-
-                    currentPos = f.txEnd;
-                });
-
-                // Fill remaining
-                if (currentPos < cycleTime) {
-                    const remainWidth = ((cycleTime - currentPos) / cycleTime * 100);
-                    slotsHtml += `<div class="slot" style="width: ${remainWidth}%"></div>`;
-                }
-
-                rows.innerHTML += `
-                    <div class="queue-row">
-                        <div class="queue-label">Queue ${q} ${q === 7 ? '(TSN)' : ''}</div>
-                        <div class="queue-slots">${slotsHtml}</div>
-                    </div>
-                `;
-            }
-        }
-
-        function renderFlowTable(flows) {
-            const tbody = document.getElementById('flowTable');
-            tbody.innerHTML = flows.map(f => `
-                <tr>
-                    <td>${f.id}</td>
-                    <td class="${f.priority === 7 ? 'priority-7' : ''}">${f.priority}</td>
-                    <td>${f.payload} B</td>
-                    <td>${f.txStart.toFixed(2)} µs</td>
-                    <td>${f.txEnd.toFixed(2)} µs</td>
-                    <td class="status-scheduled">${f.status}</td>
-                </tr>
-            `).join('');
-        }
-
-        function updateMetrics(flows, cycleTime, guardBand, tsnDuration) {
-            const tsnFlows = flows.filter(f => f.type === 'tsn');
-            const beFlows = flows.filter(f => f.type === 'be');
-
-            const tsnTime = tsnFlows.reduce((sum, f) => sum + (f.txEnd - f.txStart), 0);
-            const beTime = beFlows.reduce((sum, f) => sum + (f.txEnd - f.txStart), 0);
-            const totalTime = tsnTime + beTime;
-            const utilization = (totalTime / cycleTime * 100).toFixed(1);
-
-            document.getElementById('metricUtilization').textContent = utilization + '%';
-            document.getElementById('metricTsnSlots').textContent = tsnFlows.length;
-            document.getElementById('metricBeSlots').textContent = beFlows.length;
-            document.getElementById('metricGuardBand').textContent = guardBand.toFixed(1) + 'µs';
-        }
-
-        function updateCharts(flows, latencyBudget, cycleTime) {
-            // Utilization Chart
-            const ctx1 = document.getElementById('utilizationChart').getContext('2d');
-
-            if (utilizationChart) {
-                utilizationChart.destroy();
-            }
-
-            const tsnTime = flows.filter(f => f.type === 'tsn').reduce((sum, f) => sum + (f.txEnd - f.txStart), 0);
-            const beTime = flows.filter(f => f.type === 'be').reduce((sum, f) => sum + (f.txEnd - f.txStart), 0);
-            const idleTime = cycleTime - tsnTime - beTime;
-
-            utilizationChart = new Chart(ctx1, {
-                type: 'doughnut',
-                data: {
-                    labels: ['TSN Traffic', 'BE Traffic', 'Idle/Guard'],
-                    datasets: [{
-                        data: [tsnTime, beTime, idleTime],
-                        backgroundColor: ['#ff6b6b', '#4ecdc4', '#333'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            labels: { color: '#888' }
-                        }
-                    }
-                }
-            });
-
-            // Latency Chart
-            const ctx2 = document.getElementById('latencyChart').getContext('2d');
-
-            if (latencyChart) {
-                latencyChart.destroy();
-            }
-
-            const latencyData = flows.map(f => ({
-                x: f.id,
-                y: f.txEnd - f.txStart
-            }));
-
-            latencyChart = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels: flows.map(f => f.id),
-                    datasets: [
-                        {
-                            label: 'Transmission Time (µs)',
-                            data: flows.map(f => f.txEnd - f.txStart),
-                            backgroundColor: flows.map(f => f.type === 'tsn' ? '#ff6b6b' : '#4ecdc4'),
-                            borderRadius: 5
-                        },
-                        {
-                            label: 'Latency Budget',
-                            data: flows.map(() => latencyBudget),
-                            type: 'line',
-                            borderColor: '#ffcc00',
-                            borderDash: [5, 5],
-                            fill: false,
-                            pointRadius: 0
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.1)' },
-                            ticks: { color: '#888' }
-                        },
-                        x: {
-                            grid: { color: 'rgba(255,255,255,0.1)' },
-                            ticks: { color: '#888' }
-                        }
+        // Latency Chart
+        const ctx = document.getElementById('latencyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['f₁ (TSN)', 'f₂ (TSN)', 'f₃ (Video)', 'f₄ (BE)'],
+                datasets: [
+                    {
+                        label: 'End Time (µs)',
+                        data: [8.5, 25.2, 49.8, 64.45],
+                        backgroundColor: ['#ff6b6b', '#ff6b6b', '#4ecdc4', '#4ecdc4'],
+                        borderRadius: 5
                     },
-                    plugins: {
-                        legend: {
-                            labels: { color: '#888' }
-                        }
+                    {
+                        label: 'Deadline (µs)',
+                        data: [500, 300, null, null],
+                        type: 'line',
+                        borderColor: '#ffd93d',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#ffd93d',
+                        pointRadius: 6,
+                        fill: false
                     }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 550,
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#888' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#888' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#888' } }
                 }
-            });
-        }
-
-        // Initial calculation
-        window.onload = calculateILP;
+            }
+        });
     </script>
 </body>
 </html>
