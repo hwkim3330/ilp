@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TSN/GCL ILP Solver</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     :root {
@@ -191,8 +190,13 @@
     .collapsible { cursor: pointer; user-select: none; }
     .collapsible .arrow { display: inline-block; transition: transform .2s; font-size: 0.7rem; }
     .collapsible.open .arrow { transform: rotate(90deg); }
-    .collapse-body { display: none; margin-top: 12px; }
+    .collapse-body { display: none; margin-top: 12px; overflow: hidden; }
     .collapse-body.show { display: block; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--cyan); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .engine-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; }
+    .engine-badge.loading { background: rgba(249,168,37,.1); color: var(--orange); border: 1px solid rgba(249,168,37,.2); }
+    .engine-badge.ready { background: rgba(105,240,174,.1); color: var(--green); border: 1px solid rgba(105,240,174,.2); }
     textarea {
       width: 100%; min-height: 260px; resize: vertical;
       border: 1px solid var(--border); border-radius: 10px;
@@ -255,7 +259,20 @@
     <div class="header">
       <h1>TSN / GCL ILP Solver</h1>
       <div class="sub">IEEE 802.1Qbv Time-Aware Shaper &mdash; Integer Linear Programming Optimization</div>
-      <div class="badge">3-Switch Triangle Topology &bull; Multi-Flow Scheduling &bull; k-Path Routing</div>
+      <div class="badge" id="badgeInfo">3-Switch Triangle Topology &bull; Multi-Flow Scheduling &bull; k-Path Routing</div>
+      <div style="margin-top:10px;">
+        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK/WASM...</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Input Model &amp; Solver</div>
+      <textarea id="input" style="min-height:200px;"></textarea>
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="sampleBtn">Load Sample</button>
+        <button class="btn btn-primary" id="solveBtn" disabled>Solve ILP</button>
+        <div id="status" style="margin-top:0; margin-left:8px;"><span class="spinner"></span>Initializing GLPK engine...</div>
+      </div>
     </div>
 
     <div class="metrics" id="metricsArea"></div>
@@ -297,21 +314,7 @@
     </div>
 
     <div class="card">
-      <div class="card-title collapsible" onclick="toggleCollapse(this)">
-        <span class="arrow">&#9654;</span> Input Model (JSON)
-      </div>
-      <div class="collapse-body">
-        <textarea id="input"></textarea>
-        <div class="toolbar">
-          <button class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
-          <button class="btn btn-primary" id="solveBtn" onclick="runSolve()">Solve ILP</button>
-        </div>
-        <div id="status"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title collapsible" onclick="toggleCollapse(this)">
+      <div class="card-title collapsible" id="gclJsonToggle">
         <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
       </div>
       <div class="collapse-body">
@@ -322,7 +325,10 @@
 
   <div class="tooltip" id="tooltip"></div>
 
-  <script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script type="module">
+  import GLPK from 'https://cdn.jsdelivr.net/npm/glpk.js@4/dist/index.js';
+
   /* ═══════════════════════════════════════════════
      DATA
   ═══════════════════════════════════════════════ */
@@ -350,6 +356,8 @@
       { id: "f_video_A_loop", priority: 3, payload_bytes: 900, period_us: 1000, deadline_us: null, traffic_type: "video", src: "esA", dst: "s1", k_paths: 4 }
     ]
   };
+
+  let glpk = null; // initialized async below
 
   const DEMO_RESULT = {"method":"ILP(GLPK, Route+Schedule)","objective":89.44,"worst_util_percent":3.381,"packetRows":[{"packet_id":"f_sensor_A_to_C#0","flow_id":"f_sensor_A_to_C","priority":6,"selected_route":0,"release_us":0,"end_us":12.592,"e2e_delay_us":12.592,"deadline_abs_us":180,"slack_us":167.408,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":0,"end_us":2.064,"duration_us":2.064},{"link_id":"l_s1_s3","start_us":4.864,"end_us":6.928,"duration_us":2.064},{"link_id":"l_s3_esC","start_us":9.728,"end_us":11.792,"duration_us":2.064}]},{"packet_id":"f_video_A_loop#0","flow_id":"f_video_A_loop","priority":3,"selected_route":0,"release_us":0,"end_us":16.912,"e2e_delay_us":16.912,"deadline_abs_us":null,"slack_us":null,"status":"BE","hops":[{"link_id":"l_esA_s1","start_us":8.608,"end_us":16.112,"duration_us":7.504}]},{"packet_id":"f_ctrl_A_to_B#0","flow_id":"f_ctrl_A_to_B","priority":7,"selected_route":0,"release_us":0,"end_us":18.096,"e2e_delay_us":18.096,"deadline_abs_us":130,"slack_us":111.904,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":4.064,"end_us":6.608,"duration_us":2.544},{"link_id":"l_s1_s2","start_us":9.408,"end_us":11.952,"duration_us":2.544},{"link_id":"l_s2_esB","start_us":14.752,"end_us":17.296,"duration_us":2.544}]},{"packet_id":"f_ctrl_A_to_B#1","flow_id":"f_ctrl_A_to_B","priority":7,"selected_route":0,"release_us":250,"end_us":264.032,"e2e_delay_us":14.032,"deadline_abs_us":380,"slack_us":115.968,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":250,"end_us":252.544,"duration_us":2.544},{"link_id":"l_s1_s2","start_us":255.344,"end_us":257.888,"duration_us":2.544},{"link_id":"l_s2_esB","start_us":260.688,"end_us":263.232,"duration_us":2.544}]},{"packet_id":"f_sensor_A_to_C#1","flow_id":"f_sensor_A_to_C","priority":6,"selected_route":0,"release_us":500,"end_us":512.592,"e2e_delay_us":12.592,"deadline_abs_us":680,"slack_us":167.408,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":500,"end_us":502.064,"duration_us":2.064},{"link_id":"l_s1_s3","start_us":504.864,"end_us":506.928,"duration_us":2.064},{"link_id":"l_s3_esC","start_us":509.728,"end_us":511.792,"duration_us":2.064}]},{"packet_id":"f_ctrl_A_to_B#2","flow_id":"f_ctrl_A_to_B","priority":7,"selected_route":0,"release_us":500,"end_us":518.096,"e2e_delay_us":18.096,"deadline_abs_us":630,"slack_us":111.904,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":504.064,"end_us":506.608,"duration_us":2.544},{"link_id":"l_s1_s2","start_us":509.408,"end_us":511.952,"duration_us":2.544},{"link_id":"l_s2_esB","start_us":514.752,"end_us":517.296,"duration_us":2.544}]},{"packet_id":"f_ctrl_A_to_B#3","flow_id":"f_ctrl_A_to_B","priority":7,"selected_route":0,"release_us":750,"end_us":764.032,"e2e_delay_us":14.032,"deadline_abs_us":880,"slack_us":115.968,"status":"OK","hops":[{"link_id":"l_esA_s1","start_us":750,"end_us":752.544,"duration_us":2.544},{"link_id":"l_s1_s2","start_us":755.344,"end_us":757.888,"duration_us":2.544},{"link_id":"l_s2_esB","start_us":760.688,"end_us":763.232,"duration_us":2.544}]}],"gcl":{"cycle_time_us":1000,"base_time_us":0,"links":{"l_esA_s1":{"from":"esA","to":"s1","entries":[{"index":0,"gate_mask":"01000000","start_us":0,"end_us":2.064,"duration_us":2.064,"note":"f_sensor_A_to_C#0"},{"index":1,"gate_mask":"00000000","start_us":2.064,"end_us":4.064,"duration_us":2,"note":"guard band"},{"index":2,"gate_mask":"10000000","start_us":4.064,"end_us":6.608,"duration_us":2.544,"note":"f_ctrl_A_to_B#0"},{"index":3,"gate_mask":"00000000","start_us":6.608,"end_us":8.608,"duration_us":2,"note":"guard band"},{"index":4,"gate_mask":"00001000","start_us":8.608,"end_us":16.112,"duration_us":7.504,"note":"f_video_A_loop#0"},{"index":5,"gate_mask":"00001111","start_us":16.112,"end_us":250,"duration_us":233.888,"note":"best-effort gap"},{"index":6,"gate_mask":"10000000","start_us":250,"end_us":252.544,"duration_us":2.544,"note":"f_ctrl_A_to_B#1"},{"index":7,"gate_mask":"00000000","start_us":252.544,"end_us":254.544,"duration_us":2,"note":"guard band"},{"index":8,"gate_mask":"00001111","start_us":254.544,"end_us":500,"duration_us":245.456,"note":"best-effort gap"},{"index":9,"gate_mask":"01000000","start_us":500,"end_us":502.064,"duration_us":2.064,"note":"f_sensor_A_to_C#1"},{"index":10,"gate_mask":"00000000","start_us":502.064,"end_us":504.064,"duration_us":2,"note":"guard band"},{"index":11,"gate_mask":"10000000","start_us":504.064,"end_us":506.608,"duration_us":2.544,"note":"f_ctrl_A_to_B#2"},{"index":12,"gate_mask":"00000000","start_us":506.608,"end_us":508.608,"duration_us":2,"note":"guard band"},{"index":13,"gate_mask":"00001111","start_us":508.608,"end_us":750,"duration_us":241.392,"note":"best-effort gap"},{"index":14,"gate_mask":"10000000","start_us":750,"end_us":752.544,"duration_us":2.544,"note":"f_ctrl_A_to_B#3"},{"index":15,"gate_mask":"00000000","start_us":752.544,"end_us":754.544,"duration_us":2,"note":"guard band"},{"index":16,"gate_mask":"00001111","start_us":754.544,"end_us":1000,"duration_us":245.456,"note":"best-effort remainder"}]},"l_s1_s2":{"from":"s1","to":"s2","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":9.408,"duration_us":9.408,"note":"best-effort gap"},{"index":1,"gate_mask":"10000000","start_us":9.408,"end_us":11.952,"duration_us":2.544,"note":"f_ctrl_A_to_B#0"},{"index":2,"gate_mask":"00000000","start_us":11.952,"end_us":13.952,"duration_us":2,"note":"guard band"},{"index":3,"gate_mask":"00001111","start_us":13.952,"end_us":255.344,"duration_us":241.392,"note":"best-effort gap"},{"index":4,"gate_mask":"10000000","start_us":255.344,"end_us":257.888,"duration_us":2.544,"note":"f_ctrl_A_to_B#1"},{"index":5,"gate_mask":"00000000","start_us":257.888,"end_us":259.888,"duration_us":2,"note":"guard band"},{"index":6,"gate_mask":"00001111","start_us":259.888,"end_us":509.408,"duration_us":249.52,"note":"best-effort gap"},{"index":7,"gate_mask":"10000000","start_us":509.408,"end_us":511.952,"duration_us":2.544,"note":"f_ctrl_A_to_B#2"},{"index":8,"gate_mask":"00000000","start_us":511.952,"end_us":513.952,"duration_us":2,"note":"guard band"},{"index":9,"gate_mask":"00001111","start_us":513.952,"end_us":755.344,"duration_us":241.392,"note":"best-effort gap"},{"index":10,"gate_mask":"10000000","start_us":755.344,"end_us":757.888,"duration_us":2.544,"note":"f_ctrl_A_to_B#3"},{"index":11,"gate_mask":"00000000","start_us":757.888,"end_us":759.888,"duration_us":2,"note":"guard band"},{"index":12,"gate_mask":"00001111","start_us":759.888,"end_us":1000,"duration_us":240.112,"note":"best-effort remainder"}]},"l_s2_s1":{"from":"s2","to":"s1","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":1000,"duration_us":1000,"note":"best-effort remainder"}]},"l_s2_s3":{"from":"s2","to":"s3","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":1000,"duration_us":1000,"note":"best-effort remainder"}]},"l_s3_s2":{"from":"s3","to":"s2","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":1000,"duration_us":1000,"note":"best-effort remainder"}]},"l_s3_s1":{"from":"s3","to":"s1","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":1000,"duration_us":1000,"note":"best-effort remainder"}]},"l_s1_s3":{"from":"s1","to":"s3","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":4.864,"duration_us":4.864,"note":"best-effort gap"},{"index":1,"gate_mask":"01000000","start_us":4.864,"end_us":6.928,"duration_us":2.064,"note":"f_sensor_A_to_C#0"},{"index":2,"gate_mask":"00000000","start_us":6.928,"end_us":8.928,"duration_us":2,"note":"guard band"},{"index":3,"gate_mask":"00001111","start_us":8.928,"end_us":504.864,"duration_us":495.936,"note":"best-effort gap"},{"index":4,"gate_mask":"01000000","start_us":504.864,"end_us":506.928,"duration_us":2.064,"note":"f_sensor_A_to_C#1"},{"index":5,"gate_mask":"00000000","start_us":506.928,"end_us":508.928,"duration_us":2,"note":"guard band"},{"index":6,"gate_mask":"00001111","start_us":508.928,"end_us":1000,"duration_us":491.072,"note":"best-effort remainder"}]},"l_s2_esB":{"from":"s2","to":"esB","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":14.752,"duration_us":14.752,"note":"best-effort gap"},{"index":1,"gate_mask":"10000000","start_us":14.752,"end_us":17.296,"duration_us":2.544,"note":"f_ctrl_A_to_B#0"},{"index":2,"gate_mask":"00000000","start_us":17.296,"end_us":19.296,"duration_us":2,"note":"guard band"},{"index":3,"gate_mask":"00001111","start_us":19.296,"end_us":260.688,"duration_us":241.392,"note":"best-effort gap"},{"index":4,"gate_mask":"10000000","start_us":260.688,"end_us":263.232,"duration_us":2.544,"note":"f_ctrl_A_to_B#1"},{"index":5,"gate_mask":"00000000","start_us":263.232,"end_us":265.232,"duration_us":2,"note":"guard band"},{"index":6,"gate_mask":"00001111","start_us":265.232,"end_us":514.752,"duration_us":249.52,"note":"best-effort gap"},{"index":7,"gate_mask":"10000000","start_us":514.752,"end_us":517.296,"duration_us":2.544,"note":"f_ctrl_A_to_B#2"},{"index":8,"gate_mask":"00000000","start_us":517.296,"end_us":519.296,"duration_us":2,"note":"guard band"},{"index":9,"gate_mask":"00001111","start_us":519.296,"end_us":760.688,"duration_us":241.392,"note":"best-effort gap"},{"index":10,"gate_mask":"10000000","start_us":760.688,"end_us":763.232,"duration_us":2.544,"note":"f_ctrl_A_to_B#3"},{"index":11,"gate_mask":"00000000","start_us":763.232,"end_us":765.232,"duration_us":2,"note":"guard band"},{"index":12,"gate_mask":"00001111","start_us":765.232,"end_us":1000,"duration_us":234.768,"note":"best-effort remainder"}]},"l_s3_esC":{"from":"s3","to":"esC","entries":[{"index":0,"gate_mask":"00001111","start_us":0,"end_us":9.728,"duration_us":9.728,"note":"best-effort gap"},{"index":1,"gate_mask":"01000000","start_us":9.728,"end_us":11.792,"duration_us":2.064,"note":"f_sensor_A_to_C#0"},{"index":2,"gate_mask":"00000000","start_us":11.792,"end_us":13.792,"duration_us":2,"note":"guard band"},{"index":3,"gate_mask":"00001111","start_us":13.792,"end_us":509.728,"duration_us":495.936,"note":"best-effort gap"},{"index":4,"gate_mask":"01000000","start_us":509.728,"end_us":511.792,"duration_us":2.064,"note":"f_sensor_A_to_C#1"},{"index":5,"gate_mask":"00000000","start_us":511.792,"end_us":513.792,"duration_us":2,"note":"guard band"},{"index":6,"gate_mask":"00001111","start_us":513.792,"end_us":1000,"duration_us":486.208,"note":"best-effort remainder"}]}}},"stats":{"constraints":433,"variables":205,"binaries":162,"status":5},"runtime_ms":1854};
 
@@ -397,11 +405,10 @@
   /* ═══════════════════════════════════════════════
      COLLAPSIBLE
   ═══════════════════════════════════════════════ */
-  function toggleCollapse(el) {
-    el.classList.toggle("open");
-    const body = el.parentElement.querySelector(".collapse-body");
-    body.classList.toggle("show");
-  }
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
 
   /* ═══════════════════════════════════════════════
      METRICS
@@ -1028,125 +1035,200 @@
   }
 
   /* ═══════════════════════════════════════════════
-     SOLVER WORKER (Client-side GLPK/WASM)
+     ILP SOLVER (glpk.js async — WASM + internal Worker)
   ═══════════════════════════════════════════════ */
-  let solverWorker = null;
-  let solverReady = false;
-  let solveCallbacks = {};
-  let solveIdCounter = 0;
 
-  function initSolverWorker() {
-    try {
-      solverWorker = new Worker('solver-worker.js');
-      solverWorker.onmessage = function(evt) {
-        const msg = evt.data;
-        if (msg.type === 'ready') {
-          solverReady = true;
-          console.log('GLPK/WASM solver ready, version:', msg.version);
-          const badge = document.querySelector('.badge');
-          if (badge) badge.innerHTML += ' &bull; <span style="color:var(--green)">GLPK v' + msg.version + ' (WASM)</span>';
-        } else if (msg.type === 'error') {
-          console.warn('Solver worker error:', msg.error);
-        } else if (msg.type === 'result') {
-          const cb = solveCallbacks[msg.id];
-          if (cb) {
-            delete solveCallbacks[msg.id];
-            cb(msg);
-          }
-        }
-      };
-      solverWorker.onerror = function(e) {
-        console.warn('Worker error:', e.message);
-      };
-    } catch (e) {
-      console.warn('Worker init failed:', e);
-    }
-  }
+  function round3(v) { return Math.round(v * 1000) / 1000; }
+  function txTimeUs(bytes, mbps) { return ((bytes + 38) * 8) / mbps; }
+  function isTsn(pri, dl) { return pri >= 6 || dl !== null; }
+  function gateMask(p) { const b = Array(8).fill('0'); b[7 - Math.max(0, Math.min(7, p))] = '1'; return b.join(''); }
 
-  function solveWithWorker(model) {
-    return new Promise((resolve, reject) => {
-      if (!solverWorker || !solverReady) {
-        reject(new Error('Solver not ready yet. Wait for GLPK/WASM to load.'));
-        return;
+  function generateKPaths(adj, src, dst, k, maxD) {
+    const found = [];
+    (function dfs(n, d, vis, path) {
+      if (found.length >= 2000 || d > maxD) return;
+      if (n === dst) { found.push(path.slice()); return; }
+      for (const e of (adj.get(n) || [])) {
+        if (vis.has(e.to)) continue;
+        vis.add(e.to); path.push(e.lid);
+        dfs(e.to, d + 1, vis, path);
+        path.pop(); vis.delete(e.to);
       }
-      const id = ++solveIdCounter;
-      solveCallbacks[id] = function(msg) {
-        if (msg.ok) resolve(msg.result);
-        else reject(new Error(msg.error));
-      };
-      solverWorker.postMessage({ type: 'solve', id: id, model: model });
-    });
+    })(src, 0, new Set([src]), []);
+    found.sort((a, b) => a.length - b.length || a.join('|').localeCompare(b.join('|')));
+    const u = [], s = new Set();
+    for (const p of found) { const k2 = p.join('>'); if (!s.has(k2)) { s.add(k2); u.push(p); } if (u.length >= k) break; }
+    return u;
   }
 
-  initSolverWorker();
+  function expandPackets(model) {
+    const lm = new Map(model.links.map(l => [l.id, l]));
+    const adj = new Map();
+    for (const l of model.links) { if (!adj.has(l.from)) adj.set(l.from, []); adj.get(l.from).push({ to: l.to, lid: l.id }); }
+    const pkts = [];
+    for (const f of model.flows) {
+      let cp = f.candidate_paths || (f.path ? [f.path] : null);
+      if (!cp && f.src && f.dst) {
+        cp = generateKPaths(adj, f.src, f.dst, Math.max(1, f.k_paths || 2), model.nodes.length + 2);
+        if (!cp.length) throw new Error(`No route: ${f.src}->${f.dst}`);
+      }
+      const reps = Math.round(model.cycle_time_us / f.period_us);
+      for (let k = 0; k < reps; k++) {
+        const rel = k * f.period_us;
+        pkts.push({
+          pid: `${f.id}#${k}`, fid: f.id, pri: f.priority, tt: f.traffic_type,
+          rel, dl: f.deadline_us == null ? null : rel + f.deadline_us,
+          tsn: isTsn(f.priority, f.deadline_us),
+          routes: cp.map((pl, ri) => ({ ri, hops: pl.map(lid => ({ lid, tx: txTimeUs(f.payload_bytes, lm.get(lid).rate_mbps), pd: lm.get(lid).prop_delay_us })) }))
+        });
+      }
+    }
+    return pkts;
+  }
+
+  async function solveILP(model) {
+    if (!glpk) throw new Error('GLPK not ready');
+    if (!model.processing_delay_us) model.processing_delay_us = 2;
+    if (!model.guard_band_us) model.guard_band_us = 2;
+
+    const pkts = expandPackets(model);
+    if (pkts.length > 70) throw new Error(`Too many packets (${pkts.length}). Reduce flows or increase period.`);
+
+    const vars = new Set(), sub = [], bins = [], obj = [];
+    let ci = 0;
+    const M = model.cycle_time_us + model.guard_band_us + model.processing_delay_us + 100;
+    const zv = (p, r) => `z_${p}_${r}`, sv = (p, r, h) => `s_${p}_${r}_${h}`;
+    const yv = (l, a, b) => `y_${l.replace(/[^a-zA-Z0-9]/g, '_')}_${a}_${b}`;
+    const av = n => { vars.add(n); return n; };
+    const ac = (pre, terms, bnd) => { sub.push({ name: `${pre}_${ci++}`, vars: terms, bnds: bnd }); };
+    const ops = [];
+
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p], zt = [];
+      for (let r = 0; r < pk.routes.length; r++) {
+        const rt = pk.routes[r], z = av(zv(p, r));
+        bins.push(z); zt.push({ name: z, coef: 1 });
+        for (let h = 0; h < rt.hops.length; h++) {
+          const hp = rt.hops[h], s = av(sv(p, r, h));
+          ac('lb', [{ name: s, coef: 1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: pk.rel - M, ub: 0 });
+          ac('ub', [{ name: s, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: model.cycle_time_us - hp.tx + M });
+          if (h < rt.hops.length - 1) {
+            const sn = av(sv(p, r, h + 1));
+            ac('ch', [{ name: sn, coef: 1 }, { name: s, coef: -1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: hp.tx + hp.pd + model.processing_delay_us - M, ub: 0 });
+          }
+          ops.push({ oi: ops.length, p, r, h, lid: hp.lid, sn: s, zn: z, tx: hp.tx, blk: hp.tx + (pk.tsn ? model.guard_band_us : 0) });
+        }
+        const last = rt.hops.length - 1, sL = av(sv(p, r, last)), lH = rt.hops[last];
+        if (pk.dl != null) ac('dl', [{ name: sL, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: pk.dl - lH.tx - lH.pd + M });
+        if (pk.tsn) { obj.push({ name: sL, coef: 1 }); obj.push({ name: z, coef: lH.tx + lH.pd }); }
+      }
+      ac('sel', zt, { type: glpk.GLP_FX, lb: 1, ub: 1 });
+    }
+
+    for (const lnk of model.links) {
+      const lo = ops.filter(o => o.lid === lnk.id);
+      for (let a = 0; a < lo.length; a++) for (let b = a + 1; b < lo.length; b++) {
+        const oa = lo[a], ob = lo[b];
+        if (oa.p === ob.p && oa.r === ob.r) continue;
+        const y = av(yv(lnk.id, oa.oi, ob.oi)); bins.push(y);
+        ac('na', [{ name: ob.sn, coef: 1 }, { name: oa.sn, coef: -1 }, { name: y, coef: -M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: oa.blk - 3 * M, ub: 0 });
+        ac('nb', [{ name: oa.sn, coef: 1 }, { name: ob.sn, coef: -1 }, { name: y, coef: M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: ob.blk - 2 * M, ub: 0 });
+      }
+    }
+
+    const lp = {
+      name: 'tsn_ilp',
+      objective: { direction: glpk.GLP_MIN, name: 'obj', vars: obj.length ? obj : [{ name: av('dum'), coef: 0 }] },
+      subjectTo: sub, binaries: bins,
+      bounds: Array.from(vars).map(n => ({ name: n, type: glpk.GLP_LO, lb: 0, ub: 0 }))
+    };
+
+    const solved = await glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF, presol: true });
+    if (!solved?.result || ![glpk.GLP_OPT, glpk.GLP_FEAS].includes(solved.result.status))
+      throw new Error('ILP infeasible (status=' + (solved?.result?.status ?? '?') + ')');
+
+    const rv = solved.result.vars;
+
+    // Build result
+    const linkRows = Object.fromEntries(model.links.map(l => [l.id, []]));
+    const pktRows = [];
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p]; let selR = 0, bz = -1;
+      for (let r = 0; r < pk.routes.length; r++) { const v = Number(rv[zv(p, r)] || 0); if (v > bz) { bz = v; selR = r; } }
+      const rt = pk.routes[selR], hops = [];
+      for (let h = 0; h < rt.hops.length; h++) {
+        const hp = rt.hops[h], s = Number(rv[sv(p, selR, h)] || 0), e = s + hp.tx;
+        hops.push({ link_id: hp.lid, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
+        linkRows[hp.lid].push({ type: 'flow', note: pk.pid, priority: pk.pri, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
+        if (pk.tsn) linkRows[hp.lid].push({ type: 'guard', note: 'guard band', priority: pk.pri, start_us: round3(e), end_us: round3(e + model.guard_band_us), duration_us: round3(model.guard_band_us) });
+      }
+      const lH = rt.hops.at(-1), fin = hops.at(-1).end_us + lH.pd, e2e = round3(fin - pk.rel);
+      const ok = pk.dl == null || fin <= pk.dl + 1e-6;
+      pktRows.push({ packet_id: pk.pid, flow_id: pk.fid, priority: pk.pri, selected_route: selR, release_us: round3(pk.rel), end_us: round3(fin), e2e_delay_us: e2e, deadline_abs_us: pk.dl == null ? null : round3(pk.dl), slack_us: pk.dl == null ? null : round3(pk.dl - fin), status: pk.dl == null ? 'BE' : ok ? 'OK' : 'MISS', hops });
+    }
+    pktRows.sort((a, b) => a.end_us - b.end_us);
+
+    const gcl = { cycle_time_us: model.cycle_time_us, base_time_us: 0, links: {} };
+    for (const lnk of model.links) {
+      const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
+      const entries = []; let cur = 0, idx = 0;
+      for (const r of rows) {
+        if (r.start_us > cur) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
+        entries.push({ index: idx++, gate_mask: r.type === 'guard' ? '00000000' : gateMask(r.priority), start_us: r.start_us, end_us: r.end_us, duration_us: r.duration_us, note: r.note });
+        cur = Math.max(cur, r.end_us);
+      }
+      if (cur < model.cycle_time_us) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
+      gcl.links[lnk.id] = { from: lnk.from, to: lnk.to, entries };
+    }
+
+    let worstUtil = 0;
+    for (const lnk of model.links) {
+      let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort')) act += e.duration_us;
+      worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
+    }
+
+    return {
+      method: 'ILP (GLPK v' + (typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?')) + ', WASM)',
+      objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
+      worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl,
+      stats: { constraints: sub.length, variables: vars.size, binaries: bins.length, status: solved.result.status },
+      runtime_ms: Math.round(solved.time * 1000)
+    };
+  }
 
   /* ═══════════════════════════════════════════════
      INPUT / SOLVE
   ═══════════════════════════════════════════════ */
   const inputEl = document.getElementById("input");
   const statusEl = document.getElementById("status");
+  const solveBtn = document.getElementById("solveBtn");
+  const sampleBtn = document.getElementById("sampleBtn");
 
-  function loadSample() {
+  sampleBtn.addEventListener("click", () => {
     inputEl.value = JSON.stringify(SAMPLE, null, 2);
-    statusEl.textContent = "Sample loaded";
-    statusEl.className = "status-ok";
-  }
+    statusEl.textContent = "Sample loaded"; statusEl.className = "status-ok";
+  });
+
+  solveBtn.addEventListener("click", runSolve);
 
   async function runSolve() {
-    const btn = document.getElementById("solveBtn");
     try {
       const model = JSON.parse(inputEl.value);
-      btn.disabled = true;
+      solveBtn.disabled = true;
+      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP...';
       statusEl.className = "";
 
-      // 1) Try client-side GLPK/WASM solver (Web Worker)
-      if (solverReady) {
-        statusEl.innerHTML = 'Solving ILP in browser (GLPK/WASM)... <span style="color:var(--text3)">may take a few seconds</span>';
-        try {
-          const result = await solveWithWorker(model);
-          currentModel = model;
-          currentResult = result;
-          renderAll();
-          statusEl.textContent = `Solved in ${result.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} binaries, ${result.stats.constraints} constraints`;
-          statusEl.className = "status-ok";
-          btn.disabled = false;
-          return;
-        } catch (workerErr) {
-          statusEl.textContent = "Solver error: " + workerErr.message;
-          statusEl.className = "status-err";
-          btn.disabled = false;
-          return;
-        }
-      }
-
-      // 2) Fallback: try server API
-      statusEl.textContent = "WASM solver not loaded. Trying server API...";
-      try {
-        const res = await fetch("/api/solve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(model)
-        });
-        const data = await res.json();
-        if (data.ok) {
-          currentModel = model;
-          currentResult = data.result;
-          renderAll();
-          statusEl.textContent = `Solved via server in ${data.result.runtime_ms}ms | ${data.result.stats.variables} vars`;
-          statusEl.className = "status-ok";
-          btn.disabled = false;
-          return;
-        }
-        throw new Error(data.error);
-      } catch (fetchErr) {
-        statusEl.textContent = "Solver not available. Please wait for WASM to load, or run server.js locally.";
-        statusEl.className = "status-err";
-      }
+      const result = await solveILP(model);
+      currentModel = model;
+      currentResult = result;
+      renderAll();
+      statusEl.textContent = `Solved in ${result.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
+      statusEl.className = "status-ok";
     } catch (e) {
-      statusEl.textContent = "JSON parse error: " + e.message;
+      statusEl.textContent = "Error: " + e.message;
       statusEl.className = "status-err";
     }
-    btn.disabled = false;
+    solveBtn.disabled = false;
   }
 
   /* ═══════════════════════════════════════════════
@@ -1172,6 +1254,30 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(renderAll, 300);
   });
+
+  /* ═══════════════════════════════════════════════
+     INIT GLPK ENGINE & AUTO-SOLVE
+  ═══════════════════════════════════════════════ */
+  (async () => {
+    const badge = document.getElementById("engineBadge");
+    try {
+      glpk = await GLPK();
+      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
+      badge.className = "engine-badge ready";
+      badge.innerHTML = `&#9679; GLPK ${ver} Ready`;
+      solveBtn.disabled = false;
+      statusEl.textContent = "GLPK engine ready. Solving sample model...";
+      statusEl.className = "status-ok";
+      // Auto-solve the sample
+      await runSolve();
+    } catch (e) {
+      badge.className = "engine-badge loading";
+      badge.innerHTML = "&#10007; GLPK Load Failed";
+      statusEl.textContent = "GLPK failed: " + e.message + " — showing pre-computed demo.";
+      statusEl.className = "status-err";
+      solveBtn.disabled = true;
+    }
+  })();
   </script>
 </body>
 </html>
