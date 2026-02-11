@@ -1028,6 +1028,59 @@
   }
 
   /* ═══════════════════════════════════════════════
+     SOLVER WORKER (Client-side GLPK/WASM)
+  ═══════════════════════════════════════════════ */
+  let solverWorker = null;
+  let solverReady = false;
+  let solveCallbacks = {};
+  let solveIdCounter = 0;
+
+  function initSolverWorker() {
+    try {
+      solverWorker = new Worker('solver-worker.js');
+      solverWorker.onmessage = function(evt) {
+        const msg = evt.data;
+        if (msg.type === 'ready') {
+          solverReady = true;
+          console.log('GLPK/WASM solver ready, version:', msg.version);
+          const badge = document.querySelector('.badge');
+          if (badge) badge.innerHTML += ' &bull; <span style="color:var(--green)">GLPK v' + msg.version + ' (WASM)</span>';
+        } else if (msg.type === 'error') {
+          console.warn('Solver worker error:', msg.error);
+        } else if (msg.type === 'result') {
+          const cb = solveCallbacks[msg.id];
+          if (cb) {
+            delete solveCallbacks[msg.id];
+            cb(msg);
+          }
+        }
+      };
+      solverWorker.onerror = function(e) {
+        console.warn('Worker error:', e.message);
+      };
+    } catch (e) {
+      console.warn('Worker init failed:', e);
+    }
+  }
+
+  function solveWithWorker(model) {
+    return new Promise((resolve, reject) => {
+      if (!solverWorker || !solverReady) {
+        reject(new Error('Solver not ready yet. Wait for GLPK/WASM to load.'));
+        return;
+      }
+      const id = ++solveIdCounter;
+      solveCallbacks[id] = function(msg) {
+        if (msg.ok) resolve(msg.result);
+        else reject(new Error(msg.error));
+      };
+      solverWorker.postMessage({ type: 'solve', id: id, model: model });
+    });
+  }
+
+  initSolverWorker();
+
+  /* ═══════════════════════════════════════════════
      INPUT / SOLVE
   ═══════════════════════════════════════════════ */
   const inputEl = document.getElementById("input");
@@ -1044,10 +1097,30 @@
     try {
       const model = JSON.parse(inputEl.value);
       btn.disabled = true;
-      statusEl.textContent = "Solving ILP...";
       statusEl.className = "";
 
-      // Try server API first
+      // 1) Try client-side GLPK/WASM solver (Web Worker)
+      if (solverReady) {
+        statusEl.innerHTML = 'Solving ILP in browser (GLPK/WASM)... <span style="color:var(--text3)">may take a few seconds</span>';
+        try {
+          const result = await solveWithWorker(model);
+          currentModel = model;
+          currentResult = result;
+          renderAll();
+          statusEl.textContent = `Solved in ${result.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} binaries, ${result.stats.constraints} constraints`;
+          statusEl.className = "status-ok";
+          btn.disabled = false;
+          return;
+        } catch (workerErr) {
+          statusEl.textContent = "Solver error: " + workerErr.message;
+          statusEl.className = "status-err";
+          btn.disabled = false;
+          return;
+        }
+      }
+
+      // 2) Fallback: try server API
+      statusEl.textContent = "WASM solver not loaded. Trying server API...";
       try {
         const res = await fetch("/api/solve", {
           method: "POST",
@@ -1059,18 +1132,18 @@
           currentModel = model;
           currentResult = data.result;
           renderAll();
-          statusEl.textContent = `Solved in ${data.result.runtime_ms}ms | ${data.result.stats.variables} vars, ${data.result.stats.binaries} binaries, ${data.result.stats.constraints} constraints`;
+          statusEl.textContent = `Solved via server in ${data.result.runtime_ms}ms | ${data.result.stats.variables} vars`;
           statusEl.className = "status-ok";
           btn.disabled = false;
           return;
         }
         throw new Error(data.error);
       } catch (fetchErr) {
-        statusEl.textContent = "Server unavailable. This is a static demo with pre-computed results.";
+        statusEl.textContent = "Solver not available. Please wait for WASM to load, or run server.js locally.";
         statusEl.className = "status-err";
       }
     } catch (e) {
-      statusEl.textContent = "Error: " + e.message;
+      statusEl.textContent = "JSON parse error: " + e.message;
       statusEl.className = "status-err";
     }
     btn.disabled = false;
