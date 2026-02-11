@@ -54,48 +54,48 @@ export const ROII_MODEL = {
     {
       id: "f_lidar_fl", priority: 7, payload_bytes: 1200,
       period_us: 500, deadline_us: 200,
-      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_lidar_fr", priority: 7, payload_bytes: 1200,
       period_us: 500, deadline_us: 200,
-      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_lidar_fc", priority: 7, payload_bytes: 1200,
       period_us: 500, deadline_us: 200,
-      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_lidar_rc", priority: 7, payload_bytes: 1200,
       period_us: 500, deadline_us: 200,
-      traffic_type: "lidar", src: "LIDAR_RC", dst: "ACU_IT", k_paths: 2
+      traffic_type: "lidar", src: "LIDAR_RC", dst: "ACU_IT", k_paths: 1
     },
     // Radar flows (P6, 256B, period 1000µs, deadline 400µs, 1 pkt/cycle)
     {
       id: "f_radar_fc", priority: 6, payload_bytes: 256,
       period_us: 1000, deadline_us: 400,
-      traffic_type: "radar", src: "RADAR_FC", dst: "ACU_IT", k_paths: 2
+      traffic_type: "radar", src: "RADAR_FC", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_radar_fl", priority: 6, payload_bytes: 256,
       period_us: 1000, deadline_us: 400,
-      traffic_type: "radar", src: "RADAR_FL", dst: "ACU_IT", k_paths: 2
+      traffic_type: "radar", src: "RADAR_FL", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_radar_fr", priority: 6, payload_bytes: 256,
       period_us: 1000, deadline_us: 400,
-      traffic_type: "radar", src: "RADAR_FR", dst: "ACU_IT", k_paths: 2
+      traffic_type: "radar", src: "RADAR_FR", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_radar_rl", priority: 6, payload_bytes: 256,
       period_us: 1000, deadline_us: 400,
-      traffic_type: "radar", src: "RADAR_RL", dst: "ACU_IT", k_paths: 2
+      traffic_type: "radar", src: "RADAR_RL", dst: "ACU_IT", k_paths: 1
     },
     {
       id: "f_radar_rr", priority: 6, payload_bytes: 256,
       period_us: 1000, deadline_us: 400,
-      traffic_type: "radar", src: "RADAR_RR", dst: "ACU_IT", k_paths: 2
+      traffic_type: "radar", src: "RADAR_RR", dst: "ACU_IT", k_paths: 1
     }
   ]
 };

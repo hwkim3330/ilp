@@ -222,9 +222,8 @@
 
   <script src="vendor/d3.min.js"></script>
   <script type="module">
-  import GLPK from './vendor/glpk.js';
   import {
-    initTooltip, solveILP, flowColor, flowType, getFlowColorsHex,
+    initTooltip, solveGreedy, solveILP, flowColor, flowType, getFlowColorsHex,
     renderMetrics, renderTopology, renderGCL, renderDelayChart,
     renderUtilization, renderTable
   } from './js/ilp-core.js';
@@ -256,26 +255,44 @@
     this.parentElement.querySelector(".collapse-body").classList.toggle("show");
   });
 
-  resolveBtn.addEventListener("click", runSolve);
+  resolveBtn.addEventListener("click", runILPSolve);
 
-  /* ── Solve ───────────────────────────────────── */
-  async function runSolve() {
+  /* ── Greedy (instant) ─────────────────────────── */
+  function runGreedy() {
     try {
-      resolveBtn.disabled = true;
       const t0 = performance.now();
-      statusEl.innerHTML = '<span class="spinner"></span> Solving ILP...';
-      statusEl.className = "";
-      await new Promise(r => setTimeout(r, 50));
-
-      const result = await solveILP(currentModel, glpk);
+      const result = solveGreedy(currentModel);
       const wallMs = Math.round(performance.now() - t0);
       currentResult = result;
       renderAll();
-      statusEl.innerHTML = `<strong style="color:var(--green)">Solved in ${wallMs}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
+      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets`;
       statusEl.className = "status-ok";
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
       statusEl.className = "status-err";
+    }
+  }
+
+  /* ── ILP (GLPK/WASM, optional) ────────────────── */
+  async function runILPSolve() {
+    if (!glpk) { runGreedy(); return; }
+    try {
+      resolveBtn.disabled = true;
+      const t0 = performance.now();
+      statusEl.innerHTML = '<span class="spinner"></span> Solving ILP (tmlim=10s)...';
+      statusEl.className = "";
+      await new Promise(r => setTimeout(r, 50));
+
+      const result = await solveILP(currentModel, glpk, { tmlim: 10 });
+      const wallMs = Math.round(performance.now() - t0);
+      currentResult = result;
+      renderAll();
+      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${wallMs}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "ILP failed: " + e.message + " — using greedy";
+      statusEl.className = "status-err";
+      runGreedy();
     }
     resolveBtn.disabled = false;
   }
@@ -400,23 +417,24 @@
     resizeTimer = setTimeout(renderAll, 300);
   });
 
-  /* ── Init GLPK & Auto-Solve ──────────────────── */
+  /* ── Auto-Solve with Greedy (instant) ─────────── */
+  const badge = document.getElementById("engineBadge");
+  badge.className = "engine-badge ready";
+  badge.innerHTML = "&#9679; Greedy Ready";
+  resolveBtn.disabled = false;
+  runGreedy();
+
+  /* ── Load GLPK/WASM in background (optional ILP) ── */
   (async () => {
-    const badge = document.getElementById("engineBadge");
     try {
+      const GLPK = (await import('./vendor/glpk.js')).default;
       glpk = await GLPK();
       const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
-      badge.className = "engine-badge ready";
-      badge.innerHTML = `&#9679; GLPK ${ver}`;
-      resolveBtn.disabled = false;
-      statusEl.textContent = "Auto-solving...";
-      statusEl.className = "status-ok";
-      await runSolve();
+      badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
+      resolveBtn.textContent = "Re-Solve (ILP)";
     } catch (e) {
-      badge.className = "engine-badge loading";
-      badge.innerHTML = "&#10007; GLPK Failed";
-      statusEl.textContent = "GLPK failed: " + e.message;
-      statusEl.className = "status-err";
+      console.warn('GLPK load failed (greedy works):', e);
+      resolveBtn.textContent = "Re-Solve (Greedy)";
     }
   })();
   </script>

@@ -104,10 +104,153 @@ export function expandPackets(model) {
   return pkts;
 }
 
-export async function solveILP(model, glpk) {
+/* ── Build GCL result from scheduled packets ── */
+function buildResult(model, pkts, schedHops, method, stats) {
+  const linkRows = Object.fromEntries(model.links.map(l => [l.id, []]));
+  const pktRows = [];
+  for (let p = 0; p < pkts.length; p++) {
+    const pk = pkts[p], sh = schedHops[p];
+    const selR = sh.route, rt = pk.routes[selR], hops = [];
+    for (let h = 0; h < rt.hops.length; h++) {
+      const hp = rt.hops[h], s = sh.starts[h], e = round3(s + hp.tx);
+      hops.push({ link_id: hp.lid, start_us: round3(s), end_us: e, duration_us: round3(hp.tx) });
+      linkRows[hp.lid].push({ type: 'flow', note: pk.pid, priority: pk.pri, start_us: round3(s), end_us: e, duration_us: round3(hp.tx) });
+      if (pk.tsn) linkRows[hp.lid].push({ type: 'guard', note: 'guard band', priority: pk.pri, start_us: e, end_us: round3(e + model.guard_band_us), duration_us: round3(model.guard_band_us) });
+    }
+    const lH = rt.hops.at(-1), fin = hops.at(-1).end_us + lH.pd, e2e = round3(fin - pk.rel);
+    const ok = pk.dl == null || fin <= pk.dl + 1e-6;
+    pktRows.push({ packet_id: pk.pid, flow_id: pk.fid, priority: pk.pri, selected_route: selR, release_us: round3(pk.rel), end_us: round3(fin), e2e_delay_us: e2e, deadline_abs_us: pk.dl == null ? null : round3(pk.dl), slack_us: pk.dl == null ? null : round3(pk.dl - fin), status: pk.dl == null ? 'BE' : ok ? 'OK' : 'MISS', hops });
+  }
+  pktRows.sort((a, b) => a.end_us - b.end_us);
+
+  const gcl = { cycle_time_us: model.cycle_time_us, base_time_us: 0, links: {} };
+  for (const lnk of model.links) {
+    const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
+    const entries = []; let cur = 0, idx = 0;
+    for (const r of rows) {
+      if (r.start_us > cur) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
+      entries.push({ index: idx++, gate_mask: r.type === 'guard' ? '00000000' : gateMask(r.priority), start_us: r.start_us, end_us: r.end_us, duration_us: r.duration_us, note: r.note });
+      cur = Math.max(cur, r.end_us);
+    }
+    if (cur < model.cycle_time_us) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
+    gcl.links[lnk.id] = { from: lnk.from, to: lnk.to, entries };
+  }
+
+  let worstUtil = 0;
+  for (const lnk of model.links) {
+    let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort')) act += e.duration_us;
+    worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
+  }
+
+  return {
+    method,
+    objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
+    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl, stats
+  };
+}
+
+/* ═══════════════════════════════════════════════
+   GREEDY SCHEDULER — Priority-based list scheduler
+   No GLPK dependency, runs in <1ms
+   ═══════════════════════════════════════════════ */
+export function solveGreedy(model) {
+  if (!model.processing_delay_us) model.processing_delay_us = 2;
+  if (!model.guard_band_us) model.guard_band_us = 2;
+  const t0 = performance.now();
+  const pkts = expandPackets(model);
+
+  // Link occupancy tracker: for each link, list of [start, end] intervals
+  const linkOcc = Object.fromEntries(model.links.map(l => [l.id, []]));
+
+  function findEarliest(lid, earliest, duration, guard) {
+    const occ = linkOcc[lid];
+    let t = earliest;
+    const total = duration + guard;
+    for (let tries = 0; tries < 200; tries++) {
+      let conflict = false;
+      for (const [s, e] of occ) {
+        if (t < e && t + total > s) { t = e; conflict = true; break; }
+      }
+      if (!conflict) return t;
+    }
+    return t;
+  }
+
+  // Sort: highest priority first, then by release time, then by deadline
+  const order = pkts.map((pk, i) => i);
+  order.sort((a, b) => {
+    const pa = pkts[a], pb = pkts[b];
+    if (pa.pri !== pb.pri) return pb.pri - pa.pri; // higher priority first
+    if (pa.rel !== pb.rel) return pa.rel - pb.rel;
+    const da = pa.dl ?? Infinity, db = pb.dl ?? Infinity;
+    return da - db;
+  });
+
+  const schedHops = new Array(pkts.length);
+
+  for (const pi of order) {
+    const pk = pkts[pi];
+    let bestRoute = 0, bestEnd = Infinity, bestStarts = null;
+
+    // Try each candidate route
+    for (let ri = 0; ri < pk.routes.length; ri++) {
+      const rt = pk.routes[ri];
+      const starts = [];
+      let t = pk.rel;
+      let valid = true;
+
+      for (let h = 0; h < rt.hops.length; h++) {
+        const hp = rt.hops[h];
+        const guard = pk.tsn ? model.guard_band_us : 0;
+        const s = findEarliest(hp.lid, t, hp.tx, guard);
+        if (s + hp.tx > model.cycle_time_us) { valid = false; break; }
+        starts.push(s);
+        t = s + hp.tx + hp.pd + model.processing_delay_us;
+      }
+
+      if (valid) {
+        const lastH = rt.hops.at(-1);
+        const fin = starts.at(-1) + lastH.tx + lastH.pd;
+        if (fin < bestEnd) { bestEnd = fin; bestRoute = ri; bestStarts = starts; }
+      }
+    }
+
+    if (!bestStarts) {
+      // Fallback: just place at release time (may overlap)
+      const rt = pk.routes[0];
+      bestStarts = []; let t = pk.rel;
+      for (const hp of rt.hops) { bestStarts.push(t); t += hp.tx + hp.pd + model.processing_delay_us; }
+      bestRoute = 0;
+    }
+
+    // Commit to link occupancy
+    const rt = pk.routes[bestRoute];
+    for (let h = 0; h < rt.hops.length; h++) {
+      const hp = rt.hops[h], guard = pk.tsn ? model.guard_band_us : 0;
+      linkOcc[hp.lid].push([bestStarts[h], bestStarts[h] + hp.tx + guard]);
+    }
+    // Keep occupancy sorted for efficient conflict checking
+    for (let h = 0; h < rt.hops.length; h++) {
+      linkOcc[rt.hops[h].lid].sort((a, b) => a[0] - b[0]);
+    }
+
+    schedHops[pi] = { route: bestRoute, starts: bestStarts };
+  }
+
+  const elapsed = Math.round(performance.now() - t0);
+  return buildResult(model, pkts, schedHops, 'Greedy (priority-based list scheduler)', {
+    constraints: 0, variables: 0, binaries: 0, status: 'heuristic', runtime_ms: elapsed
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   ILP SOLVER — Exact via GLPK/WASM
+   ═══════════════════════════════════════════════ */
+export async function solveILP(model, glpk, opts = {}) {
   if (!glpk) throw new Error('GLPK not ready');
   if (!model.processing_delay_us) model.processing_delay_us = 2;
   if (!model.guard_band_us) model.guard_band_us = 2;
+  const tmlim = opts.tmlim || 10; // seconds
 
   const pkts = expandPackets(model);
   if (pkts.length > 70) throw new Error(`Too many packets (${pkts.length}). Reduce flows or increase period.`);
@@ -161,57 +304,27 @@ export async function solveILP(model, glpk) {
     bounds: Array.from(vars).map(n => ({ name: n, type: glpk.GLP_LO, lb: 0, ub: 0 }))
   };
 
-  const solved = await glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF, presol: true });
+  const solved = await glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF, presol: true, tmlim });
   if (!solved?.result || ![glpk.GLP_OPT, glpk.GLP_FEAS].includes(solved.result.status))
     throw new Error('ILP infeasible (status=' + (solved?.result?.status ?? '?') + ')');
 
   const rv = solved.result.vars;
 
-  // Build result
-  const linkRows = Object.fromEntries(model.links.map(l => [l.id, []]));
-  const pktRows = [];
+  // Build scheduled hops from ILP solution
+  const schedHops = [];
   for (let p = 0; p < pkts.length; p++) {
     const pk = pkts[p]; let selR = 0, bz = -1;
     for (let r = 0; r < pk.routes.length; r++) { const v = Number(rv[zv(p, r)] || 0); if (v > bz) { bz = v; selR = r; } }
-    const rt = pk.routes[selR], hops = [];
-    for (let h = 0; h < rt.hops.length; h++) {
-      const hp = rt.hops[h], s = Number(rv[sv(p, selR, h)] || 0), e = s + hp.tx;
-      hops.push({ link_id: hp.lid, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
-      linkRows[hp.lid].push({ type: 'flow', note: pk.pid, priority: pk.pri, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
-      if (pk.tsn) linkRows[hp.lid].push({ type: 'guard', note: 'guard band', priority: pk.pri, start_us: round3(e), end_us: round3(e + model.guard_band_us), duration_us: round3(model.guard_band_us) });
-    }
-    const lH = rt.hops.at(-1), fin = hops.at(-1).end_us + lH.pd, e2e = round3(fin - pk.rel);
-    const ok = pk.dl == null || fin <= pk.dl + 1e-6;
-    pktRows.push({ packet_id: pk.pid, flow_id: pk.fid, priority: pk.pri, selected_route: selR, release_us: round3(pk.rel), end_us: round3(fin), e2e_delay_us: e2e, deadline_abs_us: pk.dl == null ? null : round3(pk.dl), slack_us: pk.dl == null ? null : round3(pk.dl - fin), status: pk.dl == null ? 'BE' : ok ? 'OK' : 'MISS', hops });
-  }
-  pktRows.sort((a, b) => a.end_us - b.end_us);
-
-  const gcl = { cycle_time_us: model.cycle_time_us, base_time_us: 0, links: {} };
-  for (const lnk of model.links) {
-    const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
-    const entries = []; let cur = 0, idx = 0;
-    for (const r of rows) {
-      if (r.start_us > cur) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
-      entries.push({ index: idx++, gate_mask: r.type === 'guard' ? '00000000' : gateMask(r.priority), start_us: r.start_us, end_us: r.end_us, duration_us: r.duration_us, note: r.note });
-      cur = Math.max(cur, r.end_us);
-    }
-    if (cur < model.cycle_time_us) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
-    gcl.links[lnk.id] = { from: lnk.from, to: lnk.to, entries };
+    const rt = pk.routes[selR], starts = [];
+    for (let h = 0; h < rt.hops.length; h++) starts.push(Number(rv[sv(p, selR, h)] || 0));
+    schedHops.push({ route: selR, starts });
   }
 
-  let worstUtil = 0;
-  for (const lnk of model.links) {
-    let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort')) act += e.duration_us;
-    worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
-  }
-
-  return {
-    method: 'ILP (GLPK v' + (typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?')) + ', WASM)',
-    objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
-    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl,
-    stats: { constraints: sub.length, variables: vars.size, binaries: bins.length, status: solved.result.status },
-    runtime_ms: Math.round(solved.time * 1000)
-  };
+  const statusLabel = solved.result.status === glpk.GLP_OPT ? 'optimal' : 'feasible (time limit)';
+  return buildResult(model, pkts, schedHops,
+    'ILP (GLPK v' + (typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?')) + ', ' + statusLabel + ')',
+    { constraints: sub.length, variables: vars.size, binaries: bins.length, status: solved.result.status, runtime_ms: Math.round(solved.time * 1000) }
+  );
 }
 
 /* ═══════════════════════════════════════════════
