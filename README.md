@@ -1,21 +1,29 @@
-# ilp (JS network solver: Exact)
+# ilp (TSN/TAS/GCL, Triangle 3-Switch, ILP)
 
-브라우저에서 TSN/TAS/GCL을 계산하고 시각화하는 단일 페이지 예제입니다.
+브라우저 UI + Node(GLPK) 백엔드로 동작하는 TSN GCL ILP 예제입니다.
 
 ## 실행
 
 ```bash
 cd /home/kim/ilp
-python3 -m http.server 8080
+node server.js
 ```
 
 브라우저에서 `http://localhost:8080` 접속.
 
-## 모드
+## 구성
 
-- `Exact Search`만 사용 (안정성 우선)
+- `index.html`: 입력/토폴로지/결과 시각화 UI
+- `server.js`: ILP 모델 생성 + GLPK 풀이 + GCL 결과 생성 API
+- `vendor/glpk.min.js`, `vendor/glpk.wasm`: 로컬 GLPK 엔진
 
-## 입력 스키마
+## API
+
+- `POST /api/solve`
+  - body: 모델 JSON
+  - response: `packetRows`, `gcl`, `objective`, `stats`
+
+## 모델 포맷
 
 - `cycle_time_us`
 - `guard_band_us`
@@ -24,12 +32,7 @@ python3 -m http.server 8080
 - `links[]`: `{ id, from, to, rate_mbps, prop_delay_us }`
 - `flows[]`: `{ id, priority, payload_bytes, period_us, deadline_us, traffic_type, path[] }`
 
-## 출력
+## 메모
 
-- 링크별 GCL 타임라인
-- 패킷별 E2E delay/deadline/slack
-- 생성된 GCL JSON
-
-## 주의
-
-- Exact는 packet 수가 조금만 커져도 폭발적으로 느려짐
+- 현재 샘플은 3개 스위치 삼각형(`s1, s2, s3`) 기준
+- ILP 목적함수는 TSN packet의 E2E delay 합 최소화

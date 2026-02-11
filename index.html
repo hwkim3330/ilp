@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TSN/TAS/GCL JS Network Solver</title>
+  <title>TSN GCL ILP (Triangle 3-Switch)</title>
   <style>
     :root {
       --bg: #0a1124;
@@ -26,7 +26,7 @@
       background: radial-gradient(circle at 0% 0%, #1e2c58, var(--bg));
       color: var(--text);
     }
-    .wrap { max-width: 1280px; margin: 0 auto; }
+    .wrap { max-width: 1300px; margin: 0 auto; }
     .card {
       margin-top: 12px;
       padding: 14px;
@@ -34,11 +34,11 @@
       border-radius: 12px;
       background: linear-gradient(180deg, #19274c, var(--card));
     }
-    h1 { margin: 0; font-size: 1.55rem; }
+    h1 { margin: 0; font-size: 1.5rem; }
     p { margin: 6px 0 0; color: var(--muted); }
     textarea {
       width: 100%;
-      min-height: 280px;
+      min-height: 300px;
       resize: vertical;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -46,14 +46,13 @@
       color: var(--text);
       padding: 10px;
       font-family: "JetBrains Mono", "Consolas", monospace;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       line-height: 1.45;
     }
     .toolbar {
       margin-top: 10px;
       display: flex;
       flex-wrap: wrap;
-      align-items: center;
       gap: 8px;
     }
     .btn {
@@ -66,48 +65,40 @@
       color: #0e1a35;
     }
     .btn.secondary { background: #4b5f8a; color: #fff; }
-    .tool-label {
-      color: var(--muted);
-      font-size: 0.85rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    select {
-      border: 1px solid var(--line);
-      background: #0e1731;
-      color: var(--text);
-      border-radius: 8px;
-      padding: 6px 8px;
-    }
     #status { margin-top: 8px; color: var(--muted); font-size: 0.9rem; }
 
     .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .metric .v { font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+    .metric .v { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
     .metric .k { color: var(--muted); font-size: 0.82rem; }
 
     .topo {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
       margin-top: 10px;
-      display: flex;
       align-items: center;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 6px;
+      justify-items: center;
     }
     .node {
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 7px 12px;
-      font-size: 0.84rem;
-      white-space: nowrap;
+      padding: 8px 12px;
       background: #0f1732;
+      font-size: 0.82rem;
     }
     .node.switch { border-color: #6aa7ff; }
     .node.endstation { border-color: #61e2b9; }
-    .arrow { color: var(--muted); }
+    .edge {
+      color: var(--muted);
+      font-size: 0.8rem;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.02);
+    }
 
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 7px; font-size: 0.83rem; }
+    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 7px; font-size: 0.82rem; }
     th { color: var(--muted); font-weight: 500; }
 
     .axis {
@@ -132,7 +123,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       white-space: nowrap;
       color: #f7fbff;
     }
@@ -155,51 +146,42 @@
     }
 
     @media (max-width: 980px) { .grid4 { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 650px) { .grid4 { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) {
+      .grid4 { grid-template-columns: 1fr; }
+      .topo { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>TSN/TAS/GCL JS Solver (3-Switch Realistic Sample)</h1>
-    <p>같은 입력으로 Exact 스케줄을 계산하고 링크별 GCL을 확인합니다.</p>
+    <h1>TSN/TAS/GCL ILP Solver (3-Switch Triangle)</h1>
+    <p>백엔드 Node + GLPK로 ILP 최적해를 계산하고, 링크별 GCL과 패킷 지연을 시각화합니다.</p>
 
     <div class="card">
       <strong>Input JSON</strong>
       <textarea id="input"></textarea>
       <div class="toolbar">
         <button id="renderBtn" class="btn secondary">Render Input</button>
-        <button id="solveBtn" class="btn">Solve</button>
-        <button id="sampleBtn" class="btn secondary">Load 3-Switch Sample</button>
+        <button id="solveBtn" class="btn">Solve ILP</button>
+        <button id="sampleBtn" class="btn secondary">Load Triangle Sample</button>
       </div>
       <div id="status"></div>
     </div>
 
     <div class="card">
-      <strong>Input Visualization</strong>
-      <div id="topology" class="topo"></div>
+      <strong>Topology (Triangle)</strong>
+      <div id="topo" class="topo"></div>
       <div class="grid4" style="margin-top:8px;">
         <div class="card metric" style="margin-top:0;"><div class="v" id="inNodes">-</div><div class="k">Nodes</div></div>
         <div class="card metric" style="margin-top:0;"><div class="v" id="inLinks">-</div><div class="k">Links</div></div>
         <div class="card metric" style="margin-top:0;"><div class="v" id="inFlows">-</div><div class="k">Flows</div></div>
-        <div class="card metric" style="margin-top:0;"><div class="v" id="inPkts">-</div><div class="k">Packets in Cycle</div></div>
+        <div class="card metric" style="margin-top:0;"><div class="v" id="inPkts">-</div><div class="k">Packets/Cycle</div></div>
       </div>
-      <table>
-        <thead>
-          <tr><th>Link</th><th>From -> To</th><th>Rate (Mbps)</th><th>Prop Delay (us)</th></tr>
-        </thead>
-        <tbody id="linkTable"></tbody>
-      </table>
-      <table>
-        <thead>
-          <tr><th>Flow</th><th>Prio</th><th>Period</th><th>Deadline</th><th>Path</th></tr>
-        </thead>
-        <tbody id="flowTable"></tbody>
-      </table>
     </div>
 
     <div class="grid4">
       <div class="card metric"><div class="v" id="mMethod">-</div><div class="k">Solver</div></div>
-      <div class="card metric"><div class="v" id="mObj">-</div><div class="k">Objective (TSN e2e sum)</div></div>
+      <div class="card metric"><div class="v" id="mObj">-</div><div class="k">Objective (TSN delay sum)</div></div>
       <div class="card metric"><div class="v" id="mUtil">-</div><div class="k">Worst Link Util (%)</div></div>
       <div class="card metric"><div class="v" id="mRuntime">-</div><div class="k">Runtime (ms)</div></div>
     </div>
@@ -224,7 +206,7 @@
     </div>
 
     <div class="card">
-      <strong>Generated GCL JSON (per link)</strong>
+      <strong>GCL JSON</strong>
       <pre id="jsonOut">-</pre>
     </div>
   </div>
@@ -232,439 +214,152 @@
   <script>
     const sample = {
       cycle_time_us: 1000,
-      guard_band_us: 2.0,
-      processing_delay_us: 2.0,
+      guard_band_us: 2,
+      processing_delay_us: 2,
       nodes: [
-        { id: "es1", type: "endstation" },
+        { id: "esA", type: "endstation" },
+        { id: "esB", type: "endstation" },
+        { id: "esC", type: "endstation" },
         { id: "s1", type: "switch" },
         { id: "s2", type: "switch" },
-        { id: "s3", type: "switch" },
-        { id: "es2", type: "endstation" }
+        { id: "s3", type: "switch" }
       ],
       links: [
-        { id: "l_es1_s1", from: "es1", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_esA_s1", from: "esA", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s1_s2", from: "s1", to: "s2", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s2_s3", from: "s2", to: "s3", rate_mbps: 1000, prop_delay_us: 0.8 },
-        { id: "l_s3_es2", from: "s3", to: "es2", rate_mbps: 1000, prop_delay_us: 0.8 }
+        { id: "l_s3_s1", from: "s3", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_s2_esB", from: "s2", to: "esB", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_s3_esC", from: "s3", to: "esC", rate_mbps: 1000, prop_delay_us: 0.8 }
       ],
       flows: [
         {
-          id: "f_ctrl",
+          id: "f_ctrl_A_to_B",
           priority: 7,
-          payload_bytes: 300,
+          payload_bytes: 280,
           period_us: 250,
-          deadline_us: 120,
+          deadline_us: 130,
           traffic_type: "control",
-          path: ["l_es1_s1", "l_s1_s2", "l_s2_s3", "l_s3_es2"]
+          path: ["l_esA_s1", "l_s1_s2", "l_s2_esB"]
         },
         {
-          id: "f_sensor",
+          id: "f_sensor_A_to_C",
           priority: 6,
           payload_bytes: 220,
           period_us: 500,
-          deadline_us: 160,
+          deadline_us: 180,
           traffic_type: "sensor",
-          path: ["l_es1_s1", "l_s1_s2", "l_s2_s3", "l_s3_es2"]
+          path: ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_esC"]
         },
         {
-          id: "f_video",
+          id: "f_video_A_loop",
           priority: 3,
-          payload_bytes: 1000,
+          payload_bytes: 900,
           period_us: 1000,
           deadline_us: null,
           traffic_type: "video",
-          path: ["l_es1_s1", "l_s1_s2", "l_s2_s3", "l_s3_es2"]
+          path: ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_s1"]
         }
       ]
     };
 
     const inputEl = document.getElementById("input");
     const statusEl = document.getElementById("status");
-    const solveBtn = document.getElementById("solveBtn");
-    const sampleBtn = document.getElementById("sampleBtn");
-    const renderBtn = document.getElementById("renderBtn");
 
-    sampleBtn.addEventListener("click", () => {
+    document.getElementById("sampleBtn").addEventListener("click", () => {
       inputEl.value = JSON.stringify(sample, null, 2);
       renderInput();
-      statusEl.textContent = "3-switch 샘플 로드 완료";
+      statusEl.textContent = "Triangle sample loaded";
     });
-    renderBtn.addEventListener("click", renderInput);
-    solveBtn.addEventListener("click", solveAndRender);
+
+    document.getElementById("renderBtn").addEventListener("click", renderInput);
+    document.getElementById("solveBtn").addEventListener("click", solve);
 
     inputEl.value = JSON.stringify(sample, null, 2);
     renderInput();
 
-    function round3(v) { return Math.round(v * 1000) / 1000; }
-    function txTimeUs(payloadBytes, mbps) { return ((payloadBytes + 38) * 8) / mbps; }
-    function isTsn(priority, deadline) { return priority >= 6 || deadline !== null; }
-    function sVar(pIdx, hIdx) { return `s_${pIdx}_${hIdx}`; }
-    function yVar(linkId, i, j) { return `y_${linkId.replace(/[^a-zA-Z0-9]/g, "_")}_${i}_${j}`; }
+    function round3(v) {
+      return Math.round(v * 1000) / 1000;
+    }
 
     function parseModel() {
       const model = JSON.parse(inputEl.value);
       if (!Array.isArray(model.nodes) || !Array.isArray(model.links) || !Array.isArray(model.flows)) {
-        throw new Error("nodes/links/flows 배열이 필요합니다");
+        throw new Error("nodes/links/flows required");
       }
-      if (model.cycle_time_us <= 0) throw new Error("cycle_time_us > 0 필요");
-      if (model.processing_delay_us < 0) throw new Error("processing_delay_us >= 0 필요");
       return model;
     }
 
-    function expandPackets(model) {
-      const linkMap = new Map(model.links.map(l => [l.id, l]));
-      const packets = [];
-
+    function estimatePacketCount(model) {
+      let count = 0;
       for (const f of model.flows) {
-        if (!f.path || f.path.length === 0) throw new Error(`flow ${f.id}: path 필요`);
-        if (f.period_us <= 0) throw new Error(`flow ${f.id}: period_us > 0 필요`);
-        for (const lid of f.path) {
-          if (!linkMap.has(lid)) throw new Error(`flow ${f.id}: unknown link ${lid}`);
-        }
-
-        const repeatsRaw = model.cycle_time_us / f.period_us;
-        const repeats = Math.round(repeatsRaw);
-        if (Math.abs(repeatsRaw - repeats) > 1e-9) {
-          throw new Error(`flow ${f.id}: cycle_time_us는 period_us의 배수여야 함`);
-        }
-
-        for (let k = 0; k < repeats; k++) {
-          const release = k * f.period_us;
-          const hops = f.path.map((lid) => {
-            const link = linkMap.get(lid);
-            return {
-              link_id: lid,
-              tx_us: txTimeUs(f.payload_bytes, link.rate_mbps),
-              prop_delay_us: link.prop_delay_us
-            };
-          });
-
-          packets.push({
-            packet_id: `${f.id}#${k}`,
-            flow_id: f.id,
-            traffic_type: f.traffic_type,
-            priority: f.priority,
-            tsn: isTsn(f.priority, f.deadline_us),
-            release_us: release,
-            deadline_abs_us: f.deadline_us == null ? null : release + f.deadline_us,
-            payload_bytes: f.payload_bytes,
-            path: f.path.slice(),
-            hops
-          });
-        }
+        if (!f.period_us || f.period_us <= 0) throw new Error(`invalid period: ${f.id}`);
+        const rep = model.cycle_time_us / f.period_us;
+        const r = Math.round(rep);
+        if (Math.abs(rep - r) > 1e-9) throw new Error(`cycle_time_us divisible by period_us required (${f.id})`);
+        count += r;
       }
-      return packets;
+      return count;
     }
 
     function renderInput() {
       try {
         const model = parseModel();
-        const packets = expandPackets(model);
+        const packetCount = estimatePacketCount(model);
 
         document.getElementById("inNodes").textContent = model.nodes.length;
         document.getElementById("inLinks").textContent = model.links.length;
         document.getElementById("inFlows").textContent = model.flows.length;
-        document.getElementById("inPkts").textContent = packets.length;
+        document.getElementById("inPkts").textContent = packetCount;
 
-        const topology = document.getElementById("topology");
-        topology.innerHTML = "";
-        const ordered = model.links.map(l => l.from).concat(model.links[model.links.length - 1]?.to || []);
-        ordered.forEach((n, idx) => {
-          const nodeMeta = model.nodes.find(x => x.id === n) || { id: n, type: "unknown" };
+        const topo = document.getElementById("topo");
+        topo.innerHTML = "";
+
+        const n = Object.fromEntries(model.nodes.map((x) => [x.id, x]));
+        const pushNode = (id) => {
           const d = document.createElement("div");
-          d.className = `node ${nodeMeta.type}`;
-          d.textContent = `${nodeMeta.id} (${nodeMeta.type})`;
-          topology.appendChild(d);
-          if (idx < ordered.length - 1) {
-            const a = document.createElement("div");
-            a.className = "arrow";
-            a.textContent = "->";
-            topology.appendChild(a);
-          }
-        });
+          const m = n[id] || { id, type: "unknown" };
+          d.className = `node ${m.type}`;
+          d.textContent = `${m.id} (${m.type})`;
+          topo.appendChild(d);
+        };
+        const pushEdge = (txt) => {
+          const d = document.createElement("div");
+          d.className = "edge";
+          d.textContent = txt;
+          topo.appendChild(d);
+        };
 
-        const linkTable = document.getElementById("linkTable");
-        linkTable.innerHTML = "";
-        for (const l of model.links) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${l.id}</td><td>${l.from} -> ${l.to}</td><td>${l.rate_mbps}</td><td>${l.prop_delay_us}</td>`;
-          linkTable.appendChild(tr);
-        }
+        pushNode("s1"); pushNode("s2"); pushNode("s3");
+        pushEdge("s1 -> s2"); pushEdge("s2 -> s3"); pushEdge("s3 -> s1");
+        pushNode("esA"); pushNode("esB"); pushNode("esC");
 
-        const flowTable = document.getElementById("flowTable");
-        flowTable.innerHTML = "";
-        for (const f of model.flows) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${f.id}</td><td>${f.priority}</td><td>${f.period_us}</td><td>${f.deadline_us == null ? "-" : f.deadline_us}</td><td>${f.path.join(" -> ")}</td>`;
-          flowTable.appendChild(tr);
-        }
-
-        statusEl.textContent = "입력 시각화 완료";
+        statusEl.textContent = "input rendered";
       } catch (e) {
-        statusEl.innerHTML = `<span class="miss">입력 오류: ${e.message}</span>`;
+        statusEl.innerHTML = `<span class=\"miss\">input error: ${e.message}</span>`;
       }
     }
 
-    async function solveAndRender() {
+    async function solve() {
       try {
         const model = parseModel();
-        const packets = expandPackets(model);
+        statusEl.textContent = "solving ILP...";
 
-        if (packets.length > 11) {
-          throw new Error(`Exact는 packet ${packets.length}개에서 매우 느림 (<=11 권장)`);
-        }
-
-        const t0 = performance.now();
-        const result = exactSearch(model, packets);
-
-        result.runtime_ms = round3(performance.now() - t0);
-        renderResult(model, result);
-
-        let extra = "";
-        if (result.stats) {
-          extra = `, nodes=${result.stats.nodes}, pruned=${result.stats.pruned}`;
-        }
-        statusEl.textContent = `완료(${result.method}) runtime=${result.runtime_ms}ms${extra}`;
-      } catch (e) {
-        statusEl.innerHTML = `<span class="miss">계산 오류: ${e.message}</span>`;
-      }
-    }
-
-    function exactSearch(model, packets) {
-      const linkMap = new Map(model.links.map(l => [l.id, l]));
-      const linkIds = model.links.map(l => l.id);
-
-      let bestObjective = Number.POSITIVE_INFINITY;
-      let best = null;
-      let nodes = 0;
-      let pruned = 0;
-
-      const used = new Array(packets.length).fill(false);
-      const order = [];
-      const linkAvail = Object.fromEntries(linkIds.map(id => [id, 0]));
-      const linkEntries = Object.fromEntries(linkIds.map(id => [id, []]));
-      const packetRows = [];
-
-      function schedulePacket(packet, currentObj) {
-        let ready = packet.release_us;
-        const hopRecords = [];
-
-        for (let h = 0; h < packet.hops.length; h++) {
-          const hop = packet.hops[h];
-          const start = Math.max(ready, linkAvail[hop.link_id]);
-          const end = start + hop.tx_us;
-
-          if (end > model.cycle_time_us) return null;
-
-          hopRecords.push({
-            link_id: hop.link_id,
-            start_us: round3(start),
-            end_us: round3(end),
-            duration_us: round3(hop.tx_us)
-          });
-
-          linkEntries[hop.link_id].push({
-            type: "flow",
-            note: packet.packet_id,
-            start_us: round3(start),
-            end_us: round3(end),
-            duration_us: round3(hop.tx_us),
-            priority: packet.priority
-          });
-
-          if (packet.tsn) {
-            linkEntries[hop.link_id].push({
-              type: "guard",
-              note: "guard band",
-              start_us: round3(end),
-              end_us: round3(end + model.guard_band_us),
-              duration_us: round3(model.guard_band_us),
-              priority: packet.priority
-            });
-          }
-
-          linkAvail[hop.link_id] = end + (packet.tsn ? model.guard_band_us : 0);
-          ready = end + hop.prop_delay_us + (h < packet.hops.length - 1 ? model.processing_delay_us : 0);
-        }
-
-        const finish = hopRecords[hopRecords.length - 1].end_us;
-        const e2e = round3(finish - packet.release_us);
-        if (packet.deadline_abs_us != null && finish > packet.deadline_abs_us) return null;
-
-        const newObj = currentObj + (packet.tsn ? e2e : 0);
-        if (newObj >= bestObjective) return null;
-
-        return {
-          row: {
-            packet_id: packet.packet_id,
-            flow_id: packet.flow_id,
-            priority: packet.priority,
-            release_us: packet.release_us,
-            end_us: finish,
-            e2e_delay_us: e2e,
-            deadline_abs_us: packet.deadline_abs_us,
-            slack_us: packet.deadline_abs_us == null ? null : round3(packet.deadline_abs_us - finish),
-            status: packet.deadline_abs_us == null ? "BE" : "OK",
-            hops: hopRecords
-          },
-          newObj
-        };
-      }
-
-      function rollback(snapshot) {
-        for (const lid of linkIds) {
-          linkAvail[lid] = snapshot.linkAvail[lid];
-          linkEntries[lid].length = snapshot.entryLens[lid];
-        }
-        packetRows.length = snapshot.packetLen;
-        order.length = snapshot.orderLen;
-      }
-
-      function dfs(depth, currentObj) {
-        nodes++;
-        if (currentObj >= bestObjective) {
-          pruned++;
-          return;
-        }
-
-        if (depth === packets.length) {
-          bestObjective = currentObj;
-          best = {
-            objective: round3(currentObj),
-            order: order.slice(),
-            packetRows: packetRows.map(x => ({ ...x, hops: x.hops.map(h => ({ ...h })) })),
-            linkEntries: Object.fromEntries(linkIds.map(id => [id, linkEntries[id].map(e => ({ ...e }))]))
-          };
-          return;
-        }
-
-        const candidates = [];
-        for (let i = 0; i < packets.length; i++) if (!used[i]) candidates.push(i);
-        candidates.sort((a, b) => {
-          const pa = packets[a], pb = packets[b];
-          const da = pa.deadline_abs_us == null ? Number.POSITIVE_INFINITY : pa.deadline_abs_us;
-          const db = pb.deadline_abs_us == null ? Number.POSITIVE_INFINITY : pb.deadline_abs_us;
-          if (da !== db) return da - db;
-          if (pb.priority !== pa.priority) return pb.priority - pa.priority;
-          return pa.release_us - pb.release_us;
+        const res = await fetch("/api/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(model)
         });
-
-        for (const idx of candidates) {
-          const snapshot = {
-            linkAvail: { ...linkAvail },
-            entryLens: Object.fromEntries(linkIds.map(id => [id, linkEntries[id].length])),
-            packetLen: packetRows.length,
-            orderLen: order.length
-          };
-
-          const packet = packets[idx];
-          const plan = schedulePacket(packet, currentObj);
-          if (!plan) {
-            pruned++;
-            rollback(snapshot);
-            continue;
-          }
-
-          used[idx] = true;
-          order.push(packet.packet_id);
-          packetRows.push(plan.row);
-
-          dfs(depth + 1, plan.newObj);
-
-          used[idx] = false;
-          rollback(snapshot);
+        const data = await res.json();
+        if (!data.ok) {
+          throw new Error(data.error || "solve failed");
         }
+
+        renderResult(model, data.result);
+        statusEl.textContent = `done: ${data.result.method}, runtime=${data.result.runtime_ms}ms, vars=${data.result.stats.variables}, bin=${data.result.stats.binaries}`;
+      } catch (e) {
+        statusEl.innerHTML = `<span class=\"miss\">solve error: ${e.message}</span>`;
       }
-
-      dfs(0, 0);
-      if (!best) throw new Error("feasible schedule 없음 (deadline/path/cycle 제약 충돌)");
-
-      const gcl = buildGcl(model, best.linkEntries);
-      return {
-        method: "EXACT",
-        objective: best.objective,
-        packetRows: best.packetRows,
-        gcl,
-        worst_util_percent: round3(worstLinkUtil(model, gcl)),
-        stats: { nodes, pruned }
-      };
-    }
-
-    function gateMask(priority) {
-      const bits = Array(8).fill("0");
-      bits[7 - Math.min(7, Math.max(0, priority))] = "1";
-      return bits.join("");
-    }
-
-    function buildGcl(model, perLinkEntries) {
-      const out = {
-        cycle_time_us: model.cycle_time_us,
-        base_time_us: 0,
-        links: {}
-      };
-
-      for (const link of model.links) {
-        const rows = perLinkEntries[link.id] ? perLinkEntries[link.id].slice() : [];
-        rows.sort((a, b) => a.start_us - b.start_us);
-
-        const entries = [];
-        let idx = 0;
-        let cursor = 0;
-
-        for (const r of rows) {
-          if (r.start_us > cursor) {
-            entries.push({
-              index: idx++,
-              gate_mask: "00001111",
-              start_us: round3(cursor),
-              end_us: round3(r.start_us),
-              duration_us: round3(r.start_us - cursor),
-              note: "best-effort gap"
-            });
-          }
-          entries.push({
-            index: idx++,
-            gate_mask: r.type === "guard" ? "00000000" : gateMask(r.priority),
-            start_us: r.start_us,
-            end_us: r.end_us,
-            duration_us: r.duration_us,
-            note: r.type === "guard" ? "guard band" : r.note
-          });
-          cursor = Math.max(cursor, r.end_us);
-        }
-
-        if (cursor < model.cycle_time_us) {
-          entries.push({
-            index: idx++,
-            gate_mask: "00001111",
-            start_us: round3(cursor),
-            end_us: round3(model.cycle_time_us),
-            duration_us: round3(model.cycle_time_us - cursor),
-            note: "best-effort remainder"
-          });
-        }
-
-        out.links[link.id] = {
-          from: link.from,
-          to: link.to,
-          entries
-        };
-      }
-
-      return out;
-    }
-
-    function worstLinkUtil(model, gcl) {
-      let worst = 0;
-      for (const link of model.links) {
-        const rows = gcl.links[link.id].entries;
-        let active = 0;
-        for (const r of rows) {
-          if (!r.note.includes("best-effort")) active += r.duration_us;
-        }
-        worst = Math.max(worst, (active / model.cycle_time_us) * 100);
-      }
-      return worst;
     }
 
     function renderResult(model, result) {
@@ -685,7 +380,6 @@
 
       const gclRows = document.getElementById("gclRows");
       gclRows.innerHTML = "";
-
       for (const link of model.links) {
         const linkData = result.gcl.links[link.id];
         const row = document.createElement("div");
