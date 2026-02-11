@@ -196,6 +196,15 @@
       <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
     </div>
 
+    <!-- Solve Controls (visible) -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve</button>
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div id="status" style="font-size:0.82rem;"></div>
+      </div>
+    </div>
+
     <!-- Metrics (ILP Results) -->
     <div class="metrics" id="metricsArea"></div>
 
@@ -251,11 +260,6 @@
       </div>
       <div class="collapse-body">
         <textarea id="input" style="min-height:300px;"></textarea>
-        <div class="toolbar">
-          <button class="btn btn-secondary" id="resetBtn">Reset to Default</button>
-          <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve</button>
-          <div id="status" style="margin-top:0; margin-left:8px;"></div>
-        </div>
       </div>
     </div>
 
@@ -371,8 +375,8 @@
     function getType(id) {
       if (id.startsWith('LIDAR')) return 'lidar';
       if (id.startsWith('RADAR')) return 'radar';
-      if (id === 'CENTRAL_GW') return 'lan9692';
-      if (id.endsWith('_ZC')) return 'lan9662';
+      if (id === 'SW_REAR') return 'lan9692';
+      if (id.startsWith('SW')) return 'lan9662';
       return 'ecu';
     }
 
@@ -444,8 +448,8 @@
       LIDAR_FC:'LiDAR-Front-Center', LIDAR_RC:'LiDAR-Rear-Center',
       RADAR_FC:'Radar-Front-Center', RADAR_FL:'Radar-Front-L',
       RADAR_FR:'Radar-Front-R', RADAR_RL:'Radar-Rear-L', RADAR_RR:'Radar-Rear-R',
-      FRONT_ZC:'Front-ZC', REAR_ZC:'Rear-ZC', CENTRAL_GW:'Central-Gateway',
-      ADAS_PC:'ADAS-ECU'
+      SW_FL:'Front-L ZC', SW_FR:'Front-R ZC', SW_REAR:'Rear-GW',
+      ACU_IT:'ACU-IT'
     };
 
     for (const [id, pos] of Object.entries(ROII_3D_POSITIONS)) {
@@ -494,15 +498,15 @@
     // === Animated Data Particles ===
     const particles = [];
     const flowPaths = [
-      { path: ['LIDAR_FL','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FC','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FR','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_RC','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0x10B981 },
-      { path: ['RADAR_FC','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_FL','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_FR','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_RL','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0xF59E0B },
-      { path: ['RADAR_RR','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0xF59E0B }
+      { path: ['LIDAR_FL','SW_FL','SW_REAR','ACU_IT'], color: 0x10B981 },
+      { path: ['LIDAR_FC','SW_FL','SW_REAR','ACU_IT'], color: 0x10B981 },
+      { path: ['LIDAR_FR','SW_FR','SW_REAR','ACU_IT'], color: 0x10B981 },
+      { path: ['LIDAR_RC','SW_REAR','ACU_IT'],         color: 0x10B981 },
+      { path: ['RADAR_FC','SW_FL','SW_REAR','ACU_IT'], color: 0x952aff },
+      { path: ['RADAR_FL','SW_FL','SW_REAR','ACU_IT'], color: 0x952aff },
+      { path: ['RADAR_FR','SW_FR','SW_REAR','ACU_IT'], color: 0x952aff },
+      { path: ['RADAR_RL','SW_REAR','ACU_IT'],         color: 0x952aff },
+      { path: ['RADAR_RR','SW_REAR','ACU_IT'],         color: 0x952aff }
     ];
 
     flowPaths.forEach((fp, fi) => {
@@ -642,14 +646,19 @@
     try {
       const model = JSON.parse(inputEl.value);
       resolveBtn.disabled = true;
-      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP...';
+      const t0 = performance.now();
+      statusEl.innerHTML = '<span class="spinner"></span> Solving ILP (13 pkts, 9 flows)...';
       statusEl.className = "";
 
+      // yield to UI so spinner shows
+      await new Promise(r => setTimeout(r, 50));
+
       const result = await solveILP(model, glpk);
+      const wallMs = Math.round(performance.now() - t0);
       currentModel = model;
       currentResult = result;
       renderAll();
-      statusEl.textContent = `Solved in ${result.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
+      statusEl.innerHTML = `<strong style="color:var(--green)">Solved in ${wallMs}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
       statusEl.className = "status-ok";
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
