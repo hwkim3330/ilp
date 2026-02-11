@@ -1,6 +1,6 @@
-# ilp (JS only)
+# ilp (JS network solver: Exact + MILP)
 
-설치 없이 브라우저에서 TSN/TAS/GCL 계산 + 시각화를 수행하는 예제입니다.
+브라우저에서 TSN/TAS/GCL을 계산하고 시각화하는 단일 페이지 예제입니다.
 
 ## 실행
 
@@ -11,24 +11,27 @@ python3 -m http.server 8080
 
 브라우저에서 `http://localhost:8080` 접속.
 
-## 기능
+## 모드
 
-- 입력 JSON 편집
-- Exact 탐색 기반 스케줄 계산 (브라우저 JS)
-- GCL 타임라인 시각화
-- Job별 deadline/slack 확인
-- 생성된 GCL JSON 출력
+- `Exact Search`: 작은 입력에서 정확해 탐색(매우 느려질 수 있음)
+- `MILP (GLPK WASM)`: 브라우저에서 GLPK로 이진변수 기반 스케줄링
 
-## 입력 포맷
+## 입력 스키마
 
 - `cycle_time_us`
 - `guard_band_us`
-- `link_speed_mbps`
-- `keepout_after_tsn`
-- `flows[]`
-  - `id`, `priority`, `payload_bytes`, `period_us`, `deadline_us`, `traffic_type`
+- `processing_delay_us`
+- `nodes[]`: `{ id, type }`
+- `links[]`: `{ id, from, to, rate_mbps, prop_delay_us }`
+- `flows[]`: `{ id, priority, payload_bytes, period_us, deadline_us, traffic_type, path[] }`
 
-## 제약/주의
+## 출력
 
-- 브라우저 exact 탐색 특성상 `jobs <= 12` 권장
-- 더 큰 문제(복잡 GCL)는 `highs-js` 같은 WASM MILP 솔버 연동 필요
+- 링크별 GCL 타임라인
+- 패킷별 E2E delay/deadline/slack
+- 생성된 GCL JSON
+
+## 주의
+
+- Exact는 packet 수가 조금만 커져도 폭발적으로 느려짐
+- MILP는 CDN에서 `glpk.js`를 로드하므로 인터넷 연결 필요
