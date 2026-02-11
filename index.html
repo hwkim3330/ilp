@@ -610,15 +610,33 @@
       };
     }
 
-    function createGlpkInstance() {
-      if (typeof GLPK === "function") return GLPK();
-      if (window.module && typeof window.module.exports === "function") return window.module.exports();
-      if (typeof window.glpk === "function") return window.glpk();
-      throw new Error("glpk 로드 실패: vendor/glpk.min.js 또는 vendor/glpk.wasm 확인 필요");
+    let glpkInstancePromise = null;
+    async function createGlpkInstance() {
+      if (glpkInstancePromise) return glpkInstancePromise;
+
+      const factory =
+        (typeof GLPK === "function" && GLPK) ||
+        (window.module && typeof window.module.exports === "function" && window.module.exports) ||
+        (typeof window.glpk === "function" && window.glpk);
+
+      if (!factory) {
+        throw new Error("glpk 로드 실패: vendor/glpk.min.js 확인 필요");
+      }
+
+      glpkInstancePromise = (async () => {
+        const wasmRes = await fetch("./vendor/glpk.wasm");
+        if (!wasmRes.ok) {
+          throw new Error(`glpk.wasm 로드 실패: HTTP ${wasmRes.status}`);
+        }
+        const wasmBuffer = await wasmRes.arrayBuffer();
+        return factory(wasmBuffer);
+      })();
+
+      return glpkInstancePromise;
     }
 
     async function milpSolve(model, packets) {
-      const glpk = createGlpkInstance();
+      const glpk = await createGlpkInstance();
       const linkMap = new Map(model.links.map(l => [l.id, l]));
       const varsSeen = new Set();
       const subjectTo = [];
