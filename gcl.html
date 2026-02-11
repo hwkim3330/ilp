@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROii GCL Schedule &mdash; IEEE 802.1Qbv Gate Control</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme + GCL-focused Layout
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+    textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── Switch GCL Cards ───────────────────────── */
+    .gcl-switch-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid rgba(59,130,246,0.1);
+    }
+    .sw-dot {
+      width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+    }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.08); color: var(--blue); font-weight: 600;
+    }
+    .sw-stats {
+      margin-left: auto; font-size: 0.75rem; color: var(--text3);
+    }
+    .gcl-entry-table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+    }
+    .gcl-entry-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.1); font-weight: 600;
+    }
+    .gcl-entry-table td {
+      padding: 4px 8px; border-bottom: 1px solid rgba(59,130,246,0.05);
+    }
+    .gcl-entry-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .gate-mask {
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+      letter-spacing: 1px; font-weight: 700;
+    }
+    .gate-open { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar {
+      height: 6px; border-radius: 3px; margin-top: 2px;
+    }
+
+    /* ── Two-column responsive ──────────────────── */
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .row-2 { grid-template-columns: 1fr; } }
+
+    /* ── Topology mini ──────────────────────────── */
+    .topo-mini { height: 360px; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <!-- Header -->
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>ROii GCL Schedule</h1>
+        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
+      </div>
+      <div class="sub">IEEE 802.1Qbv Gate Control List &mdash; LAN9662 x2 + LAN9692 Triangle Topology</div>
+    </div>
+
+    <!-- Solve Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn" disabled>Solve GCL</button>
+        <div id="status" style="font-size:0.82rem;"></div>
+        <a href="roii.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">3D View</a>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics" id="metricsArea"></div>
+
+    <!-- Main GCL Gantt (full width, large) -->
+    <div class="card">
+      <div class="card-title">GCL Timeline &mdash; All Active Links</div>
+      <div class="legend" id="gclLegend"></div>
+      <div class="svg-container" id="gclContainer" style="min-height:500px;"></div>
+    </div>
+
+    <!-- Per-Switch GCL Detail -->
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <!-- Topology + Delay side by side -->
+    <div class="row-2">
+      <div class="card">
+        <div class="card-title">Network Topology</div>
+        <div class="legend" id="topoLegend"></div>
+        <div class="svg-container topo-mini" id="topoContainer"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:360px;"></div>
+      </div>
+    </div>
+
+    <!-- Utilization + Table -->
+    <div class="row-2">
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Packet Schedule</div>
+        <div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+          <table class="pkt-table">
+            <thead><tr>
+              <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+            </tr></thead>
+            <tbody id="pktTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw GCL JSON -->
+    <div class="card">
+      <div class="card-title collapsible" id="gclJsonToggle">
+        <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
+      </div>
+      <div class="collapse-body">
+        <pre id="jsonOut">-</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import GLPK from './vendor/glpk.js';
+  import {
+    initTooltip, solveILP, flowColor, flowType, getFlowColorsHex,
+    renderMetrics, renderTopology, renderGCL, renderDelayChart,
+    renderUtilization, renderTable
+  } from './js/ilp-core.js';
+  import {
+    ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO
+  } from './js/roii-data.js';
+
+  /* ── State ───────────────────────────────────── */
+  let glpk = null;
+  let currentModel = JSON.parse(JSON.stringify(ROII_MODEL));
+  let currentResult = null;
+
+  initTooltip();
+
+  const statusEl = document.getElementById("status");
+  const resolveBtn = document.getElementById("resolveBtn");
+
+  /* ── Collapsible ─────────────────────────────── */
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+
+  resolveBtn.addEventListener("click", runSolve);
+
+  /* ── Solve ───────────────────────────────────── */
+  async function runSolve() {
+    try {
+      resolveBtn.disabled = true;
+      const t0 = performance.now();
+      statusEl.innerHTML = '<span class="spinner"></span> Solving ILP...';
+      statusEl.className = "";
+      await new Promise(r => setTimeout(r, 50));
+
+      const result = await solveILP(currentModel, glpk);
+      const wallMs = Math.round(performance.now() - t0);
+      currentResult = result;
+      renderAll();
+      statusEl.innerHTML = `<strong style="color:var(--green)">Solved in ${wallMs}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "status-err";
+    }
+    resolveBtn.disabled = false;
+  }
+
+  /* ── Render All ──────────────────────────────── */
+  function renderAll() {
+    if (!currentResult) return;
+    const container = document.getElementById("topoContainer");
+    const W = container.clientWidth;
+    const positions = getRoiiPositions(W, 360);
+
+    renderMetrics(currentModel, currentResult);
+    renderTopology(currentModel, currentResult, {
+      nodePositions: positions, nodeColors: ROII_NODE_COLORS, height: 360
+    });
+    renderGCL(currentModel, currentResult);
+    renderDelayChart(currentModel, currentResult);
+    renderUtilization(currentModel, currentResult);
+    renderTable(currentResult);
+    renderSwitchGCL(currentModel, currentResult);
+    document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
+  }
+
+  /* ── Per-Switch GCL Detail Cards ─────────────── */
+  function renderSwitchGCL(model, result) {
+    const area = document.getElementById("switchGclArea");
+    area.innerHTML = "";
+
+    const switches = [
+      { id: "SW_FL",   label: "Front-Left Zone Controller", chip: "LAN9662", color: "#3B82F6" },
+      { id: "SW_FR",   label: "Front-Right Zone Controller", chip: "LAN9662", color: "#3B82F6" },
+      { id: "SW_REAR", label: "Rear Gateway",               chip: "LAN9692", color: "#06B6D4" }
+    ];
+
+    switches.forEach(sw => {
+      // Find all links involving this switch
+      const swLinks = model.links.filter(l => l.from === sw.id || l.to === sw.id);
+      const activeLinks = swLinks.filter(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        return entries.some(e => !e.note.includes("best-effort"));
+      });
+
+      if (activeLinks.length === 0) return;
+
+      // Calculate total utilization for this switch
+      let totalFlow = 0, totalGuard = 0;
+      activeLinks.forEach(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        entries.forEach(e => {
+          if (e.note.includes("guard")) totalGuard += e.duration_us;
+          else if (!e.note.includes("best-effort")) totalFlow += e.duration_us;
+        });
+      });
+
+      const card = document.createElement("div");
+      card.className = "gcl-switch-card";
+
+      // Header
+      card.innerHTML = `
+        <div class="sw-header">
+          <div class="sw-dot" style="background:${sw.color};"></div>
+          <span class="sw-name">${sw.label}</span>
+          <span class="sw-chip">${sw.chip}</span>
+          <span class="sw-stats">${activeLinks.length} active links &middot; flow ${totalFlow.toFixed(1)}us &middot; guard ${totalGuard.toFixed(1)}us</span>
+        </div>
+      `;
+
+      // Per-link GCL entries
+      activeLinks.forEach(link => {
+        const entries = result.gcl.links[link.id]?.entries || [];
+        const tsnEntries = entries.filter(e => !e.note.includes("best-effort"));
+        if (tsnEntries.length === 0) return;
+
+        const linkLabel = `${link.from} → ${link.to}`;
+        const linkDiv = document.createElement("div");
+        linkDiv.style.marginBottom = "12px";
+
+        let tableHTML = `
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text2);margin-bottom:4px;">
+            ${linkLabel}
+          </div>
+          <table class="gcl-entry-table">
+            <thead><tr><th>#</th><th>Gate Mask</th><th>Start</th><th>End</th><th>Duration</th><th>Type</th></tr></thead>
+            <tbody>
+        `;
+
+        entries.forEach((e, i) => {
+          const isBE = e.note.includes("best-effort");
+          const isGuard = e.note.includes("guard");
+          const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
+          const typeLabel = isGuard ? "Guard" : isBE ? "BE" : e.note.split("#")[0].replace("f_","");
+          const barColor = isGuard ? "var(--orange)" : isBE ? "var(--be)" : flowColor(e.note);
+          const barWidth = (e.duration_us / model.cycle_time_us * 100).toFixed(1);
+
+          tableHTML += `<tr>
+            <td>${e.index}</td>
+            <td class="gate-mask ${cls}">${e.gate_mask}</td>
+            <td>${e.start_us}</td>
+            <td>${e.end_us}</td>
+            <td>${e.duration_us} us</td>
+            <td>
+              <span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
+              <div class="entry-bar" style="background:${barColor};width:${Math.max(barWidth, 2)}%;opacity:${isBE ? 0.3 : 0.7};"></div>
+            </td>
+          </tr>`;
+        });
+
+        tableHTML += `</tbody></table>`;
+        linkDiv.innerHTML = tableHTML;
+        card.appendChild(linkDiv);
+      });
+
+      area.appendChild(card);
+    });
+  }
+
+  /* ── Responsive ──────────────────────────────── */
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 300);
+  });
+
+  /* ── Init GLPK & Auto-Solve ──────────────────── */
+  (async () => {
+    const badge = document.getElementById("engineBadge");
+    try {
+      glpk = await GLPK();
+      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
+      badge.className = "engine-badge ready";
+      badge.innerHTML = `&#9679; GLPK ${ver}`;
+      resolveBtn.disabled = false;
+      statusEl.textContent = "Auto-solving...";
+      statusEl.className = "status-ok";
+      await runSolve();
+    } catch (e) {
+      badge.className = "engine-badge loading";
+      badge.innerHTML = "&#10007; GLPK Failed";
+      statusEl.textContent = "GLPK failed: " + e.message;
+      statusEl.className = "status-err";
+    }
+  })();
+  </script>
+</body>
+</html>
