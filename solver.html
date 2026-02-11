@@ -195,11 +195,11 @@
     try {
       const model = JSON.parse(inputEl.value);
       solveBtn.disabled = true;
-      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=10s)...';
+      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=15s)...';
       statusEl.className = "";
       await new Promise(r => setTimeout(r, 50));
 
-      const result = await solveILP(model, glpk, { tmlim: 10 });
+      const result = await solveILP(model, glpk, { tmlim: 15 });
       currentModel = model;
       currentResult = result;
       renderAll();

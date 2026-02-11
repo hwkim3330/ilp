@@ -245,55 +245,116 @@ export function solveGreedy(model) {
 
 /* ═══════════════════════════════════════════════
    ILP SOLVER — Exact via GLPK/WASM
+   Two modes: fixed-route (tight LP) or multi-route (big-M)
    ═══════════════════════════════════════════════ */
 export async function solveILP(model, glpk, opts = {}) {
   if (!glpk) throw new Error('GLPK not ready');
   if (!model.processing_delay_us) model.processing_delay_us = 2;
   if (!model.guard_band_us) model.guard_band_us = 2;
-  const tmlim = opts.tmlim || 10; // seconds
+  const tmlim = opts.tmlim || 15;
 
   const pkts = expandPackets(model);
   if (pkts.length > 70) throw new Error(`Too many packets (${pkts.length}). Reduce flows or increase period.`);
 
+  // Check if all packets have exactly 1 route → use tight formulation
+  const allSingleRoute = pkts.every(pk => pk.routes.length === 1);
+
   const vars = new Set(), sub = [], bins = [], obj = [];
   let ci = 0;
-  const M = model.cycle_time_us + model.guard_band_us + model.processing_delay_us + 100;
-  const zv = (p, r) => `z_${p}_${r}`, sv = (p, r, h) => `s_${p}_${r}_${h}`;
+  const sv = (p, h) => `s_${p}_${h}`;
   const yv = (l, a, b) => `y_${l.replace(/[^a-zA-Z0-9]/g, '_')}_${a}_${b}`;
   const av = n => { vars.add(n); return n; };
   const ac = (pre, terms, bnd) => { sub.push({ name: `${pre}_${ci++}`, vars: terms, bnds: bnd }); };
   const ops = [];
 
-  for (let p = 0; p < pkts.length; p++) {
-    const pk = pkts[p], zt = [];
-    for (let r = 0; r < pk.routes.length; r++) {
-      const rt = pk.routes[r], z = av(zv(p, r));
-      bins.push(z); zt.push({ name: z, coef: 1 });
+  if (allSingleRoute) {
+    /* ── Fixed-route formulation: NO z-variables, per-pair tight M ── */
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p], rt = pk.routes[0];
+      let earliestArr = pk.rel;
       for (let h = 0; h < rt.hops.length; h++) {
-        const hp = rt.hops[h], s = av(sv(p, r, h));
-        ac('lb', [{ name: s, coef: 1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: pk.rel - M, ub: 0 });
-        ac('ub', [{ name: s, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: model.cycle_time_us - hp.tx + M });
-        if (h < rt.hops.length - 1) {
-          const sn = av(sv(p, r, h + 1));
-          ac('ch', [{ name: sn, coef: 1 }, { name: s, coef: -1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: hp.tx + hp.pd + model.processing_delay_us - M, ub: 0 });
+        const hp = rt.hops[h], s = av(sv(p, h));
+        // Tight lower bound
+        ac('lb', [{ name: s, coef: 1 }], { type: glpk.GLP_LO, lb: earliestArr, ub: 0 });
+        // Tight upper bound
+        let latestStart = model.cycle_time_us - hp.tx;
+        if (pk.dl != null) {
+          let tailTime = 0;
+          for (let h2 = rt.hops.length - 1; h2 > h; h2--)
+            tailTime += rt.hops[h2].tx + rt.hops[h2].pd + model.processing_delay_us;
+          latestStart = Math.min(latestStart, pk.dl - hp.tx - hp.pd - tailTime);
         }
-        ops.push({ oi: ops.length, p, r, h, lid: hp.lid, sn: s, zn: z, tx: hp.tx, blk: hp.tx + (pk.tsn ? model.guard_band_us : 0) });
+        ac('ub', [{ name: s, coef: 1 }], { type: glpk.GLP_UP, lb: 0, ub: latestStart });
+        // Chain
+        if (h < rt.hops.length - 1) {
+          const sn = av(sv(p, h + 1));
+          ac('ch', [{ name: sn, coef: 1 }, { name: s, coef: -1 }], { type: glpk.GLP_LO, lb: hp.tx + hp.pd + model.processing_delay_us, ub: 0 });
+        }
+        const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
+        ops.push({ oi: ops.length, p, r: 0, h, lid: hp.lid, sn: s, tx: hp.tx, blk, earliest: earliestArr, latest: latestStart });
+        earliestArr += hp.tx + hp.pd + model.processing_delay_us;
       }
-      const last = rt.hops.length - 1, sL = av(sv(p, r, last)), lH = rt.hops[last];
-      if (pk.dl != null) ac('dl', [{ name: sL, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: pk.dl - lH.tx - lH.pd + M });
-      if (pk.tsn) { obj.push({ name: sL, coef: 1 }); obj.push({ name: z, coef: lH.tx + lH.pd }); }
+      // Deadline
+      const last = rt.hops.length - 1, sL = sv(p, last), lH = rt.hops[last];
+      if (pk.dl != null) ac('dl', [{ name: sL, coef: 1 }], { type: glpk.GLP_UP, lb: 0, ub: pk.dl - lH.tx - lH.pd });
+      // Objective: minimize sum of last-hop start times for TSN packets
+      if (pk.tsn) obj.push({ name: sL, coef: 1 });
     }
-    ac('sel', zt, { type: glpk.GLP_FX, lb: 1, ub: 1 });
-  }
 
-  for (const lnk of model.links) {
-    const lo = ops.filter(o => o.lid === lnk.id);
-    for (let a = 0; a < lo.length; a++) for (let b = a + 1; b < lo.length; b++) {
-      const oa = lo[a], ob = lo[b];
-      if (oa.p === ob.p && oa.r === ob.r) continue;
-      const y = av(yv(lnk.id, oa.oi, ob.oi)); bins.push(y);
-      ac('na', [{ name: ob.sn, coef: 1 }, { name: oa.sn, coef: -1 }, { name: y, coef: -M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: oa.blk - 3 * M, ub: 0 });
-      ac('nb', [{ name: oa.sn, coef: 1 }, { name: ob.sn, coef: -1 }, { name: y, coef: M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: ob.blk - 2 * M, ub: 0 });
+    // Pairwise ordering with per-pair tight M and window pruning
+    for (const lnk of model.links) {
+      const lo = ops.filter(o => o.lid === lnk.id);
+      for (let a = 0; a < lo.length; a++) for (let b = a + 1; b < lo.length; b++) {
+        const oa = lo[a], ob = lo[b];
+        // Tight window pruning: skip if execution windows can't overlap
+        if (oa.latest + oa.blk <= ob.earliest || ob.latest + ob.blk <= oa.earliest) continue;
+        const y = av(yv(lnk.id, oa.oi, ob.oi)); bins.push(y);
+        // Per-pair tight M: just enough to make constraint trivial when inactive
+        const Mab = Math.max(oa.latest - ob.earliest + oa.blk, ob.latest - oa.earliest + ob.blk);
+        // y=0: a before b → s_b >= s_a + blk_a  (with -Mab*y relaxation)
+        // y=1: b before a → s_a >= s_b + blk_b  (with +Mab*y relaxation)
+        ac('na', [{ name: ob.sn, coef: 1 }, { name: oa.sn, coef: -1 }, { name: y, coef: -Mab }], { type: glpk.GLP_LO, lb: oa.blk - Mab, ub: 0 });
+        ac('nb', [{ name: oa.sn, coef: 1 }, { name: ob.sn, coef: -1 }, { name: y, coef: Mab }], { type: glpk.GLP_LO, lb: ob.blk, ub: 0 });
+      }
+    }
+  } else {
+    /* ── Multi-route formulation: big-M with z-variables ── */
+    const M = model.cycle_time_us + model.guard_band_us + model.processing_delay_us + 100;
+    const zv2 = (p, r) => `z_${p}_${r}`;
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p], zt = [];
+      for (let r = 0; r < pk.routes.length; r++) {
+        const rt = pk.routes[r], z = av(zv2(p, r));
+        bins.push(z); zt.push({ name: z, coef: 1 });
+        for (let h = 0; h < rt.hops.length; h++) {
+          const hp = rt.hops[h], s = av(`s_${p}_${r}_${h}`);
+          ac('lb', [{ name: s, coef: 1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: pk.rel - M, ub: 0 });
+          ac('ub', [{ name: s, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: model.cycle_time_us - hp.tx + M });
+          if (h < rt.hops.length - 1) {
+            const sn = av(`s_${p}_${r}_${h + 1}`);
+            ac('ch', [{ name: sn, coef: 1 }, { name: s, coef: -1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: hp.tx + hp.pd + model.processing_delay_us - M, ub: 0 });
+          }
+          ops.push({ oi: ops.length, p, r, h, lid: hp.lid, sn: s, zn: z, tx: hp.tx, blk: hp.tx + (pk.tsn ? model.guard_band_us : 0) });
+        }
+        const last = rt.hops.length - 1, sL = av(`s_${p}_${r}_${last}`), lH = rt.hops[last];
+        if (pk.dl != null) ac('dl', [{ name: sL, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: pk.dl - lH.tx - lH.pd + M });
+        if (pk.tsn) { obj.push({ name: sL, coef: 1 }); obj.push({ name: z, coef: lH.tx + lH.pd }); }
+      }
+      ac('sel', zt, { type: glpk.GLP_FX, lb: 1, ub: 1 });
+    }
+    for (const lnk of model.links) {
+      const lo = ops.filter(o => o.lid === lnk.id);
+      for (let a = 0; a < lo.length; a++) for (let b = a + 1; b < lo.length; b++) {
+        const oa = lo[a], ob = lo[b];
+        if (oa.p === ob.p && oa.r === ob.r) continue;
+        const pa = pkts[oa.p], pb = pkts[ob.p];
+        const aEnd = pa.dl ?? model.cycle_time_us;
+        const bEnd = pb.dl ?? model.cycle_time_us;
+        if (aEnd <= pb.rel || bEnd <= pa.rel) continue;
+        const y = av(yv(lnk.id, oa.oi, ob.oi)); bins.push(y);
+        ac('na', [{ name: ob.sn, coef: 1 }, { name: oa.sn, coef: -1 }, { name: y, coef: -M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: oa.blk - 3 * M, ub: 0 });
+        ac('nb', [{ name: oa.sn, coef: 1 }, { name: ob.sn, coef: -1 }, { name: y, coef: M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: ob.blk - 2 * M, ub: 0 });
+      }
     }
   }
 
@@ -312,12 +373,21 @@ export async function solveILP(model, glpk, opts = {}) {
 
   // Build scheduled hops from ILP solution
   const schedHops = [];
-  for (let p = 0; p < pkts.length; p++) {
-    const pk = pkts[p]; let selR = 0, bz = -1;
-    for (let r = 0; r < pk.routes.length; r++) { const v = Number(rv[zv(p, r)] || 0); if (v > bz) { bz = v; selR = r; } }
-    const rt = pk.routes[selR], starts = [];
-    for (let h = 0; h < rt.hops.length; h++) starts.push(Number(rv[sv(p, selR, h)] || 0));
-    schedHops.push({ route: selR, starts });
+  if (allSingleRoute) {
+    for (let p = 0; p < pkts.length; p++) {
+      const starts = [];
+      for (let h = 0; h < pkts[p].routes[0].hops.length; h++) starts.push(Number(rv[sv(p, h)] || 0));
+      schedHops.push({ route: 0, starts });
+    }
+  } else {
+    const zv2 = (p, r) => `z_${p}_${r}`;
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p]; let selR = 0, bz = -1;
+      for (let r = 0; r < pk.routes.length; r++) { const v = Number(rv[zv2(p, r)] || 0); if (v > bz) { bz = v; selR = r; } }
+      const starts = [];
+      for (let h = 0; h < pk.routes[selR].hops.length; h++) starts.push(Number(rv[`s_${p}_${selR}_${h}`] || 0));
+      schedHops.push({ route: selR, starts });
+    }
   }
 
   const statusLabel = solved.result.status === glpk.GLP_OPT ? 'optimal' : 'feasible (time limit)';
