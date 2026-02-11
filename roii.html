@@ -286,7 +286,7 @@
 
   /* ── 3D Shuttle + Network Topology ────────────── */
   /* Scene/lighting/model code replicated from original roii project */
-  (function init3D() {
+  try { (function init3D() {
     const container = document.getElementById('canvas3d');
     if (!container || typeof THREE === 'undefined') return;
 
@@ -337,8 +337,12 @@
     const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
     fillLight.position.set(0, 50, 0);
     scene.add(fillLight);
-    scene.add(Object.assign(new THREE.PointLight(0x3B82F6, 2, 100), { position: new THREE.Vector3(20, 15, 20) }));
-    scene.add(Object.assign(new THREE.PointLight(0x06B6D4, 1.5, 80), { position: new THREE.Vector3(-20, 15, -20) }));
+    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100);
+    pl1.position.set(20, 15, 20);
+    scene.add(pl1);
+    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80);
+    pl2.position.set(-20, 15, -20);
+    scene.add(pl2);
 
     // === Grid + Ground (identical to original roii) ===
     const grid = new THREE.GridHelper(100, 50, 0x3B82F6, 0xCCCCCC);
@@ -367,8 +371,8 @@
     function getType(id) {
       if (id.startsWith('LIDAR')) return 'lidar';
       if (id.startsWith('RADAR')) return 'radar';
-      if (id === 'SW_REAR') return 'lan9692';
-      if (id.startsWith('SW')) return 'lan9662';
+      if (id === 'CENTRAL_GW') return 'lan9692';
+      if (id.endsWith('_ZC')) return 'lan9662';
       return 'ecu';
     }
 
@@ -447,7 +451,7 @@
       LIDAR_FC:'LiDAR-Front-Center', LIDAR_RC:'LiDAR-Rear-Center',
       RADAR_FC:'Radar-Front-Center', RADAR_FL:'Radar-Front-L',
       RADAR_FR:'Radar-Front-R', RADAR_RL:'Radar-Rear-L', RADAR_RR:'Radar-Rear-R',
-      SW_FL:'Front-L ZC', SW_FR:'Front-R ZC', SW_REAR:'Central-GW',
+      FRONT_ZC:'Front-ZC', REAR_ZC:'Rear-ZC', CENTRAL_GW:'Central-Gateway',
       ADAS_PC:'ADAS-ECU'
     };
 
@@ -496,15 +500,15 @@
     // === Animated Data Particles ===
     const particles = [];
     const flowPaths = [
-      { path: ['LIDAR_FL','SW_FL','SW_REAR','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FC','SW_FL','SW_REAR','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FR','SW_FR','SW_REAR','ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_RC','SW_REAR','ADAS_PC'],         color: 0x10B981 },
-      { path: ['RADAR_FC','SW_FL','SW_REAR','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_FL','SW_FL','SW_REAR','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_FR','SW_FR','SW_REAR','ADAS_PC'], color: 0xF59E0B },
-      { path: ['RADAR_RL','SW_REAR','ADAS_PC'],         color: 0xF59E0B },
-      { path: ['RADAR_RR','SW_REAR','ADAS_PC'],         color: 0xF59E0B }
+      { path: ['LIDAR_FL','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_FC','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_FR','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_RC','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0x10B981 },
+      { path: ['RADAR_FC','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_FL','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_FR','FRONT_ZC','CENTRAL_GW','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_RL','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0xF59E0B },
+      { path: ['RADAR_RR','REAR_ZC','CENTRAL_GW','ADAS_PC'],  color: 0xF59E0B }
     ];
 
     flowPaths.forEach((fp, fi) => {
@@ -590,7 +594,7 @@
       renderer.render(scene, camera);
     }
     animate();
-  })();
+  })(); } catch(e) { console.warn('3D init error:', e); }
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;

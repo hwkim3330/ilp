@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════
    roii-data.js — ROii Autonomous Shuttle TSN Scenario
-   4 LiDAR + 5 Radar → Triangle Switch Topology → ADAS PC
+   Real topology: Front-ZC + Rear-ZC + Central-GW → ADAS
+   Matches original roii project (hwkim3330.github.io/roii)
    ═══════════════════════════════════════════════ */
 
 export const ROII_MODEL = {
@@ -19,35 +20,34 @@ export const ROII_MODEL = {
     { id: "RADAR_FR", type: "endstation" },
     { id: "RADAR_RL", type: "endstation" },
     { id: "RADAR_RR", type: "endstation" },
-    // Switches — triangle topology
-    { id: "SW_FL",   type: "switch" },
-    { id: "SW_FR",   type: "switch" },
-    { id: "SW_REAR", type: "switch" },
+    // Switches — matching original roii project
+    { id: "FRONT_ZC",   type: "switch" },   // LAN9662 Front Zone Controller
+    { id: "REAR_ZC",    type: "switch" },   // LAN9662 Rear Zone Controller
+    { id: "CENTRAL_GW", type: "switch" },   // LAN9692 Central Gateway
     // Processing
     { id: "ADAS_PC", type: "endstation" }
   ],
   links: [
-    // Front-left sensors → SW_FL
-    { id: "l_lidarfl_swfl",  from: "LIDAR_FL", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_lidarfc_swfl",  from: "LIDAR_FC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarfl_swfl",  from: "RADAR_FL", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarfc_swfl",  from: "RADAR_FC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    // Front-right sensors → SW_FR
-    { id: "l_lidarfr_swfr",  from: "LIDAR_FR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarfr_swfr",  from: "RADAR_FR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    // Rear sensors → SW_REAR
-    { id: "l_lidarrc_swrear", from: "LIDAR_RC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarrl_swrear", from: "RADAR_RL", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarrr_swrear", from: "RADAR_RR", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    // Triangle switch interconnects (bidirectional)
-    { id: "l_swfl_swfr",     from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfr_swfl",     from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfl_swrear",   from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swrear_swfl",   from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfr_swrear",   from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swrear_swfr",   from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    // Processing
-    { id: "l_swrear_adas",   from: "SW_REAR", to: "ADAS_PC", rate_mbps: 1000, prop_delay_us: 0.5 }
+    // Front sensors → Front Zone Controller
+    { id: "l_lidarfl_fzc",  from: "LIDAR_FL", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfr_fzc",  from: "LIDAR_FR", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfc_fzc",  from: "LIDAR_FC", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarfc_fzc",  from: "RADAR_FC", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarfl_fzc",  from: "RADAR_FL", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarfr_fzc",  from: "RADAR_FR", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    // Rear sensors → Rear Zone Controller
+    { id: "l_lidarrc_rzc",  from: "LIDAR_RC", to: "REAR_ZC",    rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrl_rzc",  from: "RADAR_RL", to: "REAR_ZC",    rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrr_rzc",  from: "RADAR_RR", to: "REAR_ZC",    rate_mbps: 1000, prop_delay_us: 0.5 },
+    // Inter-switch (bidirectional for k_paths redundancy)
+    { id: "l_fzc_cgw",      from: "FRONT_ZC",   to: "CENTRAL_GW", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_cgw_fzc",      from: "CENTRAL_GW", to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_rzc_cgw",      from: "REAR_ZC",    to: "CENTRAL_GW", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_cgw_rzc",      from: "CENTRAL_GW", to: "REAR_ZC",    rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_fzc_rzc",      from: "FRONT_ZC",   to: "REAR_ZC",    rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_rzc_fzc",      from: "REAR_ZC",    to: "FRONT_ZC",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    // Central Gateway → ADAS PC
+    { id: "l_cgw_adas",     from: "CENTRAL_GW", to: "ADAS_PC",    rate_mbps: 1000, prop_delay_us: 0.5 }
   ],
   flows: [
     // LiDAR flows (P7, 1200B, period 500µs, deadline 200µs, 2 pkts/cycle)
@@ -100,76 +100,77 @@ export const ROII_MODEL = {
   ]
 };
 
-/* ── Fixed Node Positions (shuttle shape, front=top) ── */
+/* ── Fixed Node Positions (2D topology view) ── */
 export function getRoiiPositions(W, H) {
   return {
-    // Top row — front sensors (전면)
-    LIDAR_FL:  { x: W * 0.08, y: H * 0.08 },
-    RADAR_FL:  { x: W * 0.22, y: H * 0.08 },
-    LIDAR_FC:  { x: W * 0.38, y: H * 0.08 },
-    RADAR_FC:  { x: W * 0.55, y: H * 0.08 },
-    RADAR_FR:  { x: W * 0.72, y: H * 0.08 },
-    LIDAR_FR:  { x: W * 0.90, y: H * 0.08 },
-    // Upper-middle — front zone controllers
-    SW_FL:     { x: W * 0.28, y: H * 0.35 },
-    SW_FR:     { x: W * 0.72, y: H * 0.35 },
-    // Lower-middle — rear sensors + rear gateway
-    RADAR_RL:  { x: W * 0.12, y: H * 0.62 },
-    SW_REAR:   { x: W * 0.50, y: H * 0.62 },
-    RADAR_RR:  { x: W * 0.88, y: H * 0.62 },
-    LIDAR_RC:  { x: W * 0.32, y: H * 0.76 },
-    // Bottom — ADAS PC (후면)
-    ADAS_PC:   { x: W * 0.50, y: H * 0.93 }
+    // Top row — front sensors
+    LIDAR_FL:    { x: W * 0.05, y: H * 0.08 },
+    RADAR_FL:    { x: W * 0.20, y: H * 0.08 },
+    LIDAR_FC:    { x: W * 0.38, y: H * 0.08 },
+    RADAR_FC:    { x: W * 0.55, y: H * 0.08 },
+    RADAR_FR:    { x: W * 0.72, y: H * 0.08 },
+    LIDAR_FR:    { x: W * 0.92, y: H * 0.08 },
+    // Upper-middle — Front Zone Controller
+    FRONT_ZC:    { x: W * 0.50, y: H * 0.30 },
+    // Center — Central Gateway + ADAS PC
+    CENTRAL_GW:  { x: W * 0.35, y: H * 0.55 },
+    ADAS_PC:     { x: W * 0.65, y: H * 0.55 },
+    // Lower-middle — Rear Zone Controller
+    REAR_ZC:     { x: W * 0.50, y: H * 0.72 },
+    // Bottom row — rear sensors
+    RADAR_RL:    { x: W * 0.20, y: H * 0.92 },
+    LIDAR_RC:    { x: W * 0.50, y: H * 0.92 },
+    RADAR_RR:    { x: W * 0.80, y: H * 0.92 }
   };
 }
 
 /* ── Node Color Map ──────────────────────────── */
 export const ROII_NODE_COLORS = {
   // LiDAR — light green tint
-  LIDAR_FL:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FL", shortLabel: "LiDAR" },
-  LIDAR_FR:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FR", shortLabel: "LiDAR" },
-  LIDAR_FC:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FC", shortLabel: "LiDAR" },
-  LIDAR_RC:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR RC", shortLabel: "LiDAR" },
+  LIDAR_FL:    { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FL",    shortLabel: "LiDAR" },
+  LIDAR_FR:    { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FR",    shortLabel: "LiDAR" },
+  LIDAR_FC:    { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FC",    shortLabel: "LiDAR" },
+  LIDAR_RC:    { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR RC",    shortLabel: "LiDAR" },
   // Radar — light purple tint
-  RADAR_FC:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FC", shortLabel: "Radar" },
-  RADAR_FL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FL", shortLabel: "Radar" },
-  RADAR_FR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FR", shortLabel: "Radar" },
-  RADAR_RL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL", shortLabel: "Radar" },
-  RADAR_RR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR", shortLabel: "Radar" },
-  // LAN9662 front zone controllers — light blue tint
-  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC", shortLabel: "LAN9662" },
-  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC", shortLabel: "LAN9662" },
-  // LAN9692 rear gateway — light cyan tint
-  SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "Rear GW",    shortLabel: "LAN9692" },
+  RADAR_FC:    { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FC",    shortLabel: "Radar" },
+  RADAR_FL:    { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FL",    shortLabel: "Radar" },
+  RADAR_FR:    { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FR",    shortLabel: "Radar" },
+  RADAR_RL:    { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL",    shortLabel: "Radar" },
+  RADAR_RR:    { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR",    shortLabel: "Radar" },
+  // LAN9662 Zone Controllers — light blue tint
+  FRONT_ZC:    { fill: "#dbeafe", stroke: "#3B82F6", label: "Front ZC",    shortLabel: "LAN9662" },
+  REAR_ZC:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Rear ZC",     shortLabel: "LAN9662" },
+  // LAN9692 Central Gateway — light cyan tint
+  CENTRAL_GW:  { fill: "#cffafe", stroke: "#06B6D4", label: "Central GW",  shortLabel: "LAN9692" },
   // ADAS PC — light amber tint
-  ADAS_PC:   { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",  shortLabel: "PC" }
+  ADAS_PC:     { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",     shortLabel: "PC" }
 };
 
-/* ── 3D Node Positions (from roii project, front=+Z) ── */
+/* ── 3D Node Positions (from original roii project) ── */
 export const ROII_3D_POSITIONS = {
-  // LiDAR — roof-mounted (original roii positions)
-  LIDAR_FL:  { x: -9,  y: 10,  z: 18 },
-  LIDAR_FC:  { x:  0,  y:  6,  z: 20 },
-  LIDAR_FR:  { x:  9,  y: 10,  z: 18 },
-  LIDAR_RC:  { x:  0,  y:  6,  z:-20 },
+  // LiDAR — roof-mounted
+  LIDAR_FL:    { x: -9,   y: 10,   z: 18 },
+  LIDAR_FC:    { x:  0,   y:  6,   z: 20 },
+  LIDAR_FR:    { x:  9,   y: 10,   z: 18 },
+  LIDAR_RC:    { x:  0,   y:  6,   z:-20 },
   // Radar — bumper-level
-  RADAR_FC:  { x:  0,  y: 2.5, z: 20 },
-  RADAR_FL:  { x: -8,  y: 2.5, z: 19 },
-  RADAR_FR:  { x:  8,  y: 2.5, z: 19 },
-  RADAR_RL:  { x: -8,  y: 2.5, z:-19 },
-  RADAR_RR:  { x:  8,  y: 2.5, z:-19 },
-  // Switches — inside vehicle
-  SW_FL:     { x: -4,  y:  3,  z: 10 },   // Front-Left Zone Controller
-  SW_FR:     { x:  4,  y:  3,  z: 10 },   // Front-Right Zone Controller
-  SW_REAR:   { x:  0,  y:  3,  z: -8 },   // Rear Gateway (LAN9692)
-  // ADAS PC — rear interior
-  ADAS_PC:   { x:  0,  y:  2,  z:-15 }
+  RADAR_FC:    { x:  0,   y:  2.5, z: 20 },
+  RADAR_FL:    { x: -8,   y:  2.5, z: 19 },
+  RADAR_FR:    { x:  8,   y:  2.5, z: 19 },
+  RADAR_RL:    { x: -8,   y:  2.5, z:-19 },
+  RADAR_RR:    { x:  8,   y:  2.5, z:-19 },
+  // Switches — inside vehicle (original roii positions)
+  FRONT_ZC:    { x:  0,   y:  2,   z: 10 },   // Front Zone Controller
+  REAR_ZC:     { x:  0,   y:  2,   z:-10 },   // Rear Zone Controller
+  CENTRAL_GW:  { x:  0,   y:  2,   z:  0 },   // Central Gateway (LAN9692)
+  // ADAS PC — near center
+  ADAS_PC:     { x: -3,   y:  2,   z:  3 }
 };
 
 /* ── Scenario Description ──────────────────────── */
 export const ROII_SCENARIO = {
   title: "ROii Autonomous Shuttle TSN Network",
-  description: "ROii autonomous shuttle sensor fusion network with 4 LiDAR and 5 Radar sensors. Three LAN966x switches form a triangle topology (Front-Left ZC, Front-Right ZC, Rear Gateway) connecting all sensors to a rear-mounted ADAS processing PC. IEEE 802.1Qbv GCL scheduling ensures deterministic delivery of safety-critical perception data.",
+  description: "ROii autonomous shuttle sensor fusion network with 4 LiDAR and 5 Radar sensors. Front Zone Controller (LAN9662) aggregates 6 front sensors, Rear Zone Controller (LAN9662) aggregates 3 rear sensors. Central Gateway (LAN9692) bridges both zones to the ADAS processing unit. IEEE 802.1Qbv GCL scheduling ensures deterministic delivery of safety-critical perception data.",
   flows: [
     { name: "LiDAR FL → ADAS PC", color: "#10B981", desc: "1200B point cloud, P7, 200µs deadline, 2 pkts/cycle" },
     { name: "LiDAR FR → ADAS PC", color: "#10B981", desc: "1200B point cloud, P7, 200µs deadline, 2 pkts/cycle" },
@@ -182,10 +183,10 @@ export const ROII_SCENARIO = {
     { name: "Radar RR → ADAS PC", color: "#952aff", desc: "256B detection, P6, 400µs deadline" }
   ],
   domains: [
-    { name: "LiDAR Sensors",     color: "#10B981" },
-    { name: "Radar Sensors",     color: "#952aff" },
-    { name: "LAN9662 Front ZC",  color: "#3B82F6" },
-    { name: "LAN9692 Rear GW",   color: "#06B6D4" },
-    { name: "ADAS Processing",   color: "#f9a825" }
+    { name: "LiDAR Sensors",      color: "#10B981" },
+    { name: "Radar Sensors",      color: "#952aff" },
+    { name: "LAN9662 Zone Ctrl",  color: "#3B82F6" },
+    { name: "LAN9692 Central GW", color: "#06B6D4" },
+    { name: "ADAS Processing",    color: "#f9a825" }
   ]
 };
