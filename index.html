@@ -235,6 +235,10 @@
     </div>
   </div>
 
+  <script>
+    window.module = window.module || { exports: null };
+    window.exports = window.module.exports;
+  </script>
   <script src="./vendor/glpk.min.js"></script>
   <script>
     const sample = {
@@ -606,12 +610,15 @@
       };
     }
 
-    async function milpSolve(model, packets) {
-      if (typeof GLPK === "undefined") {
-        throw new Error("glpk.js 로드 실패 (인터넷/CDN 접근 필요)");
-      }
+    function createGlpkInstance() {
+      if (typeof GLPK === "function") return GLPK();
+      if (window.module && typeof window.module.exports === "function") return window.module.exports();
+      if (typeof window.glpk === "function") return window.glpk();
+      throw new Error("glpk 로드 실패: vendor/glpk.min.js 또는 vendor/glpk.wasm 확인 필요");
+    }
 
-      const glpk = GLPK();
+    async function milpSolve(model, packets) {
+      const glpk = createGlpkInstance();
       const linkMap = new Map(model.links.map(l => [l.id, l]));
       const varsSeen = new Set();
       const subjectTo = [];

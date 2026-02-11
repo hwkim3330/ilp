@@ -34,4 +34,4 @@ python3 -m http.server 8080
 ## 주의
 
 - Exact는 packet 수가 조금만 커져도 폭발적으로 느려짐
-- MILP는 CDN에서 `glpk.js`를 로드하므로 인터넷 연결 필요
+- MILP는 저장소의 로컬 파일 `vendor/glpk.min.js`, `vendor/glpk.wasm`를 사용
