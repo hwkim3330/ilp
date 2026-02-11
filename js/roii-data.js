@@ -146,25 +146,33 @@ export const ROII_NODE_COLORS = {
   ADAS_PC:     { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",     shortLabel: "PC" }
 };
 
-/* ── 3D Node Positions (from original roii project) ── */
+/* ── 3D Node Positions (from latest web roii project) ── */
 export const ROII_3D_POSITIONS = {
-  // LiDAR — roof-mounted
-  LIDAR_FL:    { x: -9,   y: 10,   z: 18 },
-  LIDAR_FC:    { x:  0,   y:  6,   z: 20 },
-  LIDAR_FR:    { x:  9,   y: 10,   z: 18 },
-  LIDAR_RC:    { x:  0,   y:  6,   z:-20 },
-  // Radar — bumper-level
-  RADAR_FC:    { x:  0,   y:  2.5, z: 20 },
-  RADAR_FL:    { x: -8,   y:  2.5, z: 19 },
-  RADAR_FR:    { x:  8,   y:  2.5, z: 19 },
-  RADAR_RL:    { x: -8,   y:  2.5, z:-19 },
-  RADAR_RR:    { x:  8,   y:  2.5, z:-19 },
-  // Switches — inside vehicle (original roii positions)
+  // LiDAR — roof-mounted (updated positions)
+  LIDAR_FL:    { x: -8.5, y: 10,   z: 16.2 },
+  LIDAR_FC:    { x:  0,   y:  5.5, z: 18.5 },
+  LIDAR_FR:    { x:  8.5, y: 10,   z: 16.2 },
+  LIDAR_RC:    { x:  0,   y:  5.5, z:-18.5 },
+  // Radar — mid-height (updated from bumper to mid-body)
+  RADAR_FC:    { x:  0,   y:  7,   z: 18.5 },
+  RADAR_FL:    { x: -7,   y:  6.5, z: 17.5 },
+  RADAR_FR:    { x:  7,   y:  6.5, z: 17.5 },
+  RADAR_RL:    { x: -7,   y:  6.5, z:-18 },
+  RADAR_RR:    { x:  7,   y:  6.5, z:-18 },
+  // Switches — inside vehicle
   FRONT_ZC:    { x:  0,   y:  2,   z: 10 },   // Front Zone Controller
   REAR_ZC:     { x:  0,   y:  2,   z:-10 },   // Rear Zone Controller
   CENTRAL_GW:  { x:  0,   y:  2,   z:  0 },   // Central Gateway (LAN9692)
   // ADAS PC — near center
   ADAS_PC:     { x: -3,   y:  2,   z:  3 }
+};
+
+/* ── Radar Tilts (from latest web roii project) ── */
+export const ROII_3D_TILTS = {
+  RADAR_FL:  { y: -Math.PI / 6 },
+  RADAR_FR:  { y:  Math.PI / 6 },
+  RADAR_RL:  { y:  Math.PI / 6 },
+  RADAR_RR:  { y: -Math.PI / 6 }
 };
 
 /* ── Scenario Description ──────────────────────── */
