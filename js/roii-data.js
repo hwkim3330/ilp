@@ -125,24 +125,24 @@ export function getRoiiPositions(W, H) {
 
 /* ── Node Color Map ──────────────────────────── */
 export const ROII_NODE_COLORS = {
-  // LiDAR — green
-  LIDAR_FL:  { fill: "#064e3b", stroke: "#10B981", label: "LiDAR FL", shortLabel: "LiDAR" },
-  LIDAR_FR:  { fill: "#064e3b", stroke: "#10B981", label: "LiDAR FR", shortLabel: "LiDAR" },
-  LIDAR_FC:  { fill: "#064e3b", stroke: "#10B981", label: "LiDAR FC", shortLabel: "LiDAR" },
-  LIDAR_RC:  { fill: "#064e3b", stroke: "#10B981", label: "LiDAR RC", shortLabel: "LiDAR" },
-  // Radar — purple
-  RADAR_FC:  { fill: "#2d1066", stroke: "#952aff", label: "Radar FC", shortLabel: "Radar" },
-  RADAR_FL:  { fill: "#2d1066", stroke: "#952aff", label: "Radar FL", shortLabel: "Radar" },
-  RADAR_FR:  { fill: "#2d1066", stroke: "#952aff", label: "Radar FR", shortLabel: "Radar" },
-  RADAR_RL:  { fill: "#2d1066", stroke: "#952aff", label: "Radar RL", shortLabel: "Radar" },
-  RADAR_RR:  { fill: "#2d1066", stroke: "#952aff", label: "Radar RR", shortLabel: "Radar" },
-  // LAN9662 front switches — blue
-  SW_FL:     { fill: "#1e3a5f", stroke: "#3B82F6", label: "SW FL",    shortLabel: "LAN9662" },
-  SW_FR:     { fill: "#1e3a5f", stroke: "#3B82F6", label: "SW FR",    shortLabel: "LAN9662" },
-  // LAN9692 rear gateway — cyan
-  SW_REAR:   { fill: "#0a3a3a", stroke: "#06B6D4", label: "SW Rear",  shortLabel: "LAN9692" },
-  // ADAS PC — orange
-  ADAS_PC:   { fill: "#3a2800", stroke: "#f9a825", label: "ADAS PC",  shortLabel: "PC" }
+  // LiDAR — light green tint
+  LIDAR_FL:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FL", shortLabel: "LiDAR" },
+  LIDAR_FR:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FR", shortLabel: "LiDAR" },
+  LIDAR_FC:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR FC", shortLabel: "LiDAR" },
+  LIDAR_RC:  { fill: "#d1fae5", stroke: "#10B981", label: "LiDAR RC", shortLabel: "LiDAR" },
+  // Radar — light purple tint
+  RADAR_FC:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FC", shortLabel: "Radar" },
+  RADAR_FL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FL", shortLabel: "Radar" },
+  RADAR_FR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FR", shortLabel: "Radar" },
+  RADAR_RL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL", shortLabel: "Radar" },
+  RADAR_RR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR", shortLabel: "Radar" },
+  // LAN9662 front switches — light blue tint
+  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "SW FL",    shortLabel: "LAN9662" },
+  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "SW FR",    shortLabel: "LAN9662" },
+  // LAN9692 rear gateway — light cyan tint
+  SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "SW Rear",  shortLabel: "LAN9692" },
+  // ADAS PC — light amber tint
+  ADAS_PC:   { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",  shortLabel: "PC" }
 };
 
 /* ── Scenario Description ──────────────────────── */
