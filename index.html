@@ -1,467 +1,455 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TSN TAS ILP Scheduling Example</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #eee;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { text-align: center; color: #00d4ff; margin-bottom: 5px; }
-        .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.9em; }
-        .card {
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .card h2 {
-            color: #00d4ff;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 10px;
-        }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-
-        /* ILP Section */
-        .ilp-box {
-            background: #0a0a1a;
-            border-radius: 10px;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.8;
-        }
-        .obj { color: #ff6b6b; }
-        .constraint { color: #4ecdc4; }
-        .var { color: #ffd93d; }
-        .comment { color: #666; }
-
-        /* Timeline */
-        .timeline {
-            background: #0a0a1a;
-            border-radius: 10px;
-            padding: 20px;
-            overflow-x: auto;
-        }
-        .time-axis {
-            display: flex;
-            margin-left: 100px;
-            margin-bottom: 5px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 5px;
-        }
-        .time-tick {
-            flex: 1;
-            text-align: center;
-            font-size: 0.75em;
-            color: #666;
-        }
-        .flow-row {
-            display: flex;
-            align-items: center;
-            margin: 8px 0;
-        }
-        .flow-label {
-            width: 100px;
-            font-size: 0.85em;
-            color: #888;
-        }
-        .flow-bar-container {
-            flex: 1;
-            height: 35px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 5px;
-            position: relative;
-        }
-        .flow-bar {
-            position: absolute;
-            height: 100%;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75em;
-            color: #fff;
-            transition: all 0.3s;
-        }
-        .flow-bar:hover { filter: brightness(1.2); transform: scaleY(1.1); }
-        .flow-bar.tsn { background: linear-gradient(90deg, #ff6b6b, #ee5a5a); }
-        .flow-bar.be { background: linear-gradient(90deg, #4ecdc4, #44a08d); }
-        .flow-bar.guard { background: rgba(255,255,255,0.1); }
-
-        /* Results */
-        .result-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-        }
-        .result-item {
-            text-align: center;
-            padding: 15px;
-            background: rgba(0,212,255,0.1);
-            border-radius: 10px;
-        }
-        .result-item .value {
-            font-size: 1.5em;
-            color: #00d4ff;
-            font-weight: bold;
-        }
-        .result-item .label {
-            font-size: 0.8em;
-            color: #888;
-            margin-top: 5px;
-        }
-
-        /* Table */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        th { color: #00d4ff; font-weight: normal; font-size: 0.85em; }
-        .tsn-priority { color: #ff6b6b; font-weight: bold; }
-        .check { color: #4ecdc4; }
-
-        /* Legend */
-        .legend { display: flex; gap: 20px; margin-top: 15px; flex-wrap: wrap; }
-        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; }
-        .legend-color { width: 20px; height: 20px; border-radius: 4px; }
-
-        canvas { max-height: 250px; margin-top: 15px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSN TAS GCL JS Solver</title>
+  <style>
+    :root {
+      --bg: #0a1022;
+      --card: #141d36;
+      --line: #2d3b64;
+      --text: #edf2ff;
+      --muted: #98a7ce;
+      --accent: #64f6cb;
+      --warn: #ff7d7d;
+      --ok: #84f4a5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 0% 0%, #1f2b56, var(--bg));
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .card {
+      background: linear-gradient(180deg, #1a2648, var(--card));
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    h1 { margin: 0; font-size: 1.6rem; }
+    p { color: var(--muted); margin: 8px 0 0; }
+    textarea {
+      width: 100%;
+      min-height: 250px;
+      resize: vertical;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0e1630;
+      color: var(--text);
+      padding: 10px;
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      font-size: 0.83rem;
+      line-height: 1.5;
+    }
+    .btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: #0b1528;
+      margin-right: 8px;
+    }
+    .btn.secondary { background: #4f648f; color: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .metric .v { font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+    .metric .k { color: var(--muted); font-size: 0.82rem; }
+    .axis {
+      margin-top: 10px;
+      height: 22px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.14); }
+    .row { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: rgba(0,0,0,0.12); }
+    .row .t { color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
+    .bar-area { height: 30px; border-radius: 6px; background: rgba(255,255,255,0.03); position: relative; overflow: hidden; }
+    .bar {
+      position: absolute;
+      top: 2px;
+      height: 26px;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      white-space: nowrap;
+      color: #f8fbff;
+    }
+    .bar.flow { background: linear-gradient(90deg, #5ca7ff, #7f7fff); }
+    .bar.guard { background: #ffb067; color: #111; }
+    .bar.rem { background: #2d8c6b; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 8px; font-size: 0.85rem; }
+    th { color: var(--muted); font-weight: 500; }
+    .ok { color: var(--ok); }
+    .miss { color: var(--warn); }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0d1630;
+      padding: 10px;
+      font-size: 0.8rem;
+      color: #c6d5ff;
+    }
+    #status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>TSN TAS ILP Scheduling</h1>
-        <p class="subtitle">Time-Aware Shaper를 위한 Integer Linear Programming 스케줄링 예제</p>
+  <div class="wrap">
+    <h1>TSN/TAS/GCL JS Solver</h1>
+    <p>브라우저에서 계산과 시각화를 같이 수행합니다. (설치 없음)</p>
 
-        <!-- Problem Definition -->
-        <div class="card">
-            <h2>📋 Problem: 4개의 Flow를 1ms Cycle에 스케줄링</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Flow</th>
-                        <th>Priority</th>
-                        <th>Payload</th>
-                        <th>Deadline</th>
-                        <th>Period</th>
-                        <th>Type</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>f₁</td>
-                        <td class="tsn-priority">7 (TSN)</td>
-                        <td>1024 B</td>
-                        <td>500 µs</td>
-                        <td>1000 µs</td>
-                        <td>Control</td>
-                    </tr>
-                    <tr>
-                        <td>f₂</td>
-                        <td class="tsn-priority">7 (TSN)</td>
-                        <td>512 B</td>
-                        <td>300 µs</td>
-                        <td>1000 µs</td>
-                        <td>Sensor</td>
-                    </tr>
-                    <tr>
-                        <td>f₃</td>
-                        <td>3</td>
-                        <td>1500 B</td>
-                        <td>-</td>
-                        <td>1000 µs</td>
-                        <td>Video</td>
-                    </tr>
-                    <tr>
-                        <td>f₄</td>
-                        <td>0</td>
-                        <td>256 B</td>
-                        <td>-</td>
-                        <td>1000 µs</td>
-                        <td>Best Effort</td>
-                    </tr>
-                </tbody>
-            </table>
-            <p style="margin-top: 15px; color: #888; font-size: 0.85em;">
-                Link Speed: 1 Gbps | Cycle Time: 1000 µs | Guard Band: 12.3 µs (Max Frame)
-            </p>
-        </div>
-
-        <div class="grid">
-            <!-- ILP Formulation -->
-            <div class="card">
-                <h2>📐 ILP Formulation</h2>
-                <div class="ilp-box">
-                    <div class="comment">/* Decision Variables */</div>
-                    <div><span class="var">s[i]</span> = start time of flow i</div>
-                    <div><span class="var">x[i,j]</span> ∈ {0,1} = flow i before j</div>
-                    <br>
-                    <div class="comment">/* Objective: Minimize total latency */</div>
-                    <div><span class="obj">min</span> Σ (s[i] + d[i]) for TSN flows</div>
-                    <br>
-                    <div class="comment">/* Constraints */</div>
-                    <div><span class="constraint">C1:</span> s[i] + d[i] ≤ deadline[i]</div>
-                    <div><span class="constraint">C2:</span> s[i] ≥ 0</div>
-                    <div><span class="constraint">C3:</span> s[i] + d[i] ≤ s[j] + M(1-x[i,j])</div>
-                    <div><span class="constraint">C4:</span> s[j] + d[j] ≤ s[i] + M·x[i,j]</div>
-                    <div><span class="constraint">C5:</span> s[i] + d[i] + guard ≤ cycle</div>
-                </div>
-            </div>
-
-            <!-- Solution -->
-            <div class="card">
-                <h2>✅ ILP Solution</h2>
-                <div class="ilp-box">
-                    <div class="comment">/* Computed Transmission Times */</div>
-                    <div><span class="var">d[f₁]</span> = (1024+38)×8 / 1000 = <span class="obj">8.50 µs</span></div>
-                    <div><span class="var">d[f₂]</span> = (512+38)×8 / 1000 = <span class="obj">4.40 µs</span></div>
-                    <div><span class="var">d[f₃]</span> = (1500+38)×8 / 1000 = <span class="obj">12.30 µs</span></div>
-                    <div><span class="var">d[f₄]</span> = (256+38)×8 / 1000 = <span class="obj">2.35 µs</span></div>
-                    <br>
-                    <div class="comment">/* Optimal Start Times */</div>
-                    <div><span class="var">s[f₁]</span> = <span class="constraint">0.00 µs</span></div>
-                    <div><span class="var">s[f₂]</span> = <span class="constraint">20.80 µs</span></div>
-                    <div><span class="var">s[f₃]</span> = <span class="constraint">37.50 µs</span></div>
-                    <div><span class="var">s[f₄]</span> = <span class="constraint">62.10 µs</span></div>
-                    <br>
-                    <div class="comment">/* Objective Value */</div>
-                    <div>Total TSN Latency = <span class="obj">33.70 µs</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- GCL Timeline -->
-        <div class="card">
-            <h2>📊 Gate Control List (GCL) Timeline</h2>
-            <div class="timeline">
-                <div class="time-axis">
-                    <div class="time-tick">0</div>
-                    <div class="time-tick">100</div>
-                    <div class="time-tick">200</div>
-                    <div class="time-tick">300</div>
-                    <div class="time-tick">400</div>
-                    <div class="time-tick">500</div>
-                    <div class="time-tick">600</div>
-                    <div class="time-tick">700</div>
-                    <div class="time-tick">800</div>
-                    <div class="time-tick">900</div>
-                    <div class="time-tick">1000 µs</div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="flow-label">f₁ (TSN)</div>
-                    <div class="flow-bar-container">
-                        <div class="flow-bar tsn" style="left: 0%; width: 0.85%;">f₁</div>
-                        <div class="flow-bar guard" style="left: 0.85%; width: 1.23%;"></div>
-                    </div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="flow-label">f₂ (TSN)</div>
-                    <div class="flow-bar-container">
-                        <div class="flow-bar tsn" style="left: 2.08%; width: 0.44%;">f₂</div>
-                        <div class="flow-bar guard" style="left: 2.52%; width: 1.23%;"></div>
-                    </div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="flow-label">f₃ (Video)</div>
-                    <div class="flow-bar-container">
-                        <div class="flow-bar be" style="left: 3.75%; width: 1.23%;">f₃</div>
-                    </div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="flow-label">f₄ (BE)</div>
-                    <div class="flow-bar-container">
-                        <div class="flow-bar be" style="left: 6.21%; width: 0.24%;">f₄</div>
-                    </div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="flow-label" style="color: #00d4ff;">Combined</div>
-                    <div class="flow-bar-container" style="height: 45px;">
-                        <div class="flow-bar tsn" style="left: 0%; width: 0.85%; height: 100%;">f₁</div>
-                        <div class="flow-bar guard" style="left: 0.85%; width: 1.23%; height: 100%;"></div>
-                        <div class="flow-bar tsn" style="left: 2.08%; width: 0.44%; height: 100%;">f₂</div>
-                        <div class="flow-bar guard" style="left: 2.52%; width: 1.23%; height: 100%;"></div>
-                        <div class="flow-bar be" style="left: 3.75%; width: 1.23%; height: 100%;">f₃</div>
-                        <div class="flow-bar be" style="left: 6.21%; width: 0.24%; height: 100%;">f₄</div>
-                    </div>
-                </div>
-            </div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: linear-gradient(90deg, #ff6b6b, #ee5a5a);"></div>
-                    <span>TSN Traffic (Priority 7)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: linear-gradient(90deg, #4ecdc4, #44a08d);"></div>
-                    <span>Best Effort Traffic</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgba(255,255,255,0.1);"></div>
-                    <span>Guard Band (12.3 µs)</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Results -->
-        <div class="card">
-            <h2>📈 Schedule Results</h2>
-            <div class="result-grid">
-                <div class="result-item">
-                    <div class="value">6.45%</div>
-                    <div class="label">Link Utilization</div>
-                </div>
-                <div class="result-item">
-                    <div class="value">2</div>
-                    <div class="label">TSN Slots</div>
-                </div>
-                <div class="result-item">
-                    <div class="value">33.7 µs</div>
-                    <div class="label">Max TSN Latency</div>
-                </div>
-                <div class="result-item">
-                    <div class="value">✓</div>
-                    <div class="label">All Deadlines Met</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid">
-            <!-- Deadline Check -->
-            <div class="card">
-                <h2>⏱️ Deadline Verification</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Flow</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Deadline</th>
-                            <th>Slack</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>f₁</td>
-                            <td>0.00 µs</td>
-                            <td>8.50 µs</td>
-                            <td>500 µs</td>
-                            <td>491.5 µs</td>
-                            <td class="check">✓ OK</td>
-                        </tr>
-                        <tr>
-                            <td>f₂</td>
-                            <td>20.80 µs</td>
-                            <td>25.20 µs</td>
-                            <td>300 µs</td>
-                            <td>274.8 µs</td>
-                            <td class="check">✓ OK</td>
-                        </tr>
-                        <tr>
-                            <td>f₃</td>
-                            <td>37.50 µs</td>
-                            <td>49.80 µs</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td class="check">✓ BE</td>
-                        </tr>
-                        <tr>
-                            <td>f₄</td>
-                            <td>62.10 µs</td>
-                            <td>64.45 µs</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td class="check">✓ BE</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Chart -->
-            <div class="card">
-                <h2>📉 Latency vs Deadline</h2>
-                <canvas id="latencyChart"></canvas>
-            </div>
-        </div>
-
-        <!-- GCL Output -->
-        <div class="card">
-            <h2>🔧 Generated GCL Configuration</h2>
-            <div class="ilp-box">
-                <div class="comment">/* IEEE 802.1Qbv Gate Control List */</div>
-                <div>cycle_time = <span class="var">1000 µs</span></div>
-                <div>base_time = <span class="var">0</span></div>
-                <br>
-                <div class="comment">/* Gate Control Entries */</div>
-                <div>GCE[0]: gate=<span class="obj">10000000</span> time=<span class="var">8.50 µs</span>  <span class="comment">// Q7 open (f₁)</span></div>
-                <div>GCE[1]: gate=<span class="obj">00000000</span> time=<span class="var">12.30 µs</span> <span class="comment">// Guard band</span></div>
-                <div>GCE[2]: gate=<span class="obj">10000000</span> time=<span class="var">4.40 µs</span>  <span class="comment">// Q7 open (f₂)</span></div>
-                <div>GCE[3]: gate=<span class="obj">00000000</span> time=<span class="var">12.30 µs</span> <span class="comment">// Guard band</span></div>
-                <div>GCE[4]: gate=<span class="obj">00001111</span> time=<span class="var">962.50 µs</span> <span class="comment">// Q0-Q3 open (BE)</span></div>
-            </div>
-        </div>
+    <div class="card">
+      <strong>Input JSON</strong>
+      <textarea id="input"></textarea>
+      <div style="margin-top:10px;">
+        <button class="btn" id="solveBtn">Solve (Exact Search)</button>
+        <button class="btn secondary" id="resetBtn">Reset Sample</button>
+      </div>
+      <div id="status"></div>
     </div>
 
-    <script>
-        // Latency Chart
-        const ctx = document.getElementById('latencyChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['f₁ (TSN)', 'f₂ (TSN)', 'f₃ (Video)', 'f₄ (BE)'],
-                datasets: [
-                    {
-                        label: 'End Time (µs)',
-                        data: [8.5, 25.2, 49.8, 64.45],
-                        backgroundColor: ['#ff6b6b', '#ff6b6b', '#4ecdc4', '#4ecdc4'],
-                        borderRadius: 5
-                    },
-                    {
-                        label: 'Deadline (µs)',
-                        data: [500, 300, null, null],
-                        type: 'line',
-                        borderColor: '#ffd93d',
-                        borderWidth: 2,
-                        pointBackgroundColor: '#ffd93d',
-                        pointRadius: 6,
-                        fill: false
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 550,
-                        grid: { color: 'rgba(255,255,255,0.1)' },
-                        ticks: { color: '#888' }
-                    },
-                    x: {
-                        grid: { color: 'rgba(255,255,255,0.1)' },
-                        ticks: { color: '#888' }
-                    }
-                },
-                plugins: {
-                    legend: { labels: { color: '#888' } }
-                }
-            }
+    <div class="grid">
+      <div class="card metric"><div class="v" id="mCycle">-</div><div class="k">Cycle (us)</div></div>
+      <div class="card metric"><div class="v" id="mJobs">-</div><div class="k">Jobs</div></div>
+      <div class="card metric"><div class="v" id="mObj">-</div><div class="k">Objective (TSN end sum)</div></div>
+      <div class="card metric"><div class="v" id="mUtil">-</div><div class="k">Utilization (%)</div></div>
+    </div>
+
+    <div class="card">
+      <strong>GCL Timeline</strong>
+      <div class="axis" id="axis"></div>
+      <div style="display:flex;justify-content:space-between;color:#98a7ce;font-size:0.75rem;margin-top:4px;"><span>0</span><span id="axisMax">-</span></div>
+      <div id="rows"></div>
+    </div>
+
+    <div class="card">
+      <strong>Scheduled Jobs</strong>
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Flow</th>
+            <th>Prio</th>
+            <th>Release</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Deadline</th>
+            <th>Slack</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="jobTable"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <strong>Generated GCL JSON</strong>
+      <pre id="gclOut">-</pre>
+    </div>
+  </div>
+
+  <script>
+    const sampleInput = {
+      cycle_time_us: 1000,
+      guard_band_us: 12.3,
+      link_speed_mbps: 1000,
+      keepout_after_tsn: true,
+      flows: [
+        { id: "f1", priority: 7, payload_bytes: 1024, period_us: 1000, deadline_us: 500, traffic_type: "control" },
+        { id: "f2", priority: 7, payload_bytes: 512, period_us: 500, deadline_us: 280, traffic_type: "sensor" },
+        { id: "f3", priority: 3, payload_bytes: 1200, period_us: 1000, deadline_us: null, traffic_type: "video" },
+        { id: "f4", priority: 0, payload_bytes: 256, period_us: 1000, deadline_us: null, traffic_type: "be" }
+      ]
+    };
+
+    const inputEl = document.getElementById("input");
+    const statusEl = document.getElementById("status");
+    const solveBtn = document.getElementById("solveBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    resetSample();
+
+    resetBtn.addEventListener("click", resetSample);
+    solveBtn.addEventListener("click", () => {
+      try {
+        const model = JSON.parse(inputEl.value);
+        const t0 = performance.now();
+        const result = solveExact(model);
+        const elapsed = (performance.now() - t0).toFixed(1);
+        render(result);
+        statusEl.textContent = `완료: nodes=${result.stats.nodes}, pruned=${result.stats.pruned}, time=${elapsed}ms`;
+      } catch (err) {
+        statusEl.innerHTML = `<span style=\"color:#ff9a9a\">오류: ${err.message}</span>`;
+      }
+    });
+
+    function resetSample() {
+      inputEl.value = JSON.stringify(sampleInput, null, 2);
+      statusEl.textContent = "샘플 입력 로드됨";
+    }
+
+    function txTimeUs(payloadBytes, mbps) {
+      return ((payloadBytes + 38) * 8) / mbps;
+    }
+
+    function isTsn(priority, deadline) {
+      return priority >= 6 || deadline !== null;
+    }
+
+    function round3(v) {
+      return Math.round(v * 1000) / 1000;
+    }
+
+    function expandJobs(model) {
+      const jobs = [];
+      for (const flow of model.flows) {
+        if (!flow.period_us || flow.period_us <= 0) throw new Error(`invalid period_us: ${flow.id}`);
+        const countRaw = model.cycle_time_us / flow.period_us;
+        const count = Math.round(countRaw);
+        if (Math.abs(countRaw - count) > 1e-9) {
+          throw new Error(`cycle_time_us must be divisible by period_us (${flow.id})`);
+        }
+        for (let k = 0; k < count; k++) {
+          const release = k * flow.period_us;
+          jobs.push({
+            job_id: `${flow.id}#${k}`,
+            flow_id: flow.id,
+            priority: flow.priority,
+            traffic_type: flow.traffic_type,
+            release_us: release,
+            tx_us: txTimeUs(flow.payload_bytes, model.link_speed_mbps),
+            deadline_us: flow.deadline_us == null ? null : release + flow.deadline_us,
+            tsn: isTsn(flow.priority, flow.deadline_us)
+          });
+        }
+      }
+      return jobs;
+    }
+
+    function solveExact(model) {
+      if (!model || !Array.isArray(model.flows) || model.flows.length === 0) {
+        throw new Error("flows must not be empty");
+      }
+      if (model.link_speed_mbps <= 0) throw new Error("link_speed_mbps must be > 0");
+
+      const jobs = expandJobs(model);
+      const n = jobs.length;
+      if (n > 12) {
+        throw new Error(`jobs=${n} too large for exact search in browser (<=12 권장)`);
+      }
+
+      let bestObjective = Number.POSITIVE_INFINITY;
+      let bestSchedule = null;
+      let nodes = 0;
+      let pruned = 0;
+
+      const used = new Array(n).fill(false);
+      const current = [];
+
+      function dfs(depth, t, objective) {
+        nodes++;
+
+        if (objective >= bestObjective) {
+          pruned++;
+          return;
+        }
+
+        if (depth === n) {
+          if (t <= model.cycle_time_us && objective < bestObjective) {
+            bestObjective = objective;
+            bestSchedule = current.map(x => ({ ...x }));
+          }
+          return;
+        }
+
+        const candidates = [];
+        for (let i = 0; i < n; i++) {
+          if (!used[i]) candidates.push(i);
+        }
+
+        candidates.sort((a, b) => {
+          const da = jobs[a].deadline_us == null ? Number.POSITIVE_INFINITY : jobs[a].deadline_us;
+          const db = jobs[b].deadline_us == null ? Number.POSITIVE_INFINITY : jobs[b].deadline_us;
+          if (da !== db) return da - db;
+          return jobs[b].priority - jobs[a].priority;
         });
-    </script>
+
+        for (const i of candidates) {
+          const job = jobs[i];
+          const start = Math.max(t, job.release_us);
+          const end = start + job.tx_us;
+
+          if (end > model.cycle_time_us) {
+            pruned++;
+            continue;
+          }
+          if (job.deadline_us != null && end > job.deadline_us) {
+            pruned++;
+            continue;
+          }
+
+          const nextT = end + (model.keepout_after_tsn && job.tsn && depth < n - 1 ? model.guard_band_us : 0);
+          if (nextT > model.cycle_time_us) {
+            pruned++;
+            continue;
+          }
+
+          used[i] = true;
+          current.push({
+            ...job,
+            start_us: round3(start),
+            end_us: round3(end),
+            slack_us: job.deadline_us == null ? null : round3(job.deadline_us - end),
+            status: job.deadline_us == null ? "BE" : "OK"
+          });
+
+          dfs(depth + 1, nextT, objective + (job.tsn ? end : 0));
+
+          current.pop();
+          used[i] = false;
+        }
+      }
+
+      dfs(0, 0, 0);
+
+      if (!bestSchedule) throw new Error("feasible schedule 없음 (deadline/cycle 제약 확인 필요)");
+
+      const gcl = buildGcl(model, bestSchedule);
+      const usedTime = gcl.entries[gcl.entries.length - 1].end_us;
+
+      return {
+        model,
+        jobs: bestSchedule,
+        gcl,
+        objective: round3(bestObjective),
+        utilization: round3((usedTime / model.cycle_time_us) * 100),
+        stats: { nodes, pruned }
+      };
+    }
+
+    function gateMask(priority) {
+      const bits = Array(8).fill("0");
+      const p = Math.min(7, Math.max(0, priority));
+      bits[7 - p] = "1";
+      return bits.join("");
+    }
+
+    function buildGcl(model, scheduledJobs) {
+      const entries = [];
+      let idx = 0;
+      let lastEnd = 0;
+
+      for (let i = 0; i < scheduledJobs.length; i++) {
+        const j = scheduledJobs[i];
+        entries.push({
+          index: idx++,
+          gate_mask: gateMask(j.priority),
+          start_us: round3(j.start_us),
+          duration_us: round3(j.end_us - j.start_us),
+          end_us: round3(j.end_us),
+          note: `${j.job_id} (${j.traffic_type})`
+        });
+        lastEnd = j.end_us;
+
+        if (model.keepout_after_tsn && j.tsn && i < scheduledJobs.length - 1) {
+          const gEnd = j.end_us + model.guard_band_us;
+          entries.push({
+            index: idx++,
+            gate_mask: "00000000",
+            start_us: round3(j.end_us),
+            duration_us: round3(model.guard_band_us),
+            end_us: round3(gEnd),
+            note: "guard band"
+          });
+          lastEnd = gEnd;
+        }
+      }
+
+      if (lastEnd < model.cycle_time_us) {
+        entries.push({
+          index: idx++,
+          gate_mask: "00001111",
+          start_us: round3(lastEnd),
+          duration_us: round3(model.cycle_time_us - lastEnd),
+          end_us: round3(model.cycle_time_us),
+          note: "best-effort remainder"
+        });
+        lastEnd = model.cycle_time_us;
+      }
+
+      return {
+        cycle_time_us: model.cycle_time_us,
+        base_time_us: 0,
+        entries,
+        used_time_us: round3(lastEnd)
+      };
+    }
+
+    function pct(v, max) {
+      return max <= 0 ? 0 : (v / max) * 100;
+    }
+
+    function render(result) {
+      document.getElementById("mCycle").textContent = round3(result.model.cycle_time_us);
+      document.getElementById("mJobs").textContent = result.jobs.length;
+      document.getElementById("mObj").textContent = result.objective;
+      document.getElementById("mUtil").textContent = result.utilization;
+      document.getElementById("axisMax").textContent = `${round3(result.model.cycle_time_us)} us`;
+
+      const axis = document.getElementById("axis");
+      axis.innerHTML = "";
+      for (let i = 1; i < 10; i++) {
+        const t = document.createElement("div");
+        t.className = "tick";
+        t.style.left = `${i * 10}%`;
+        axis.appendChild(t);
+      }
+
+      const rows = document.getElementById("rows");
+      rows.innerHTML = "";
+      for (const e of result.gcl.entries) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const cls = e.note.includes("guard") ? "guard" : (e.note.includes("remainder") ? "rem" : "flow");
+        row.innerHTML = `<div class="t">#${e.index} | mask=${e.gate_mask} | ${e.note}</div><div class="bar-area"><div class="bar ${cls}" style="left:${pct(e.start_us, result.model.cycle_time_us)}%;width:${Math.max(pct(e.duration_us, result.model.cycle_time_us), 0.8)}%">${e.start_us}-${e.end_us} us</div></div>`;
+        rows.appendChild(row);
+      }
+
+      const tbody = document.getElementById("jobTable");
+      tbody.innerHTML = "";
+      for (const j of result.jobs) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${j.job_id}</td>
+          <td>${j.flow_id}</td>
+          <td>${j.priority}</td>
+          <td>${round3(j.release_us)}</td>
+          <td>${round3(j.start_us)}</td>
+          <td>${round3(j.end_us)}</td>
+          <td>${j.deadline_us == null ? "-" : round3(j.deadline_us)}</td>
+          <td>${j.slack_us == null ? "-" : round3(j.slack_us)}</td>
+          <td class="${j.status === "OK" || j.status === "BE" ? "ok" : "miss"}">${j.status}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      document.getElementById("gclOut").textContent = JSON.stringify(result.gcl, null, 2);
+    }
+  </script>
 </body>
 </html>
