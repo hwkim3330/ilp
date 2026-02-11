@@ -285,23 +285,25 @@
   } from './js/roii-data.js';
 
   /* ── 3D Shuttle + Network Topology ────────────── */
+  /* Scene/lighting/model code replicated from original roii project */
   (function init3D() {
     const container = document.getElementById('canvas3d');
     if (!container || typeof THREE === 'undefined') return;
 
+    // === Scene (identical to original roii) ===
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f2f5);
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
 
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
-    camera.position.set(40, 28, 55);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera.position.set(50, 35, 70);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.sortObjects = true;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     function updateSize() {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
+      const w = container.clientWidth, h = container.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -310,139 +312,153 @@
     container.appendChild(renderer.domElement);
     window.addEventListener('resize', updateSize);
 
-    // Controls
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.2;
-    controls.minDistance = 15;
-    controls.maxDistance = 150;
-    controls.target.set(0, 4, 0);
+    controls.minDistance = 20;
+    controls.maxDistance = 120;
+    controls.target.set(0, 0, 0);
 
-    // Lights — clean, no shadows
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(30, 60, 40);
-    scene.add(dirLight);
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillLight.position.set(-20, 40, -30);
+    // === Lighting (identical to original roii) ===
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(30, 50, 30);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.set(2048, 2048);
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 200;
+    mainLight.shadow.camera.left = -60;
+    mainLight.shadow.camera.right = 60;
+    mainLight.shadow.camera.top = 60;
+    mainLight.shadow.camera.bottom = -60;
+    scene.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    fillLight.position.set(0, 50, 0);
     scene.add(fillLight);
+    scene.add(Object.assign(new THREE.PointLight(0x3B82F6, 2, 100), { position: new THREE.Vector3(20, 15, 20) }));
+    scene.add(Object.assign(new THREE.PointLight(0x06B6D4, 1.5, 80), { position: new THREE.Vector3(-20, 15, -20) }));
 
-    // Grid (subtle)
-    const grid = new THREE.GridHelper(100, 20, 0xd0d0d0, 0xe8e8e8);
-    grid.position.y = -0.1;
+    // === Grid + Ground (identical to original roii) ===
+    const grid = new THREE.GridHelper(100, 50, 0x3B82F6, 0xCCCCCC);
+    grid.material.opacity = 0.4;
     grid.material.transparent = true;
-    grid.material.opacity = 0.5;
+    grid.position.y = -0.5;
     scene.add(grid);
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.ShadowMaterial({ opacity: 0.3 })
+    );
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -0.5;
+    plane.receiveShadow = true;
+    scene.add(plane);
 
-    /* ── Device Templates (from original roii) ── */
-    const DEVICE_TEMPLATES = {
-      lidar:  { w: 2.5, h: 3.5, d: 2.5, color: 0x10B981 },
-      radar:  { w: 1.3, h: 0.8, d: 1.3, color: 0xF59E0B },
-      lan9662:{ w: 4,   h: 2,   d: 3,   color: 0x3B82F6 },
-      lan9692:{ w: 6,   h: 2.5, d: 4,   color: 0x10B981 },
-      ecu:    { w: 3,   h: 1.5, d: 2.5, color: 0x8B5CF6 }
+    // === Device Templates (identical to original roii) ===
+    const TMPL = {
+      lidar:   { w: 2.5, h: 3.5, d: 2.5, color: 0x10B981, ports: 1 },
+      radar:   { w: 1.3, h: 0.8, d: 1.3, color: 0xF59E0B, ports: 1 },
+      lan9662: { w: 4,   h: 2,   d: 3,   color: 0x3B82F6, ports: 4 },
+      lan9692: { w: 6,   h: 2.5, d: 4,   color: 0x10B981, ports: 4 },
+      ecu:     { w: 3,   h: 1.5, d: 2.5, color: 0x8B5CF6, ports: 1 }
     };
 
-    // Map node IDs to device types
-    function getDeviceType(nodeId) {
-      if (nodeId.startsWith('LIDAR')) return 'lidar';
-      if (nodeId.startsWith('RADAR')) return 'radar';
-      if (nodeId === 'SW_REAR') return 'lan9692';
-      if (nodeId.startsWith('SW')) return 'lan9662';
-      if (nodeId === 'ADAS_PC') return 'ecu';
+    function getType(id) {
+      if (id.startsWith('LIDAR')) return 'lidar';
+      if (id.startsWith('RADAR')) return 'radar';
+      if (id === 'SW_REAR') return 'lan9692';
+      if (id.startsWith('SW')) return 'lan9662';
       return 'ecu';
     }
 
-    /* ── Label Sprite ── */
-    function makeLabel(text, color) {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 512; canvas.height = 128;
-      ctx.fillStyle = 'rgba(26, 26, 46, 0.85)';
-      ctx.fillRect(0, 0, 512, 128);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 48px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(text, 256, 75);
-      const tex = new THREE.CanvasTexture(canvas);
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
-      );
-      sprite.renderOrder = 10;
-      return sprite;
-    }
-
-    /* ── Create Device Meshes (matching original roii shapes) ── */
-    const nodePos3D = {};
-    const nodeMeshes = {};
-
-    for (const [nodeId, pos] of Object.entries(ROII_3D_POSITIONS)) {
-      const nc = ROII_NODE_COLORS[nodeId];
-      const devType = getDeviceType(nodeId);
-      const tmpl = DEVICE_TEMPLATES[devType];
+    // === createDeviceMesh (identical to original roii) ===
+    function createDevice(nodeId, position, label) {
+      const type = getType(nodeId);
+      const t = TMPL[type];
       const group = new THREE.Group();
-      group.position.set(pos.x, pos.y, pos.z);
+      const { w, h, d } = t;
 
-      // Build geometry based on device type
       let geometry;
-      if (devType === 'lidar') {
-        // Center LiDARs = small box, side LiDARs = cylinder
-        const isCenter = nodeId.includes('FC') || nodeId.includes('RC');
-        if (isCenter) {
-          geometry = new THREE.BoxGeometry(tmpl.w * 0.5, tmpl.h * 0.5, tmpl.d * 0.5);
-        } else {
-          geometry = new THREE.CylinderGeometry(tmpl.w * 0.6, tmpl.w * 0.6, tmpl.h, 16);
-        }
+      if (type === 'lidar') {
+        const isCenter = label.includes('Center') || nodeId.includes('FC') || nodeId.includes('RC');
+        geometry = isCenter
+          ? new THREE.BoxGeometry(w * 0.5, h * 0.5, d * 0.5)
+          : new THREE.CylinderGeometry(w * 0.6, w * 0.6, h, 16);
+      } else if (type === 'radar') {
+        geometry = new THREE.BoxGeometry(w, h, d);
       } else {
-        geometry = new THREE.BoxGeometry(tmpl.w, tmpl.h, tmpl.d);
+        geometry = new THREE.BoxGeometry(w, h, d);
       }
 
-      // Main mesh
       const mat = new THREE.MeshPhongMaterial({
-        color: tmpl.color,
-        emissive: tmpl.color,
-        emissiveIntensity: 0.2,
-        shininess: 70
+        color: t.color, shininess: 70,
+        emissive: t.color, emissiveIntensity: 0.2
       });
       const mesh = new THREE.Mesh(geometry, mat);
-      mesh.renderOrder = 3;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       group.add(mesh);
 
       // Edge wireframe
-      const edges = new THREE.EdgesGeometry(geometry);
-      const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-      group.add(new THREE.LineSegments(edges, wireMat));
+      group.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })
+      ));
 
-      // Port dots (up to 4)
-      const portCount = (devType === 'lan9692') ? 4 : (devType === 'lan9662') ? 4 : 1;
-      const portGeo = new THREE.SphereGeometry(0.3, 8, 8);
-      const portMat = new THREE.MeshPhongMaterial({
-        color: 0xffffff, emissive: tmpl.color, emissiveIntensity: 0.5
-      });
-      for (let i = 0; i < Math.min(portCount, 4); i++) {
+      // Port dots
+      const portGeo = new THREE.SphereGeometry(0.3, 12, 12);
+      const portMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: t.color, emissiveIntensity: 0.5 });
+      for (let i = 0; i < Math.min(t.ports, 4); i++) {
         const angle = (i / 4) * Math.PI * 2;
         const p = new THREE.Mesh(portGeo, portMat.clone());
-        p.position.set(Math.cos(angle) * tmpl.w * 0.4, 0, Math.sin(angle) * tmpl.d * 0.4);
+        p.position.set(Math.cos(angle) * w * 0.4, 0, Math.sin(angle) * d * 0.4);
         group.add(p);
       }
 
-      // Label sprite (sized relative to device)
-      const label = makeLabel(nc.label, nc.stroke);
-      const labelScale = Math.max(tmpl.w, tmpl.d) * 1.2;
-      label.scale.set(labelScale, labelScale * 0.25, 1);
-      label.position.y = tmpl.h + 1.2;
-      group.add(label);
+      // Label (identical to original roii)
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 512; canvas.height = 128;
+      ctx.fillStyle = 'rgba(26, 26, 46, 0.9)';
+      ctx.fillRect(0, 0, 512, 128);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, 256, 75);
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) })
+      );
+      const ls = Math.max(w, d) * 1.2;
+      sprite.scale.set(ls, ls * 0.25, 1);
+      sprite.position.y = h + 1;
+      group.add(sprite);
 
-      group.renderOrder = 3;
+      group.position.copy(position);
       scene.add(group);
-
-      nodePos3D[nodeId] = new THREE.Vector3(pos.x, pos.y, pos.z);
-      nodeMeshes[nodeId] = mesh;
+      return { mesh, group };
     }
 
-    /* ── Network Links ── */
+    // === Place devices (identical positions to original roii) ===
+    const nodePos3D = {};
+    const nodeMeshes = {};
+    const LABELS = {
+      LIDAR_FL:'LiDAR-Front-Left', LIDAR_FR:'LiDAR-Front-Right',
+      LIDAR_FC:'LiDAR-Front-Center', LIDAR_RC:'LiDAR-Rear-Center',
+      RADAR_FC:'Radar-Front-Center', RADAR_FL:'Radar-Front-L',
+      RADAR_FR:'Radar-Front-R', RADAR_RL:'Radar-Rear-L', RADAR_RR:'Radar-Rear-R',
+      SW_FL:'Front-L ZC', SW_FR:'Front-R ZC', SW_REAR:'Central-GW',
+      ADAS_PC:'ADAS-ECU'
+    };
+
+    for (const [id, pos] of Object.entries(ROII_3D_POSITIONS)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, LABELS[id] || id);
+      nodePos3D[id] = v;
+      nodeMeshes[id] = dev.mesh;
+    }
+
+    // === Connection Lines (matching original roii style) ===
     const drawnLinks = new Set();
     for (const link of ROII_MODEL.links) {
       const key = [link.from, link.to].sort().join('|');
@@ -451,70 +467,62 @@
       const p1 = nodePos3D[link.from], p2 = nodePos3D[link.to];
       if (!p1 || !p2) continue;
 
-      const isSwitchLink = link.from.startsWith('SW') && link.to.startsWith('SW');
-      const color = isSwitchLink ? 0x3B82F6 : 0x94a3b8;
+      // Simple line
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.3
+      });
+      scene.add(new THREE.Line(lineGeo, lineMat));
 
-      // Tube geometry for all links (visible thickness)
-      const curve = new THREE.LineCurve3(p1, p2);
-      const tubeR = isSwitchLink ? 0.18 : 0.08;
-      const tubeGeo = new THREE.TubeGeometry(curve, 1, tubeR, 6, false);
-      const tubeMat = new THREE.MeshPhongMaterial({
-        color, emissive: color,
-        emissiveIntensity: isSwitchLink ? 0.3 : 0.1,
-        transparent: true, opacity: isSwitchLink ? 0.7 : 0.4,
-        depthWrite: false
+      // Glowing tube
+      const curve = new THREE.CatmullRomCurve3([p1.clone(), p2.clone()]);
+      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.6,
+        transparent: true, opacity: 0.8
       });
       const tube = new THREE.Mesh(tubeGeo, tubeMat);
-      tube.renderOrder = 1;
+      tube.castShadow = false;
       scene.add(tube);
+
+      // Outer glow halo
+      const glowGeo = new THREE.TubeGeometry(curve, 20, 0.15, 8, false);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.2
+      });
+      scene.add(new THREE.Mesh(glowGeo, glowMat));
     }
 
-    /* ── Animated Data Particles ── */
+    // === Animated Data Particles ===
     const particles = [];
     const flowPaths = [
-      { path: ['LIDAR_FL', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FC', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_FR', 'SW_FR', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
-      { path: ['LIDAR_RC', 'SW_REAR', 'ADAS_PC'],          color: 0x10B981 },
-      { path: ['RADAR_FC', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
-      { path: ['RADAR_FL', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
-      { path: ['RADAR_FR', 'SW_FR', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
-      { path: ['RADAR_RL', 'SW_REAR', 'ADAS_PC'],          color: 0x8B5CF6 },
-      { path: ['RADAR_RR', 'SW_REAR', 'ADAS_PC'],          color: 0x8B5CF6 }
+      { path: ['LIDAR_FL','SW_FL','SW_REAR','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_FC','SW_FL','SW_REAR','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_FR','SW_FR','SW_REAR','ADAS_PC'], color: 0x10B981 },
+      { path: ['LIDAR_RC','SW_REAR','ADAS_PC'],         color: 0x10B981 },
+      { path: ['RADAR_FC','SW_FL','SW_REAR','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_FL','SW_FL','SW_REAR','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_FR','SW_FR','SW_REAR','ADAS_PC'], color: 0xF59E0B },
+      { path: ['RADAR_RL','SW_REAR','ADAS_PC'],         color: 0xF59E0B },
+      { path: ['RADAR_RR','SW_REAR','ADAS_PC'],         color: 0xF59E0B }
     ];
 
     flowPaths.forEach((fp, fi) => {
-      const points = fp.path.map(id => nodePos3D[id]).filter(Boolean);
-      if (points.length < 2) return;
-
-      const segs = [];
-      let totalLen = 0;
-      for (let i = 0; i < points.length - 1; i++) {
-        const d = points[i].distanceTo(points[i+1]);
-        segs.push(d); totalLen += d;
-      }
-
-      const pMat = new THREE.MeshBasicMaterial({
-        color: fp.color, transparent: true, opacity: 0.95, depthWrite: false
-      });
-      const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), pMat);
-      const pgMat = new THREE.MeshBasicMaterial({
-        color: fp.color, transparent: true, opacity: 0.2, depthWrite: false
-      });
-      const pgMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), pgMat);
-      pMesh.renderOrder = 5;
-      pgMesh.renderOrder = 4;
-      scene.add(pMesh);
-      scene.add(pgMesh);
-
-      particles.push({
-        mesh: pMesh, glow: pgMesh, points, segs, totalLen,
-        t: fi / flowPaths.length,
-        speed: 0.12 + Math.random() * 0.06
-      });
+      const pts = fp.path.map(id => nodePos3D[id]).filter(Boolean);
+      if (pts.length < 2) return;
+      const segs = []; let totalLen = 0;
+      for (let i = 0; i < pts.length - 1; i++) { const d = pts[i].distanceTo(pts[i+1]); segs.push(d); totalLen += d; }
+      const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8),
+        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.9 }));
+      const pgMesh = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 8),
+        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.25 }));
+      scene.add(pMesh); scene.add(pgMesh);
+      particles.push({ mesh: pMesh, glow: pgMesh, points: pts, segs, totalLen,
+        t: fi / flowPaths.length, speed: 0.12 + Math.random() * 0.06 });
     });
 
-    /* ── Load GLB Model (ghost overlay) ── */
+    // === Load GLB Model (identical to original roii) ===
+    const vehicleOpacity = 0.3;
     const loader = new THREE.GLTFLoader();
     loader.load('./roii.glb',
       (gltf) => {
@@ -527,34 +535,26 @@
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = targetSize / maxDim;
         model.scale.set(scale, scale, scale);
-        const scaledHeight = size.y * scale;
-        model.position.set(
-          -center.x,
-          -center.y + (scaledHeight * 0.5) + 0.5,
-          -center.z
-        );
 
-        // Transparent vehicle body — keep original colors, no shadows
-        model.renderOrder = 0;
+        const scaledHeight = size.y * scale;
+        model.position.x = -center.x;
+        model.position.y = -center.y + (scaledHeight * 0.5) + 0.5;
+        model.position.z = -center.z;
+
         model.traverse((child) => {
-          if (child.isMesh && child.material) {
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach(mat => {
-              mat.transparent = true;
-              mat.opacity = 0.25;
-              mat.side = THREE.DoubleSide;
-              mat.depthWrite = true;
-              // Brighten original colors
-              if (mat.color) mat.color.multiplyScalar(1.5);
-              mat.emissive = mat.color
-                ? mat.color.clone().multiplyScalar(0.3)
-                : new THREE.Color(0xffffff);
-              mat.emissiveIntensity = 0.4;
-            });
-            child.castShadow = false;
-            child.receiveShadow = false;
-            child.renderOrder = 0;
-          }
+          if (!child.isMesh) return;
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(mat => {
+            mat.transparent = true;
+            mat.opacity = vehicleOpacity;
+            mat.side = THREE.DoubleSide;
+            mat.depthWrite = true;
+            if (mat.color) mat.color.multiplyScalar(1.5);
+            mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.3) : new THREE.Color(0xffffff);
+            mat.emissiveIntensity = 0.4;
+          });
+          child.castShadow = true;
+          child.receiveShadow = true;
         });
         scene.add(model);
       },
@@ -562,35 +562,29 @@
       (err) => { console.warn('GLB load failed:', err); }
     );
 
-    /* ── Animation Loop ── */
+    // === Animation Loop ===
     const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
       controls.update();
 
-      // Subtle pulse on nodes
-      const pulse = Math.sin(clock.elapsedTime * 2.5) * 0.08;
-      for (const mesh of Object.values(nodeMeshes)) {
-        mesh.material.emissiveIntensity = 0.35 + pulse;
-      }
+      // Pulse on device emissive
+      const pulse = Math.sin(clock.elapsedTime * 2.5) * 0.06;
+      for (const m of Object.values(nodeMeshes)) m.material.emissiveIntensity = 0.2 + pulse;
 
-      // Animate particles along flow paths
+      // Animate particles
       particles.forEach(p => {
         p.t += dt * p.speed;
         if (p.t > 1) p.t -= 1;
-        let dist = p.t * p.totalLen;
-        let segIdx = 0;
-        while (segIdx < p.segs.length - 1 && dist > p.segs[segIdx]) {
-          dist -= p.segs[segIdx]; segIdx++;
-        }
-        const frac = dist / p.segs[segIdx];
-        const pos = new THREE.Vector3().lerpVectors(p.points[segIdx], p.points[segIdx + 1], frac);
+        let dist = p.t * p.totalLen, si = 0;
+        while (si < p.segs.length - 1 && dist > p.segs[si]) { dist -= p.segs[si]; si++; }
+        const pos = new THREE.Vector3().lerpVectors(p.points[si], p.points[si + 1], dist / p.segs[si]);
         p.mesh.position.copy(pos);
         p.glow.position.copy(pos);
         const fade = Math.min(p.t * 4, (1 - p.t) * 4, 1);
-        p.mesh.material.opacity = 0.95 * fade;
-        p.glow.material.opacity = 0.2 * fade;
+        p.mesh.material.opacity = 0.9 * fade;
+        p.glow.material.opacity = 0.25 * fade;
       });
 
       renderer.render(scene, camera);
