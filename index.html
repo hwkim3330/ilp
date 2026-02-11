@@ -161,18 +161,12 @@
 <body>
   <div class="wrap">
     <h1>TSN/TAS/GCL JS Solver (3-Switch Realistic Sample)</h1>
-    <p>같은 입력으로 `Exact` 또는 `MILP(GLPK)`를 실행하고 링크별 GCL을 비교합니다.</p>
+    <p>같은 입력으로 Exact 스케줄을 계산하고 링크별 GCL을 확인합니다.</p>
 
     <div class="card">
       <strong>Input JSON</strong>
       <textarea id="input"></textarea>
       <div class="toolbar">
-        <label class="tool-label">Mode
-          <select id="modeSelect">
-            <option value="exact">Exact Search</option>
-            <option value="milp">MILP (GLPK WASM)</option>
-          </select>
-        </label>
         <button id="renderBtn" class="btn secondary">Render Input</button>
         <button id="solveBtn" class="btn">Solve</button>
         <button id="sampleBtn" class="btn secondary">Load 3-Switch Sample</button>
@@ -236,11 +230,6 @@
   </div>
 
   <script>
-    window.module = window.module || { exports: null };
-    window.exports = window.module.exports;
-  </script>
-  <script src="./vendor/glpk.min.js"></script>
-  <script>
     const sample = {
       cycle_time_us: 1000,
       guard_band_us: 2.0,
@@ -294,7 +283,6 @@
     const solveBtn = document.getElementById("solveBtn");
     const sampleBtn = document.getElementById("sampleBtn");
     const renderBtn = document.getElementById("renderBtn");
-    const modeSelect = document.getElementById("modeSelect");
 
     sampleBtn.addEventListener("click", () => {
       inputEl.value = JSON.stringify(sample, null, 2);
@@ -419,30 +407,22 @@
 
     async function solveAndRender() {
       try {
-        const mode = modeSelect.value;
         const model = parseModel();
         const packets = expandPackets(model);
 
-        if (mode === "exact" && packets.length > 11) {
+        if (packets.length > 11) {
           throw new Error(`Exact는 packet ${packets.length}개에서 매우 느림 (<=11 권장)`);
-        }
-        if (mode === "milp" && packets.length > 28) {
-          throw new Error(`MILP도 packet ${packets.length}개는 브라우저에서 무거움 (<=28 권장)`);
         }
 
         const t0 = performance.now();
-        const result = mode === "milp"
-          ? await milpSolve(model, packets)
-          : exactSearch(model, packets);
+        const result = exactSearch(model, packets);
 
         result.runtime_ms = round3(performance.now() - t0);
         renderResult(model, result);
 
         let extra = "";
-        if (result.method === "EXACT" && result.stats) {
+        if (result.stats) {
           extra = `, nodes=${result.stats.nodes}, pruned=${result.stats.pruned}`;
-        } else if (result.method === "MILP" && result.stats) {
-          extra = `, vars=${result.stats.variables}, bin=${result.stats.binaries}, cons=${result.stats.constraints}`;
         }
         statusEl.textContent = `완료(${result.method}) runtime=${result.runtime_ms}ms${extra}`;
       } catch (e) {
@@ -607,244 +587,6 @@
         gcl,
         worst_util_percent: round3(worstLinkUtil(model, gcl)),
         stats: { nodes, pruned }
-      };
-    }
-
-    let glpkInstancePromise = null;
-    async function createGlpkInstance() {
-      if (glpkInstancePromise) return glpkInstancePromise;
-
-      const factory =
-        (typeof GLPK === "function" && GLPK) ||
-        (window.module && typeof window.module.exports === "function" && window.module.exports) ||
-        (typeof window.glpk === "function" && window.glpk);
-
-      if (!factory) {
-        throw new Error("glpk 로드 실패: vendor/glpk.min.js 확인 필요");
-      }
-
-      glpkInstancePromise = (async () => {
-        const wasmRes = await fetch("./vendor/glpk.wasm");
-        if (!wasmRes.ok) {
-          throw new Error(`glpk.wasm 로드 실패: HTTP ${wasmRes.status}`);
-        }
-        const wasmBuffer = await wasmRes.arrayBuffer();
-        return factory(wasmBuffer);
-      })();
-
-      return glpkInstancePromise;
-    }
-
-    async function milpSolve(model, packets) {
-      const glpk = await createGlpkInstance();
-      const linkMap = new Map(model.links.map(l => [l.id, l]));
-      const varsSeen = new Set();
-      const subjectTo = [];
-      const binaries = [];
-      const objectiveVars = [];
-      let cIdx = 0;
-      const M = model.cycle_time_us + model.guard_band_us + 100;
-
-      function addVar(name) { varsSeen.add(name); return name; }
-      function addConstraint(prefix, terms, bnd) {
-        subjectTo.push({ name: `${prefix}_${cIdx++}`, vars: terms, bnds: bnd });
-      }
-
-      const packetHopByLink = packets.map((p) => {
-        const m = new Map();
-        p.hops.forEach((h, idx) => m.set(h.link_id, idx));
-        return m;
-      });
-
-      for (let p = 0; p < packets.length; p++) {
-        const packet = packets[p];
-        const lastHop = packet.hops.length - 1;
-
-        for (let h = 0; h < packet.hops.length; h++) {
-          const hop = packet.hops[h];
-          const s = addVar(sVar(p, h));
-
-          addConstraint("start_lb", [{ name: s, coef: 1 }], {
-            type: glpk.GLP_LO,
-            lb: h === 0 ? packet.release_us : 0,
-            ub: 0
-          });
-
-          addConstraint("cycle_ub", [{ name: s, coef: 1 }], {
-            type: glpk.GLP_UP,
-            lb: 0,
-            ub: model.cycle_time_us - hop.tx_us
-          });
-
-          if (h < packet.hops.length - 1) {
-            const sNext = addVar(sVar(p, h + 1));
-            const shift = hop.tx_us + hop.prop_delay_us + model.processing_delay_us;
-            addConstraint("hop_chain", [{ name: sNext, coef: 1 }, { name: s, coef: -1 }], {
-              type: glpk.GLP_LO,
-              lb: shift,
-              ub: 0
-            });
-          }
-        }
-
-        if (packet.deadline_abs_us != null) {
-          const sL = addVar(sVar(p, lastHop));
-          const latestStart = packet.deadline_abs_us - packet.hops[lastHop].tx_us;
-          addConstraint("deadline", [{ name: sL, coef: 1 }], {
-            type: glpk.GLP_UP,
-            lb: 0,
-            ub: latestStart
-          });
-        }
-
-        if (packet.tsn) {
-          const sL = addVar(sVar(p, lastHop));
-          objectiveVars.push({ name: sL, coef: 1 });
-        }
-      }
-
-      for (const link of model.links) {
-        const onLink = [];
-        for (let p = 0; p < packets.length; p++) {
-          if (packetHopByLink[p].has(link.id)) onLink.push(p);
-        }
-
-        for (let a = 0; a < onLink.length; a++) {
-          for (let b = a + 1; b < onLink.length; b++) {
-            const i = onLink[a];
-            const j = onLink[b];
-            const hi = packetHopByLink[i].get(link.id);
-            const hj = packetHopByLink[j].get(link.id);
-
-            const si = addVar(sVar(i, hi));
-            const sj = addVar(sVar(j, hj));
-            const y = addVar(yVar(link.id, i, j));
-            binaries.push(y);
-
-            const di = packets[i].hops[hi].tx_us + (packets[i].tsn ? model.guard_band_us : 0);
-            const dj = packets[j].hops[hj].tx_us + (packets[j].tsn ? model.guard_band_us : 0);
-
-            addConstraint("nolap_ij", [
-              { name: sj, coef: 1 },
-              { name: si, coef: -1 },
-              { name: y, coef: -M }
-            ], {
-              type: glpk.GLP_LO,
-              lb: di - M,
-              ub: 0
-            });
-
-            addConstraint("nolap_ji", [
-              { name: si, coef: 1 },
-              { name: sj, coef: -1 },
-              { name: y, coef: M }
-            ], {
-              type: glpk.GLP_LO,
-              lb: dj,
-              ub: 0
-            });
-          }
-        }
-      }
-
-      const lp = {
-        name: "tsn_tas_gcl",
-        objective: {
-          direction: glpk.GLP_MIN,
-          name: "obj",
-          vars: objectiveVars.length ? objectiveVars : [{ name: addVar(sVar(0, 0)), coef: 0 }]
-        },
-        subjectTo,
-        binaries,
-        bounds: Array.from(varsSeen).map((name) => ({
-          name,
-          type: glpk.GLP_LO,
-          lb: 0,
-          ub: 0
-        }))
-      };
-
-      const solved = glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF });
-      if (!solved || !solved.result) throw new Error("MILP solve failed");
-      const status = solved.result.status;
-      if (![glpk.GLP_OPT, glpk.GLP_FEAS].includes(status)) {
-        throw new Error(`MILP infeasible/status=${status}`);
-      }
-
-      const vals = solved.result.vars || {};
-      const packetRows = [];
-      const perLinkRows = Object.fromEntries(model.links.map(l => [l.id, []]));
-
-      for (let p = 0; p < packets.length; p++) {
-        const packet = packets[p];
-        const hops = [];
-
-        for (let h = 0; h < packet.hops.length; h++) {
-          const hop = packet.hops[h];
-          const s = Number(vals[sVar(p, h)] || 0);
-          const e = s + hop.tx_us;
-
-          hops.push({
-            link_id: hop.link_id,
-            start_us: round3(s),
-            end_us: round3(e),
-            duration_us: round3(hop.tx_us)
-          });
-
-          perLinkRows[hop.link_id].push({
-            type: "flow",
-            note: packet.packet_id,
-            start_us: round3(s),
-            end_us: round3(e),
-            duration_us: round3(hop.tx_us),
-            priority: packet.priority
-          });
-
-          if (packet.tsn) {
-            perLinkRows[hop.link_id].push({
-              type: "guard",
-              note: "guard band",
-              start_us: round3(e),
-              end_us: round3(e + model.guard_band_us),
-              duration_us: round3(model.guard_band_us),
-              priority: packet.priority
-            });
-          }
-        }
-
-        const finish = hops[hops.length - 1].end_us;
-        const e2e = round3(finish - packet.release_us);
-        const ok = packet.deadline_abs_us == null || finish <= packet.deadline_abs_us + 1e-6;
-
-        packetRows.push({
-          packet_id: packet.packet_id,
-          flow_id: packet.flow_id,
-          priority: packet.priority,
-          release_us: packet.release_us,
-          end_us: round3(finish),
-          e2e_delay_us: e2e,
-          deadline_abs_us: packet.deadline_abs_us,
-          slack_us: packet.deadline_abs_us == null ? null : round3(packet.deadline_abs_us - finish),
-          status: packet.deadline_abs_us == null ? "BE" : (ok ? "OK" : "MISS"),
-          hops
-        });
-      }
-
-      packetRows.sort((a, b) => a.end_us - b.end_us);
-      const gcl = buildGcl(model, perLinkRows);
-      const objective = round3(packetRows.filter(p => p.status !== "BE").reduce((acc, p) => acc + p.e2e_delay_us, 0));
-
-      return {
-        method: "MILP",
-        objective,
-        packetRows,
-        gcl,
-        worst_util_percent: round3(worstLinkUtil(model, gcl)),
-        stats: {
-          constraints: subjectTo.length,
-          variables: varsSeen.size,
-          binaries: binaries.length
-        }
       };
     }
 

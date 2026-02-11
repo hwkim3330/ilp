@@ -1,4 +1,4 @@
-# ilp (JS network solver: Exact + MILP)
+# ilp (JS network solver: Exact)
 
 브라우저에서 TSN/TAS/GCL을 계산하고 시각화하는 단일 페이지 예제입니다.
 
@@ -13,8 +13,7 @@ python3 -m http.server 8080
 
 ## 모드
 
-- `Exact Search`: 작은 입력에서 정확해 탐색(매우 느려질 수 있음)
-- `MILP (GLPK WASM)`: 브라우저에서 GLPK로 이진변수 기반 스케줄링
+- `Exact Search`만 사용 (안정성 우선)
 
 ## 입력 스키마
 
@@ -34,4 +33,3 @@ python3 -m http.server 8080
 ## 주의
 
 - Exact는 packet 수가 조금만 커져도 폭발적으로 느려짐
-- MILP는 저장소의 로컬 파일 `vendor/glpk.min.js`, `vendor/glpk.wasm`를 사용
