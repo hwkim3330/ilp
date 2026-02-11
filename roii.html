@@ -196,6 +196,9 @@
       <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
     </div>
 
+    <!-- Metrics (ILP Results) -->
+    <div class="metrics" id="metricsArea"></div>
+
     <!-- Scenario Description -->
     <div class="auto-desc" id="scenarioDesc"></div>
 
@@ -208,9 +211,6 @@
       <div class="legend" id="topoLegend"></div>
       <div class="svg-container" id="topoContainer" style="height:520px;"></div>
     </div>
-
-    <!-- Metrics -->
-    <div class="metrics" id="metricsArea"></div>
 
     <!-- GCL Gantt -->
     <div class="card">
@@ -291,14 +291,13 @@
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f2f5);
-    scene.fog = new THREE.Fog(0xf0f2f5, 120, 300);
 
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
-    camera.position.set(40, 30, 55);
+    camera.position.set(40, 28, 55);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.sortObjects = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     function updateSize() {
       const w = container.clientWidth;
@@ -321,32 +320,21 @@
     controls.maxDistance = 150;
     controls.target.set(0, 4, 0);
 
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(50, 80, 60);
-    dirLight.castShadow = true;
+    // Lights — clean, no shadows
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(30, 60, 40);
     scene.add(dirLight);
-    // Accent lights (blue/cyan tint)
-    const blueLight = new THREE.PointLight(0x3B82F6, 0.4, 80);
-    blueLight.position.set(-15, 20, 15);
-    scene.add(blueLight);
-    const cyanLight = new THREE.PointLight(0x06B6D4, 0.3, 80);
-    cyanLight.position.set(15, 20, -15);
-    scene.add(cyanLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-20, 40, -30);
+    scene.add(fillLight);
 
-    // Grid + Ground
-    const grid = new THREE.GridHelper(100, 20, 0xc0c0c0, 0xe0e0e0);
+    // Grid (subtle)
+    const grid = new THREE.GridHelper(100, 20, 0xd0d0d0, 0xe8e8e8);
     grid.position.y = -0.1;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.5;
     scene.add(grid);
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.9 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.2;
-    ground.receiveShadow = true;
-    scene.add(ground);
 
     /* ── Text Sprite Helper ── */
     function makeLabel(text, color) {
@@ -356,31 +344,31 @@
       ctx.font = 'bold 22px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // Background pill
       const tw = ctx.measureText(text).width;
-      const px = 12, py = 6;
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      const px = 14;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       const rx = 128 - tw/2 - px, ry = 8, rw = tw + px*2, rh = 48;
       ctx.beginPath();
-      ctx.roundRect(rx, ry, rw, rh, 8);
+      ctx.roundRect(rx, ry, rw, rh, 10);
       ctx.fill(); ctx.stroke();
-      // Text
       ctx.fillStyle = '#1e293b';
       ctx.fillText(text, 128, 32);
       const tex = new THREE.CanvasTexture(canvas);
       tex.minFilter = THREE.LinearFilter;
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
+      );
       sprite.scale.set(7, 1.75, 1);
+      sprite.renderOrder = 10;
       return sprite;
     }
 
-    /* ── Network Nodes & Links ── */
-    const nodePos3D = {};  // THREE.Vector3 map
+    /* ── Network Nodes ── */
+    const nodePos3D = {};
     const nodeMeshes = {};
 
-    // Create node spheres
     for (const [nodeId, pos] of Object.entries(ROII_3D_POSITIONS)) {
       const nc = ROII_NODE_COLORS[nodeId];
       const strokeColor = new THREE.Color(nc.stroke);
@@ -388,34 +376,38 @@
       const isPC = nodeId === 'ADAS_PC';
       const r = isPC ? 1.6 : isSwitch ? 1.4 : 1.0;
 
-      // Outer glow ring
-      const glowGeo = new THREE.SphereGeometry(r * 1.8, 16, 16);
-      const glowMat = new THREE.MeshBasicMaterial({ color: strokeColor, transparent: true, opacity: 0.12 });
+      // Outer glow — additive, no depth write
+      const glowGeo = new THREE.SphereGeometry(r * 2, 16, 16);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: strokeColor, transparent: true, opacity: 0.10,
+        depthWrite: false
+      });
       const glow = new THREE.Mesh(glowGeo, glowMat);
       glow.position.set(pos.x, pos.y, pos.z);
+      glow.renderOrder = 2;
       scene.add(glow);
 
-      // Core sphere
+      // Core node — opaque, solid
       const geo = new THREE.SphereGeometry(r, 20, 20);
       const mat = new THREE.MeshPhongMaterial({
-        color: strokeColor, emissive: strokeColor, emissiveIntensity: 0.4,
-        shininess: 60, transparent: true, opacity: 0.9
+        color: strokeColor, emissive: strokeColor, emissiveIntensity: 0.35,
+        shininess: 80
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(pos.x, pos.y, pos.z);
-      mesh.castShadow = true;
+      mesh.renderOrder = 3;
       scene.add(mesh);
 
-      // Label sprite
+      // Label
       const label = makeLabel(nc.label, nc.stroke);
-      label.position.set(pos.x, pos.y + r + 2.2, pos.z);
+      label.position.set(pos.x, pos.y + r + 2.5, pos.z);
       scene.add(label);
 
       nodePos3D[nodeId] = new THREE.Vector3(pos.x, pos.y, pos.z);
       nodeMeshes[nodeId] = mesh;
     }
 
-    // Create link lines (deduplicate bidirectional)
+    /* ── Network Links ── */
     const drawnLinks = new Set();
     for (const link of ROII_MODEL.links) {
       const key = [link.from, link.to].sort().join('|');
@@ -424,39 +416,31 @@
       const p1 = nodePos3D[link.from], p2 = nodePos3D[link.to];
       if (!p1 || !p2) continue;
 
-      // Determine color based on node types
       const isSwitchLink = link.from.startsWith('SW') && link.to.startsWith('SW');
       const color = isSwitchLink ? 0x3B82F6 : 0x94a3b8;
 
-      const pts = [p1, p2];
-      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-      const lineMat = new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: isSwitchLink ? 0.7 : 0.45, linewidth: 1
+      // Tube geometry for all links (visible thickness)
+      const curve = new THREE.LineCurve3(p1, p2);
+      const tubeR = isSwitchLink ? 0.18 : 0.08;
+      const tubeGeo = new THREE.TubeGeometry(curve, 1, tubeR, 6, false);
+      const tubeMat = new THREE.MeshPhongMaterial({
+        color, emissive: color,
+        emissiveIntensity: isSwitchLink ? 0.3 : 0.1,
+        transparent: true, opacity: isSwitchLink ? 0.7 : 0.4,
+        depthWrite: false
       });
-      scene.add(new THREE.Line(lineGeo, lineMat));
-
-      // Tube for switch backbone (thicker visual)
-      if (isSwitchLink) {
-        const curve = new THREE.LineCurve3(p1, p2);
-        const tubeGeo = new THREE.TubeGeometry(curve, 1, 0.15, 6, false);
-        const tubeMat = new THREE.MeshPhongMaterial({
-          color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.3,
-          transparent: true, opacity: 0.5
-        });
-        scene.add(new THREE.Mesh(tubeGeo, tubeMat));
-      }
+      const tube = new THREE.Mesh(tubeGeo, tubeMat);
+      tube.renderOrder = 1;
+      scene.add(tube);
     }
 
     /* ── Animated Data Particles ── */
     const particles = [];
-    // Build flow paths: sensor → switch(es) → ADAS_PC
     const flowPaths = [
-      // LiDAR flows
       { path: ['LIDAR_FL', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
       { path: ['LIDAR_FC', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
       { path: ['LIDAR_FR', 'SW_FR', 'SW_REAR', 'ADAS_PC'], color: 0x10B981 },
       { path: ['LIDAR_RC', 'SW_REAR', 'ADAS_PC'],          color: 0x10B981 },
-      // Radar flows
       { path: ['RADAR_FC', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
       { path: ['RADAR_FL', 'SW_FL', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
       { path: ['RADAR_FR', 'SW_FR', 'SW_REAR', 'ADAS_PC'], color: 0x8B5CF6 },
@@ -468,35 +452,34 @@
       const points = fp.path.map(id => nodePos3D[id]).filter(Boolean);
       if (points.length < 2) return;
 
-      // Build segment lengths for parametric travel
       const segs = [];
       let totalLen = 0;
       for (let i = 0; i < points.length - 1; i++) {
         const d = points[i].distanceTo(points[i+1]);
-        segs.push(d);
-        totalLen += d;
+        segs.push(d); totalLen += d;
       }
 
-      // Particle sphere
-      const pGeo = new THREE.SphereGeometry(0.4, 8, 8);
-      const pMat = new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.9 });
-      const pMesh = new THREE.Mesh(pGeo, pMat);
-      // Glow
-      const pgGeo = new THREE.SphereGeometry(0.8, 8, 8);
-      const pgMat = new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.3 });
-      const pgMesh = new THREE.Mesh(pgGeo, pgMat);
-
+      const pMat = new THREE.MeshBasicMaterial({
+        color: fp.color, transparent: true, opacity: 0.95, depthWrite: false
+      });
+      const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), pMat);
+      const pgMat = new THREE.MeshBasicMaterial({
+        color: fp.color, transparent: true, opacity: 0.2, depthWrite: false
+      });
+      const pgMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), pgMat);
+      pMesh.renderOrder = 5;
+      pgMesh.renderOrder = 4;
       scene.add(pMesh);
       scene.add(pgMesh);
 
       particles.push({
         mesh: pMesh, glow: pgMesh, points, segs, totalLen,
-        t: fi / flowPaths.length,  // stagger start
-        speed: 0.15 + Math.random() * 0.05
+        t: fi / flowPaths.length,
+        speed: 0.12 + Math.random() * 0.06
       });
     });
 
-    /* ── Load GLB Model ── */
+    /* ── Load GLB Model (ghost overlay) ── */
     const loader = new THREE.GLTFLoader();
     loader.load('./roii.glb',
       (gltf) => {
@@ -509,26 +492,34 @@
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = targetSize / maxDim;
         model.scale.set(scale, scale, scale);
-
         const scaledHeight = size.y * scale;
-        model.position.x = -center.x * scale;
-        model.position.y = -center.y * scale + scaledHeight * 0.5 + 0.5;
-        model.position.z = -center.z * scale;
+        model.position.set(
+          -center.x * scale,
+          -center.y * scale + scaledHeight * 0.5 + 0.5,
+          -center.z * scale
+        );
 
+        // Ghost body — no shadows, render behind everything
+        model.renderOrder = 0;
         model.traverse((child) => {
           if (child.isMesh && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(mat => {
               mat.transparent = true;
-              mat.opacity = 0.25;
+              mat.opacity = 0.15;
               mat.side = THREE.DoubleSide;
               mat.depthWrite = false;
-              if (mat.color) mat.color.multiplyScalar(1.3);
-              mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.2) : new THREE.Color(0xffffff);
-              mat.emissiveIntensity = 0.3;
+              mat.depthTest = true;
+              // Soft neutral tint — no color boost
+              if (mat.color) {
+                mat.color.setHex(0xb0c4de);  // light steel blue
+              }
+              mat.emissive = new THREE.Color(0x6688aa);
+              mat.emissiveIntensity = 0.15;
             });
-            child.castShadow = true;
-            child.receiveShadow = true;
+            child.castShadow = false;
+            child.receiveShadow = false;
+            child.renderOrder = 0;
           }
         });
         scene.add(model);
@@ -544,31 +535,28 @@
       const dt = clock.getDelta();
       controls.update();
 
-      // Pulse glow on nodes
-      const pulse = 0.10 + Math.sin(clock.elapsedTime * 2) * 0.05;
+      // Subtle pulse on nodes
+      const pulse = Math.sin(clock.elapsedTime * 2.5) * 0.08;
       for (const mesh of Object.values(nodeMeshes)) {
-        mesh.material.emissiveIntensity = 0.3 + pulse;
+        mesh.material.emissiveIntensity = 0.35 + pulse;
       }
 
-      // Animate particles
+      // Animate particles along flow paths
       particles.forEach(p => {
         p.t += dt * p.speed;
         if (p.t > 1) p.t -= 1;
-        // Map t to position along path
         let dist = p.t * p.totalLen;
         let segIdx = 0;
         while (segIdx < p.segs.length - 1 && dist > p.segs[segIdx]) {
-          dist -= p.segs[segIdx];
-          segIdx++;
+          dist -= p.segs[segIdx]; segIdx++;
         }
         const frac = dist / p.segs[segIdx];
         const pos = new THREE.Vector3().lerpVectors(p.points[segIdx], p.points[segIdx + 1], frac);
         p.mesh.position.copy(pos);
         p.glow.position.copy(pos);
-        // Fade near endpoints
-        const edgeFade = Math.min(p.t * 5, (1 - p.t) * 5, 1);
-        p.mesh.material.opacity = 0.9 * edgeFade;
-        p.glow.material.opacity = 0.3 * edgeFade;
+        const fade = Math.min(p.t * 4, (1 - p.t) * 4, 1);
+        p.mesh.material.opacity = 0.95 * fade;
+        p.glow.material.opacity = 0.2 * fade;
       });
 
       renderer.render(scene, camera);

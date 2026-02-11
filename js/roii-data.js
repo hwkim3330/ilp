@@ -136,34 +136,34 @@ export const ROII_NODE_COLORS = {
   RADAR_FR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FR", shortLabel: "Radar" },
   RADAR_RL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL", shortLabel: "Radar" },
   RADAR_RR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR", shortLabel: "Radar" },
-  // LAN9662 front switches — light blue tint
-  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "SW FL",    shortLabel: "LAN9662" },
-  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "SW FR",    shortLabel: "LAN9662" },
+  // LAN9662 front zone controllers — light blue tint
+  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC", shortLabel: "LAN9662" },
+  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC", shortLabel: "LAN9662" },
   // LAN9692 rear gateway — light cyan tint
-  SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "SW Rear",  shortLabel: "LAN9692" },
+  SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "Rear GW",    shortLabel: "LAN9692" },
   // ADAS PC — light amber tint
   ADAS_PC:   { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",  shortLabel: "PC" }
 };
 
-/* ── 3D Node Positions (on shuttle body, front=+Z) ── */
+/* ── 3D Node Positions (from roii project, front=+Z) ── */
 export const ROII_3D_POSITIONS = {
-  // LiDAR — roof-mounted
-  LIDAR_FL:  { x: -6,  y: 8.5, z: 15 },
-  LIDAR_FC:  { x:  0,  y: 9.5, z: 18 },
-  LIDAR_FR:  { x:  6,  y: 8.5, z: 15 },
-  LIDAR_RC:  { x:  0,  y: 9,   z:-16 },
+  // LiDAR — roof-mounted (original roii positions)
+  LIDAR_FL:  { x: -9,  y: 10,  z: 18 },
+  LIDAR_FC:  { x:  0,  y:  6,  z: 20 },
+  LIDAR_FR:  { x:  9,  y: 10,  z: 18 },
+  LIDAR_RC:  { x:  0,  y:  6,  z:-20 },
   // Radar — bumper-level
-  RADAR_FC:  { x:  0,  y: 3,   z: 20 },
-  RADAR_FL:  { x: -7,  y: 3.5, z: 13 },
-  RADAR_FR:  { x:  7,  y: 3.5, z: 13 },
-  RADAR_RL:  { x: -7,  y: 3.5, z:-13 },
-  RADAR_RR:  { x:  7,  y: 3.5, z:-13 },
+  RADAR_FC:  { x:  0,  y: 2.5, z: 20 },
+  RADAR_FL:  { x: -8,  y: 2.5, z: 19 },
+  RADAR_FR:  { x:  8,  y: 2.5, z: 19 },
+  RADAR_RL:  { x: -8,  y: 2.5, z:-19 },
+  RADAR_RR:  { x:  8,  y: 2.5, z:-19 },
   // Switches — inside vehicle
-  SW_FL:     { x: -4,  y: 5,   z:  8 },
-  SW_FR:     { x:  4,  y: 5,   z:  8 },
-  SW_REAR:   { x:  0,  y: 5,   z: -8 },
-  // ADAS PC — rear floor
-  ADAS_PC:   { x:  0,  y: 2.5, z:-15 }
+  SW_FL:     { x: -4,  y:  3,  z: 10 },   // Front-Left Zone Controller
+  SW_FR:     { x:  4,  y:  3,  z: 10 },   // Front-Right Zone Controller
+  SW_REAR:   { x:  0,  y:  3,  z: -8 },   // Rear Gateway (LAN9692)
+  // ADAS PC — rear interior
+  ADAS_PC:   { x:  0,  y:  2,  z:-15 }
 };
 
 /* ── Scenario Description ──────────────────────── */
