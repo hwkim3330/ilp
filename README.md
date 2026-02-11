@@ -11,6 +11,7 @@ Browser-based IEEE 802.1Qbv Time-Aware Shaper (TAS) Gate Control List scheduler 
 | [`index.html`](index.html) | Landing page — links to solver and automotive demo |
 | [`solver.html`](solver.html) | Generic solver — JSON editor with live input preview, 6 result visualizations |
 | [`automotive.html`](automotive.html) | Automotive TSN demo — 11-node in-vehicle network, auto-solve on load |
+| [`roii.html`](roii.html) | ROii Shuttle TSN demo — 13-node autonomous shuttle network (4 LiDAR + 5 Radar), auto-solve on load |
 
 ## Quick Start
 
@@ -32,10 +33,12 @@ ilp/
 ├── index.html              ← Landing/hub page
 ├── solver.html             ← Generic solver (JSON input + preview)
 ├── automotive.html         ← Automotive TSN demo (auto-solve)
+├── roii.html               ← ROii Shuttle TSN demo (auto-solve)
 ├── style.css               ← Shared CSS (dark theme)
 ├── js/
 │   ├── ilp-core.js         ← Solver engine + D3 visualizations (ES module)
-│   └── automotive-data.js  ← Automotive scenario model + layout
+│   ├── automotive-data.js  ← Automotive scenario model + layout
+│   └── roii-data.js        ← ROii shuttle scenario model + layout
 ├── vendor/
 │   ├── d3.min.js           ← D3 v7 (~280KB)
 │   ├── glpk.js             ← glpk.js@4 browser build (~250KB)
@@ -103,6 +106,7 @@ ilp/
 | `index.html` | 랜딩 페이지 — 솔버/자동차 데모 링크 |
 | `solver.html` | 범용 솔버 — JSON 편집기 + 실시간 입력 미리보기, 6가지 결과 시각화 |
 | `automotive.html` | 자동차 TSN 데모 — 11노드 차량 내 네트워크, 자동 풀이 |
+| `roii.html` | ROii 셔틀 TSN 데모 — 13노드 자율주행 셔틀 네트워크 (LiDAR 4개 + Radar 5개), 자동 풀이 |
 
 ## 실행
 
