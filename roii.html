@@ -336,72 +336,107 @@
     grid.material.opacity = 0.5;
     scene.add(grid);
 
-    /* ── Text Sprite Helper ── */
+    /* ── Device Templates (from original roii) ── */
+    const DEVICE_TEMPLATES = {
+      lidar:  { w: 2.5, h: 3.5, d: 2.5, color: 0x10B981 },
+      radar:  { w: 1.3, h: 0.8, d: 1.3, color: 0xF59E0B },
+      lan9662:{ w: 4,   h: 2,   d: 3,   color: 0x3B82F6 },
+      lan9692:{ w: 6,   h: 2.5, d: 4,   color: 0x10B981 },
+      ecu:    { w: 3,   h: 1.5, d: 2.5, color: 0x8B5CF6 }
+    };
+
+    // Map node IDs to device types
+    function getDeviceType(nodeId) {
+      if (nodeId.startsWith('LIDAR')) return 'lidar';
+      if (nodeId.startsWith('RADAR')) return 'radar';
+      if (nodeId === 'SW_REAR') return 'lan9692';
+      if (nodeId.startsWith('SW')) return 'lan9662';
+      if (nodeId === 'ADAS_PC') return 'ecu';
+      return 'ecu';
+    }
+
+    /* ── Label Sprite ── */
     function makeLabel(text, color) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      canvas.width = 256; canvas.height = 64;
-      ctx.font = 'bold 22px Arial';
+      canvas.width = 512; canvas.height = 128;
+      ctx.fillStyle = 'rgba(26, 26, 46, 0.85)';
+      ctx.fillRect(0, 0, 512, 128);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 48px Arial';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const tw = ctx.measureText(text).width;
-      const px = 14;
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      const rx = 128 - tw/2 - px, ry = 8, rw = tw + px*2, rh = 48;
-      ctx.beginPath();
-      ctx.roundRect(rx, ry, rw, rh, 10);
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText(text, 128, 32);
+      ctx.fillText(text, 256, 75);
       const tex = new THREE.CanvasTexture(canvas);
-      tex.minFilter = THREE.LinearFilter;
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
       );
-      sprite.scale.set(7, 1.75, 1);
       sprite.renderOrder = 10;
       return sprite;
     }
 
-    /* ── Network Nodes ── */
+    /* ── Create Device Meshes (matching original roii shapes) ── */
     const nodePos3D = {};
     const nodeMeshes = {};
 
     for (const [nodeId, pos] of Object.entries(ROII_3D_POSITIONS)) {
       const nc = ROII_NODE_COLORS[nodeId];
-      const strokeColor = new THREE.Color(nc.stroke);
-      const isSwitch = nodeId.startsWith('SW_');
-      const isPC = nodeId === 'ADAS_PC';
-      const r = isPC ? 1.6 : isSwitch ? 1.4 : 1.0;
+      const devType = getDeviceType(nodeId);
+      const tmpl = DEVICE_TEMPLATES[devType];
+      const group = new THREE.Group();
+      group.position.set(pos.x, pos.y, pos.z);
 
-      // Outer glow — additive, no depth write
-      const glowGeo = new THREE.SphereGeometry(r * 2, 16, 16);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: strokeColor, transparent: true, opacity: 0.10,
-        depthWrite: false
-      });
-      const glow = new THREE.Mesh(glowGeo, glowMat);
-      glow.position.set(pos.x, pos.y, pos.z);
-      glow.renderOrder = 2;
-      scene.add(glow);
+      // Build geometry based on device type
+      let geometry;
+      if (devType === 'lidar') {
+        // Center LiDARs = small box, side LiDARs = cylinder
+        const isCenter = nodeId.includes('FC') || nodeId.includes('RC');
+        if (isCenter) {
+          geometry = new THREE.BoxGeometry(tmpl.w * 0.5, tmpl.h * 0.5, tmpl.d * 0.5);
+        } else {
+          geometry = new THREE.CylinderGeometry(tmpl.w * 0.6, tmpl.w * 0.6, tmpl.h, 16);
+        }
+      } else {
+        geometry = new THREE.BoxGeometry(tmpl.w, tmpl.h, tmpl.d);
+      }
 
-      // Core node — opaque, solid
-      const geo = new THREE.SphereGeometry(r, 20, 20);
+      // Main mesh
       const mat = new THREE.MeshPhongMaterial({
-        color: strokeColor, emissive: strokeColor, emissiveIntensity: 0.35,
-        shininess: 80
+        color: tmpl.color,
+        emissive: tmpl.color,
+        emissiveIntensity: 0.2,
+        shininess: 70
       });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(pos.x, pos.y, pos.z);
+      const mesh = new THREE.Mesh(geometry, mat);
       mesh.renderOrder = 3;
-      scene.add(mesh);
+      group.add(mesh);
 
-      // Label
+      // Edge wireframe
+      const edges = new THREE.EdgesGeometry(geometry);
+      const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+      group.add(new THREE.LineSegments(edges, wireMat));
+
+      // Port dots (up to 4)
+      const portCount = (devType === 'lan9692') ? 4 : (devType === 'lan9662') ? 4 : 1;
+      const portGeo = new THREE.SphereGeometry(0.3, 8, 8);
+      const portMat = new THREE.MeshPhongMaterial({
+        color: 0xffffff, emissive: tmpl.color, emissiveIntensity: 0.5
+      });
+      for (let i = 0; i < Math.min(portCount, 4); i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const p = new THREE.Mesh(portGeo, portMat.clone());
+        p.position.set(Math.cos(angle) * tmpl.w * 0.4, 0, Math.sin(angle) * tmpl.d * 0.4);
+        group.add(p);
+      }
+
+      // Label sprite (sized relative to device)
       const label = makeLabel(nc.label, nc.stroke);
-      label.position.set(pos.x, pos.y + r + 2.5, pos.z);
-      scene.add(label);
+      const labelScale = Math.max(tmpl.w, tmpl.d) * 1.2;
+      label.scale.set(labelScale, labelScale * 0.25, 1);
+      label.position.y = tmpl.h + 1.2;
+      group.add(label);
+
+      group.renderOrder = 3;
+      scene.add(group);
 
       nodePos3D[nodeId] = new THREE.Vector3(pos.x, pos.y, pos.z);
       nodeMeshes[nodeId] = mesh;
@@ -494,28 +529,27 @@
         model.scale.set(scale, scale, scale);
         const scaledHeight = size.y * scale;
         model.position.set(
-          -center.x * scale,
-          -center.y * scale + scaledHeight * 0.5 + 0.5,
-          -center.z * scale
+          -center.x,
+          -center.y + (scaledHeight * 0.5) + 0.5,
+          -center.z
         );
 
-        // Ghost body — no shadows, render behind everything
+        // Transparent vehicle body — keep original colors, no shadows
         model.renderOrder = 0;
         model.traverse((child) => {
           if (child.isMesh && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(mat => {
               mat.transparent = true;
-              mat.opacity = 0.15;
+              mat.opacity = 0.25;
               mat.side = THREE.DoubleSide;
-              mat.depthWrite = false;
-              mat.depthTest = true;
-              // Soft neutral tint — no color boost
-              if (mat.color) {
-                mat.color.setHex(0xb0c4de);  // light steel blue
-              }
-              mat.emissive = new THREE.Color(0x6688aa);
-              mat.emissiveIntensity = 0.15;
+              mat.depthWrite = true;
+              // Brighten original colors
+              if (mat.color) mat.color.multiplyScalar(1.5);
+              mat.emissive = mat.color
+                ? mat.color.clone().multiplyScalar(0.3)
+                : new THREE.Color(0xffffff);
+              mat.emissiveIntensity = 0.4;
             });
             child.castShadow = false;
             child.receiveShadow = false;
