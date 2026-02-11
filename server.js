@@ -54,18 +54,75 @@ function parseBody(req) {
   });
 }
 
-function normalizeFlowPaths(flow) {
+function generateKPaths(adjacency, src, dst, k, maxDepth) {
+  const found = [];
+  const MAX_ENUM = 2000;
+
+  function dfs(node, depth, nodeVisited, linkPath) {
+    if (found.length >= MAX_ENUM) return;
+    if (depth > maxDepth) return;
+    if (node === dst) {
+      found.push(linkPath.slice());
+      return;
+    }
+
+    const edges = adjacency.get(node) || [];
+    for (const e of edges) {
+      if (nodeVisited.has(e.to)) continue;
+      nodeVisited.add(e.to);
+      linkPath.push(e.link_id);
+      dfs(e.to, depth + 1, nodeVisited, linkPath);
+      linkPath.pop();
+      nodeVisited.delete(e.to);
+    }
+  }
+
+  const seedVisited = new Set([src]);
+  dfs(src, 0, seedVisited, []);
+
+  found.sort((a, b) => {
+    if (a.length !== b.length) return a.length - b.length;
+    return a.join('|').localeCompare(b.join('|'));
+  });
+
+  const unique = [];
+  const seen = new Set();
+  for (const p of found) {
+    const key = p.join('>');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(p);
+    if (unique.length >= k) break;
+  }
+  return unique;
+}
+
+function normalizeFlowPaths(flow, adjacency, model) {
   if (Array.isArray(flow.candidate_paths) && flow.candidate_paths.length > 0) {
     return flow.candidate_paths;
   }
   if (Array.isArray(flow.path) && flow.path.length > 0) {
     return [flow.path];
   }
-  throw new Error(`flow ${flow.id}: path or candidate_paths is required`);
+  if (flow.src && flow.dst) {
+    const k = Math.max(1, Number(flow.k_paths || model.k_paths || 2));
+    const maxDepth = Math.max(1, Number(flow.max_path_hops || model.max_path_hops || model.nodes.length + 2));
+    const generated = generateKPaths(adjacency, flow.src, flow.dst, k, maxDepth);
+    if (generated.length === 0) {
+      throw new Error(`flow ${flow.id}: no route found from ${flow.src} to ${flow.dst}`);
+    }
+    return generated;
+  }
+  throw new Error(`flow ${flow.id}: set candidate_paths/path OR src+dst`);
 }
 
 function expandPackets(model) {
   const linkMap = new Map(model.links.map((l) => [l.id, l]));
+  const adjacency = new Map();
+  for (const l of model.links) {
+    if (!adjacency.has(l.from)) adjacency.set(l.from, []);
+    adjacency.get(l.from).push({ to: l.to, link_id: l.id });
+  }
   const packets = [];
 
   for (const flow of model.flows) {
@@ -73,7 +130,7 @@ function expandPackets(model) {
       throw new Error(`flow ${flow.id}: period_us must be > 0`);
     }
 
-    const candidatePaths = normalizeFlowPaths(flow);
+    const candidatePaths = normalizeFlowPaths(flow, adjacency, model);
     for (const p of candidatePaths) {
       for (const lid of p) {
         if (!linkMap.has(lid)) {

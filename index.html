@@ -243,10 +243,9 @@
           period_us: 250,
           deadline_us: 130,
           traffic_type: "control",
-          candidate_paths: [
-            ["l_esA_s1", "l_s1_s2", "l_s2_esB"],
-            ["l_esA_s1", "l_s1_s3", "l_s3_s2", "l_s2_esB"]
-          ]
+          src: "esA",
+          dst: "esB",
+          k_paths: 3
         },
         {
           id: "f_sensor_A_to_C",
@@ -255,10 +254,9 @@
           period_us: 500,
           deadline_us: 180,
           traffic_type: "sensor",
-          candidate_paths: [
-            ["l_esA_s1", "l_s1_s3", "l_s3_esC"],
-            ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_esC"]
-          ]
+          src: "esA",
+          dst: "esC",
+          k_paths: 3
         },
         {
           id: "f_video_A_loop",
@@ -267,10 +265,9 @@
           period_us: 1000,
           deadline_us: null,
           traffic_type: "video",
-          candidate_paths: [
-            ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_s1"],
-            ["l_esA_s1", "l_s1_s3", "l_s3_s2", "l_s2_s1"]
-          ]
+          src: "esA",
+          dst: "s1",
+          k_paths: 4
         }
       ]
     };

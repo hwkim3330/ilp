@@ -16,6 +16,9 @@ node server.js
 - 3개 스위치 삼각형 토폴로지(`s1, s2, s3`)
 - ILP가 **경로 선택 + 전송시각 스케줄**을 동시에 결정
 - 출력: 링크별 GCL, 패킷별 E2E delay/deadline/slack, 선택된 경로
+- 경로 입력은 두 방식 지원:
+  - `candidate_paths[][]` 직접 지정
+  - `src/dst + k_paths`로 서버가 자동 후보경로 생성(K-shortest 유사)
 
 ## 구성
 
@@ -36,6 +39,7 @@ node server.js
 - `processing_delay_us`
 - `nodes[]`: `{ id, type }`
 - `links[]`: `{ id, from, to, rate_mbps, prop_delay_us }`
-- `flows[]`: `{ id, priority, payload_bytes, period_us, deadline_us, traffic_type, candidate_paths[][] }`
+- `flows[]`
+  - 수동경로: `{ id, priority, payload_bytes, period_us, deadline_us, traffic_type, candidate_paths[][] }`
+  - 자동경로: `{ id, priority, payload_bytes, period_us, deadline_us, traffic_type, src, dst, k_paths }`
   - 하위호환: `path[]` 1개만 제공해도 동작
-
