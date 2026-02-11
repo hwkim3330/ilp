@@ -595,6 +595,14 @@
     animate();
   })(); } catch(e) { console.warn('3D init error:', e); }
 
+  /* ── ROii Flow Colors (green LiDAR, purple Radar) ── */
+  function roiiFlowColor(fid) {
+    const id = (fid || '').toLowerCase();
+    if (id.includes('lidar')) return '#10B981';
+    if (id.includes('radar')) return '#952aff';
+    return '#3B82F6';
+  }
+
   /* ── State ───────────────────────────────────── */
   let glpk = null;
   let currentModel = JSON.parse(JSON.stringify(ROII_MODEL));
@@ -682,10 +690,11 @@
       nodeColors: ROII_NODE_COLORS,
       height: 520
     });
-    renderGCL(currentModel, currentResult);
-    renderDelayChart(currentModel, currentResult);
+    const fcopts = { flowColorFn: roiiFlowColor };
+    renderGCL(currentModel, currentResult, fcopts);
+    renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult);
-    renderTable(currentResult);
+    renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
 

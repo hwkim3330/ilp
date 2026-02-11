@@ -461,6 +461,7 @@ export function renderTopology(model, result, opts = {}) {
 export function renderGCL(model, result, opts = {}) {
   const containerId = opts.containerId || "gclContainer";
   const legendId = opts.legendId || "gclLegend";
+  const colorFn = opts.flowColorFn || flowColor;
 
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -471,11 +472,12 @@ export function renderGCL(model, result, opts = {}) {
   if (legendEl) {
     const types = [...new Set(model.flows.map(f => f.traffic_type))];
     legendEl.innerHTML = types.map(t => {
-      const c = FLOW_COLORS_HEX[t] || "#7b61ff";
-      return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t}</div>`;
+      const rep = model.flows.find(f => f.traffic_type === t);
+      const c = rep ? colorFn(rep.id) : (FLOW_COLORS_HEX[t] || "#7b61ff");
+      return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t} (P${rep?.priority ?? '?'})</div>`;
     }).join("") +
       `<div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>Guard Band</div>` +
-      `<div class="legend-item"><div class="legend-dot" style="background:#1a3050"></div>Best-Effort</div>`;
+      `<div class="legend-item"><div class="legend-dot" style="background:var(--be,#e2e8f0)"></div>Best-Effort</div>`;
   }
 
   // Filter to links with TSN entries
@@ -484,8 +486,20 @@ export function renderGCL(model, result, opts = {}) {
     return entries.some(e => !e.note.includes("best-effort"));
   });
 
-  const margin = { top: 30, right: 30, bottom: 40, left: 110 };
-  const rowH = 44;
+  // Auto-zoom: if TSN traffic uses <30% of cycle, zoom into active region
+  let maxActiveEnd = 0;
+  activeLinks.forEach(link => {
+    const entries = result.gcl.links[link.id]?.entries || [];
+    entries.forEach(e => {
+      if (!e.note.includes("best-effort")) maxActiveEnd = Math.max(maxActiveEnd, e.end_us);
+    });
+  });
+  const zoomThreshold = model.cycle_time_us * 0.3;
+  const isZoomed = maxActiveEnd > 0 && maxActiveEnd < zoomThreshold;
+  const xMax = isZoomed ? Math.max(maxActiveEnd * 1.5, maxActiveEnd + 20) : model.cycle_time_us;
+
+  const margin = { top: 30, right: 30, bottom: isZoomed ? 50 : 40, left: 140 };
+  const rowH = 48;
   const W = container.clientWidth;
   const H = margin.top + activeLinks.length * rowH + margin.bottom;
 
@@ -497,7 +511,7 @@ export function renderGCL(model, result, opts = {}) {
   const innerW = W - margin.left - margin.right;
   const innerH = activeLinks.length * rowH;
 
-  const x = d3.scaleLinear().domain([0, model.cycle_time_us]).range([0, innerW]);
+  const x = d3.scaleLinear().domain([0, xMax]).range([0, innerW]);
   const y = d3.scaleBand().domain(activeLinks.map(l => l.id)).range([0, innerH]).padding(0.2);
 
   // Grid
@@ -509,7 +523,7 @@ export function renderGCL(model, result, opts = {}) {
   // X axis
   g.append("g").attr("class", "gcl-axis")
     .attr("transform", `translate(0,${innerH})`)
-    .call(d3.axisBottom(x).ticks(10).tickFormat(d => d + " us"))
+    .call(d3.axisBottom(x).ticks(10).tickFormat(d => d + " µs"))
     .selectAll("text").attr("fill", "var(--text3)");
 
   // Y axis
@@ -528,15 +542,18 @@ export function renderGCL(model, result, opts = {}) {
     .data(activeLinks).enter().append("rect")
     .attr("x", 0).attr("y", d => y(d.id))
     .attr("width", innerW).attr("height", y.bandwidth())
-    .attr("fill", "rgba(255,255,255,.015)").attr("rx", 4);
+    .attr("fill", (d, i) => i % 2 === 0 ? "rgba(59,130,246,0.03)" : "transparent").attr("rx", 4);
 
   // GCL bars
   activeLinks.forEach(link => {
     const entries = result.gcl.links[link.id]?.entries || [];
     const barG = g.append("g");
 
+    // When zoomed, only show entries within visible range
+    const visibleEntries = isZoomed ? entries.filter(e => e.start_us < xMax) : entries;
+
     barG.selectAll("rect")
-      .data(entries).enter().append("rect")
+      .data(visibleEntries).enter().append("rect")
       .attr("class", "gcl-bar")
       .attr("x", d => x(d.start_us))
       .attr("y", y(link.id))
@@ -544,19 +561,20 @@ export function renderGCL(model, result, opts = {}) {
       .attr("height", y.bandwidth())
       .attr("fill", d => {
         if (d.note.includes("guard")) return "#f9a825";
-        if (d.note.includes("best-effort")) return "#0d1a30";
-        return flowColor(d.note);
+        if (d.note.includes("best-effort")) return "var(--be, #e2e8f0)";
+        return colorFn(d.note);
       })
-      .attr("stroke", d => d.note.includes("best-effort") ? "rgba(30,48,96,.5)" : "none")
+      .attr("stroke", d => d.note.includes("best-effort") ? "var(--border, rgba(59,130,246,.2))" : "none")
       .attr("stroke-width", 0.5)
       .attr("opacity", d => d.note.includes("best-effort") ? 0.3 : 0.85)
+      .attr("rx", 2)
       .on("mouseover", (evt, d) => {
         showTip(evt, `
           <div class="tt-title">${d.note}</div>
           <div class="tt-row"><span class="tt-k">Gate</span><span class="tt-v">${d.gate_mask}</span></div>
-          <div class="tt-row"><span class="tt-k">Start</span><span class="tt-v">${d.start_us} us</span></div>
-          <div class="tt-row"><span class="tt-k">End</span><span class="tt-v">${d.end_us} us</span></div>
-          <div class="tt-row"><span class="tt-k">Duration</span><span class="tt-v">${d.duration_us} us</span></div>
+          <div class="tt-row"><span class="tt-k">Start</span><span class="tt-v">${d.start_us} µs</span></div>
+          <div class="tt-row"><span class="tt-k">End</span><span class="tt-v">${d.end_us} µs</span></div>
+          <div class="tt-row"><span class="tt-k">Duration</span><span class="tt-v">${d.duration_us} µs</span></div>
         `);
       })
       .on("mousemove", (evt) => {
@@ -565,32 +583,60 @@ export function renderGCL(model, result, opts = {}) {
       })
       .on("mouseout", hideTip)
       .transition().duration(800).delay((d, i) => i * 30)
-      .attr("width", d => Math.max(x(d.duration_us) - x(0), 1));
+      .attr("width", d => {
+        const endClamped = Math.min(d.start_us + d.duration_us, xMax);
+        const w = x(endClamped) - x(d.start_us);
+        return d.note.includes("best-effort") ? Math.max(w, 0) : Math.max(w, 3);
+      });
 
     // Labels on flow bars
     barG.selectAll("text")
-      .data(entries.filter(e => !e.note.includes("best-effort") && !e.note.includes("guard") && (x(e.duration_us) - x(0)) > 30))
+      .data(visibleEntries.filter(e => !e.note.includes("best-effort") && !e.note.includes("guard")))
       .enter().append("text")
       .attr("class", "gcl-label")
-      .attr("x", d => x(d.start_us) + (x(d.duration_us) - x(0)) / 2)
+      .attr("x", d => {
+        const endClamped = Math.min(d.start_us + d.duration_us, xMax);
+        return x(d.start_us) + (x(endClamped) - x(d.start_us)) / 2;
+      })
       .attr("y", d => y(link.id) + y.bandwidth() / 2)
       .attr("text-anchor", "middle").attr("dominant-baseline", "central")
       .attr("opacity", 0)
-      .text(d => d.note.split("#")[0].replace("f_", "").substring(0, 8))
+      .text(d => d.note.split("#")[0].replace("f_", ""))
       .transition().delay(800).duration(300).attr("opacity", 1);
   });
 
-  // Cycle info
+  // Cycle info + zoom indicator
   svg.append("text")
     .attr("x", margin.left).attr("y", margin.top - 10)
     .attr("fill", "var(--text3)").attr("font-size", "10px")
-    .text(`Cycle: ${model.cycle_time_us} us | Guard: ${model.guard_band_us} us | Active Links: ${activeLinks.length}/${model.links.length}`);
+    .text(`Cycle: ${model.cycle_time_us} µs | Guard: ${model.guard_band_us} µs | Active: ${activeLinks.length}/${model.links.length} links${isZoomed ? ` | Zoom: 0–${Math.round(xMax)} µs` : ''}`);
+
+  // Zoom indicator bar (shows which portion of the full cycle is displayed)
+  if (isZoomed) {
+    const zoomBarY = H - 14;
+    const zoomRatio = xMax / model.cycle_time_us;
+    svg.append("rect")
+      .attr("x", margin.left).attr("y", zoomBarY)
+      .attr("width", innerW).attr("height", 6)
+      .attr("fill", "var(--border, rgba(59,130,246,0.1))").attr("rx", 3);
+    svg.append("rect")
+      .attr("x", margin.left).attr("y", zoomBarY)
+      .attr("width", innerW * zoomRatio).attr("height", 6)
+      .attr("fill", "var(--blue, #3B82F6)").attr("opacity", 0.5).attr("rx", 3);
+    svg.append("text")
+      .attr("x", margin.left + innerW * zoomRatio + 6).attr("y", zoomBarY + 5)
+      .attr("fill", "var(--text3)").attr("font-size", "8px")
+      .text(`${(zoomRatio * 100).toFixed(0)}% of cycle`);
+  }
 }
 
 /* ═══════════════════════════════════════════════
    RENDER: PACKET DELAY CHART
    ═══════════════════════════════════════════════ */
-export function renderDelayChart(model, result, containerId = "delayContainer") {
+export function renderDelayChart(model, result, optsOrId = "delayContainer") {
+  const _opts = typeof optsOrId === 'string' ? { containerId: optsOrId } : (optsOrId || {});
+  const containerId = _opts.containerId || "delayContainer";
+  const colorFn = _opts.flowColorFn || flowColor;
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";
@@ -645,7 +691,7 @@ export function renderDelayChart(model, result, containerId = "delayContainer") 
     .attr("class", "delay-bar")
     .attr("x", d => x(d.packet_id)).attr("y", innerH)
     .attr("width", x.bandwidth()).attr("height", 0)
-    .attr("fill", d => flowColor(d.flow_id)).attr("opacity", 0.85)
+    .attr("fill", d => colorFn(d.flow_id)).attr("opacity", 0.85)
     .on("mouseover", (evt, d) => {
       showTip(evt, `
         <div class="tt-title">${d.packet_id}</div>
@@ -773,12 +819,15 @@ export function renderUtilization(model, result, containerId = "utilContainer") 
 /* ═══════════════════════════════════════════════
    RENDER: PACKET TABLE
    ═══════════════════════════════════════════════ */
-export function renderTable(result, containerId = "pktTableBody") {
+export function renderTable(result, optsOrId = "pktTableBody") {
+  const _opts = typeof optsOrId === 'string' ? { containerId: optsOrId } : (optsOrId || {});
+  const containerId = _opts.containerId || "pktTableBody";
+  const colorFn = _opts.flowColorFn || flowColor;
   const tbody = document.getElementById(containerId);
   if (!tbody) return;
   tbody.innerHTML = result.packetRows.map(p => {
     const ft = flowType(p.flow_id);
-    const badgeColor = FLOW_COLORS_HEX[ft] || "#7b61ff";
+    const badgeColor = colorFn(p.flow_id);
     const statusCls = p.status === "OK" ? "ok" : p.status === "MISS" ? "miss" : "be";
     return `<tr>
       <td>${p.packet_id.replace("f_", "")}</td>

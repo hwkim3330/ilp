@@ -232,6 +232,14 @@
     ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO
   } from './js/roii-data.js';
 
+  /* ── ROii Flow Colors (green LiDAR, purple Radar) ── */
+  function roiiFlowColor(fid) {
+    const id = (fid || '').toLowerCase();
+    if (id.includes('lidar')) return '#10B981';
+    if (id.includes('radar')) return '#952aff';
+    return '#3B82F6';
+  }
+
   /* ── State ───────────────────────────────────── */
   let glpk = null;
   let currentModel = JSON.parse(JSON.stringify(ROII_MODEL));
@@ -283,10 +291,11 @@
     renderTopology(currentModel, currentResult, {
       nodePositions: positions, nodeColors: ROII_NODE_COLORS, height: 360
     });
-    renderGCL(currentModel, currentResult);
-    renderDelayChart(currentModel, currentResult);
+    const fcopts = { flowColorFn: roiiFlowColor };
+    renderGCL(currentModel, currentResult, fcopts);
+    renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult);
-    renderTable(currentResult);
+    renderTable(currentResult, fcopts);
     renderSwitchGCL(currentModel, currentResult);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
@@ -359,7 +368,7 @@
           const isGuard = e.note.includes("guard");
           const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
           const typeLabel = isGuard ? "Guard" : isBE ? "BE" : e.note.split("#")[0].replace("f_","");
-          const barColor = isGuard ? "var(--orange)" : isBE ? "var(--be)" : flowColor(e.note);
+          const barColor = isGuard ? "var(--orange)" : isBE ? "var(--be)" : roiiFlowColor(e.note);
           const barWidth = (e.duration_us / model.cycle_time_us * 100).toFixed(1);
 
           tableHTML += `<tr>
