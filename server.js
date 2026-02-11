@@ -46,7 +46,7 @@ function parseBody(req) {
     req.on('end', () => {
       try {
         resolve(data ? JSON.parse(data) : {});
-      } catch (e) {
+      } catch (_e) {
         reject(new Error('invalid JSON body'));
       }
     });
@@ -54,21 +54,31 @@ function parseBody(req) {
   });
 }
 
+function normalizeFlowPaths(flow) {
+  if (Array.isArray(flow.candidate_paths) && flow.candidate_paths.length > 0) {
+    return flow.candidate_paths;
+  }
+  if (Array.isArray(flow.path) && flow.path.length > 0) {
+    return [flow.path];
+  }
+  throw new Error(`flow ${flow.id}: path or candidate_paths is required`);
+}
+
 function expandPackets(model) {
   const linkMap = new Map(model.links.map((l) => [l.id, l]));
   const packets = [];
 
   for (const flow of model.flows) {
-    if (!Array.isArray(flow.path) || flow.path.length === 0) {
-      throw new Error(`flow ${flow.id}: path is required`);
-    }
     if (!flow.period_us || flow.period_us <= 0) {
       throw new Error(`flow ${flow.id}: period_us must be > 0`);
     }
 
-    for (const lid of flow.path) {
-      if (!linkMap.has(lid)) {
-        throw new Error(`flow ${flow.id}: unknown link ${lid}`);
+    const candidatePaths = normalizeFlowPaths(flow);
+    for (const p of candidatePaths) {
+      for (const lid of p) {
+        if (!linkMap.has(lid)) {
+          throw new Error(`flow ${flow.id}: unknown link ${lid}`);
+        }
       }
     }
 
@@ -80,12 +90,19 @@ function expandPackets(model) {
 
     for (let k = 0; k < repeats; k++) {
       const release = k * flow.period_us;
-      const hops = flow.path.map((lid) => {
-        const link = linkMap.get(lid);
+      const routes = candidatePaths.map((pathLinks, rIdx) => {
+        const hops = pathLinks.map((lid) => {
+          const link = linkMap.get(lid);
+          return {
+            link_id: lid,
+            tx_us: txTimeUs(flow.payload_bytes, link.rate_mbps),
+            prop_delay_us: link.prop_delay_us,
+          };
+        });
+
         return {
-          link_id: lid,
-          tx_us: txTimeUs(flow.payload_bytes, link.rate_mbps),
-          prop_delay_us: link.prop_delay_us,
+          route_idx: rIdx,
+          hops,
         };
       });
 
@@ -97,7 +114,7 @@ function expandPackets(model) {
         release_us: release,
         deadline_abs_us: flow.deadline_us == null ? null : release + flow.deadline_us,
         tsn: isTsn(flow.priority, flow.deadline_us),
-        hops,
+        routes,
       });
     }
   }
@@ -106,12 +123,6 @@ function expandPackets(model) {
 }
 
 function buildAndSolveIlp(model, packets) {
-  const packetHopByLink = packets.map((p) => {
-    const m = new Map();
-    p.hops.forEach((h, idx) => m.set(h.link_id, idx));
-    return m;
-  });
-
   const varsSeen = new Set();
   const subjectTo = [];
   const binaries = [];
@@ -120,8 +131,9 @@ function buildAndSolveIlp(model, packets) {
 
   const M = model.cycle_time_us + model.guard_band_us + model.processing_delay_us + 100;
 
-  const sVar = (pIdx, hIdx) => `s_${pIdx}_${hIdx}`;
-  const yVar = (linkId, i, j) => `y_${linkId.replace(/[^a-zA-Z0-9]/g, '_')}_${i}_${j}`;
+  const zVar = (pIdx, rIdx) => `z_${pIdx}_${rIdx}`;
+  const sVar = (pIdx, rIdx, hIdx) => `s_${pIdx}_${rIdx}_${hIdx}`;
+  const yVar = (linkId, a, b) => `y_${linkId.replace(/[^a-zA-Z0-9]/g, '_')}_${a}_${b}`;
 
   const addVar = (name) => {
     varsSeen.add(name);
@@ -132,96 +144,141 @@ function buildAndSolveIlp(model, packets) {
     subjectTo.push({ name: `${prefix}_${cIdx++}`, vars: terms, bnds: bnd });
   };
 
+  const operationList = [];
+
   for (let p = 0; p < packets.length; p++) {
     const packet = packets[p];
-    const last = packet.hops.length - 1;
 
-    for (let h = 0; h < packet.hops.length; h++) {
-      const hop = packet.hops[h];
-      const s = addVar(sVar(p, h));
+    const zTerms = [];
+    for (let r = 0; r < packet.routes.length; r++) {
+      const route = packet.routes[r];
+      const z = addVar(zVar(p, r));
+      binaries.push(z);
+      zTerms.push({ name: z, coef: 1 });
 
-      addConstraint('lb_release', [{ name: s, coef: 1 }], {
-        type: glpk.GLP_LO,
-        lb: h === 0 ? packet.release_us : 0,
-        ub: 0,
-      });
+      for (let h = 0; h < route.hops.length; h++) {
+        const hop = route.hops[h];
+        const s = addVar(sVar(p, r, h));
 
-      addConstraint('ub_cycle', [{ name: s, coef: 1 }], {
-        type: glpk.GLP_UP,
-        lb: 0,
-        ub: model.cycle_time_us - hop.tx_us,
-      });
-
-      if (h < packet.hops.length - 1) {
-        const sNext = addVar(sVar(p, h + 1));
-        const shift = hop.tx_us + hop.prop_delay_us + model.processing_delay_us;
-        addConstraint('chain', [
-          { name: sNext, coef: 1 },
-          { name: s, coef: -1 },
+        // Active only when route selected: s >= release - M*(1-z)
+        addConstraint('lb_release', [
+          { name: s, coef: 1 },
+          { name: z, coef: -M },
         ], {
           type: glpk.GLP_LO,
-          lb: shift,
+          lb: packet.release_us - M,
           ub: 0,
         });
+
+        // s <= cycle-tx + M*(1-z)
+        addConstraint('ub_cycle', [
+          { name: s, coef: 1 },
+          { name: z, coef: M },
+        ], {
+          type: glpk.GLP_UP,
+          lb: 0,
+          ub: model.cycle_time_us - hop.tx_us + M,
+        });
+
+        if (h < route.hops.length - 1) {
+          const sNext = addVar(sVar(p, r, h + 1));
+          const shift = hop.tx_us + hop.prop_delay_us + model.processing_delay_us;
+          // s_next - s >= shift - M*(1-z)
+          addConstraint('chain', [
+            { name: sNext, coef: 1 },
+            { name: s, coef: -1 },
+            { name: z, coef: -M },
+          ], {
+            type: glpk.GLP_LO,
+            lb: shift - M,
+            ub: 0,
+          });
+        }
+
+        operationList.push({
+          op_id: operationList.length,
+          p,
+          r,
+          h,
+          link_id: hop.link_id,
+          s_name: s,
+          z_name: z,
+          tx_us: hop.tx_us,
+          block_us: hop.tx_us + (packet.tsn ? model.guard_band_us : 0),
+        });
+      }
+
+      const last = route.hops.length - 1;
+      const sLast = addVar(sVar(p, r, last));
+      const lastHop = route.hops[last];
+
+      if (packet.deadline_abs_us != null) {
+        const finishShift = lastHop.tx_us + lastHop.prop_delay_us;
+        // s_last <= deadline-finishShift + M*(1-z)
+        addConstraint('deadline', [
+          { name: sLast, coef: 1 },
+          { name: z, coef: M },
+        ], {
+          type: glpk.GLP_UP,
+          lb: 0,
+          ub: packet.deadline_abs_us - finishShift + M,
+        });
+      }
+
+      if (packet.tsn) {
+        // arrival approx: s_last + tx_last + prop_last
+        objectiveVars.push({ name: sLast, coef: 1 });
+        objectiveVars.push({ name: z, coef: lastHop.tx_us + lastHop.prop_delay_us });
       }
     }
 
-    if (packet.deadline_abs_us != null) {
-      const sLast = addVar(sVar(p, last));
-      const finishShift = packet.hops[last].tx_us + packet.hops[last].prop_delay_us;
-      addConstraint('deadline', [{ name: sLast, coef: 1 }], {
-        type: glpk.GLP_UP,
-        lb: 0,
-        ub: packet.deadline_abs_us - finishShift,
-      });
-    }
-
-    if (packet.tsn) {
-      const sLast = addVar(sVar(p, last));
-      objectiveVars.push({ name: sLast, coef: 1 });
-    }
+    // Exactly one route selected per packet.
+    addConstraint('select_route', zTerms, {
+      type: glpk.GLP_FX,
+      lb: 1,
+      ub: 1,
+    });
   }
 
+  // No-overlap on each link across all possible operations using that link.
   for (const link of model.links) {
-    const onLink = [];
-    for (let p = 0; p < packets.length; p++) {
-      if (packetHopByLink[p].has(link.id)) onLink.push(p);
-    }
+    const ops = operationList.filter((o) => o.link_id === link.id);
 
-    for (let a = 0; a < onLink.length; a++) {
-      for (let b = a + 1; b < onLink.length; b++) {
-        const i = onLink[a];
-        const j = onLink[b];
-        const hi = packetHopByLink[i].get(link.id);
-        const hj = packetHopByLink[j].get(link.id);
+    for (let a = 0; a < ops.length; a++) {
+      for (let b = a + 1; b < ops.length; b++) {
+        const oa = ops[a];
+        const ob = ops[b];
 
-        const si = addVar(sVar(i, hi));
-        const sj = addVar(sVar(j, hj));
-        const y = addVar(yVar(link.id, i, j));
+        if (oa.p === ob.p && oa.r === ob.r) continue;
+
+        const y = addVar(yVar(link.id, oa.op_id, ob.op_id));
         binaries.push(y);
 
-        const bi = packets[i].hops[hi].tx_us + (packets[i].tsn ? model.guard_band_us : 0);
-        const bj = packets[j].hops[hj].tx_us + (packets[j].tsn ? model.guard_band_us : 0);
-
-        // y = 0 => i before j : sj - si >= bi
-        addConstraint('nolap_ij', [
-          { name: sj, coef: 1 },
-          { name: si, coef: -1 },
-          { name: y, coef: M },
+        // y=1 => a before b.
+        // sb - sa >= ba - M*(1-y) - M*(2-za-zb)
+        addConstraint('nolap_ab', [
+          { name: ob.s_name, coef: 1 },
+          { name: oa.s_name, coef: -1 },
+          { name: y, coef: -M },
+          { name: oa.z_name, coef: -M },
+          { name: ob.z_name, coef: -M },
         ], {
           type: glpk.GLP_LO,
-          lb: bi,
+          lb: oa.block_us - 3 * M,
           ub: 0,
         });
 
-        // y = 1 => j before i : si - sj >= bj
-        addConstraint('nolap_ji', [
-          { name: si, coef: 1 },
-          { name: sj, coef: -1 },
-          { name: y, coef: -M },
+        // y=0 => b before a.
+        // sa - sb >= bb - M*y - M*(2-za-zb)
+        addConstraint('nolap_ba', [
+          { name: oa.s_name, coef: 1 },
+          { name: ob.s_name, coef: -1 },
+          { name: y, coef: M },
+          { name: oa.z_name, coef: -M },
+          { name: ob.z_name, coef: -M },
         ], {
           type: glpk.GLP_LO,
-          lb: bj - M,
+          lb: ob.block_us - 2 * M,
           ub: 0,
         });
       }
@@ -229,11 +286,11 @@ function buildAndSolveIlp(model, packets) {
   }
 
   const lp = {
-    name: 'tsn_triangle_ilp',
+    name: 'tsn_triangle_path_ilp',
     objective: {
       direction: glpk.GLP_MIN,
       name: 'obj',
-      vars: objectiveVars.length > 0 ? objectiveVars : [{ name: addVar('dummy_obj'), coef: 0 }],
+      vars: objectiveVars.length ? objectiveVars : [{ name: addVar('dummy_obj'), coef: 0 }],
     },
     subjectTo,
     binaries,
@@ -261,6 +318,7 @@ function buildAndSolveIlp(model, packets) {
       binaries: binaries.length,
       status: solved.result.status,
     },
+    zVar,
     sVar,
   };
 }
@@ -271,11 +329,23 @@ function buildResult(model, packets, ilpRes) {
 
   for (let p = 0; p < packets.length; p++) {
     const packet = packets[p];
+
+    let selectedR = 0;
+    let bestZ = -1;
+    for (let r = 0; r < packet.routes.length; r++) {
+      const zv = Number(ilpRes.vars[ilpRes.zVar(p, r)] || 0);
+      if (zv > bestZ) {
+        bestZ = zv;
+        selectedR = r;
+      }
+    }
+
+    const route = packet.routes[selectedR];
     const hops = [];
 
-    for (let h = 0; h < packet.hops.length; h++) {
-      const hop = packet.hops[h];
-      const s = Number(ilpRes.vars[ilpRes.sVar(p, h)] || 0);
+    for (let h = 0; h < route.hops.length; h++) {
+      const hop = route.hops[h];
+      const s = Number(ilpRes.vars[ilpRes.sVar(p, selectedR, h)] || 0);
       const e = s + hop.tx_us;
 
       hops.push({
@@ -306,7 +376,7 @@ function buildResult(model, packets, ilpRes) {
       }
     }
 
-    const lastHop = packet.hops[packet.hops.length - 1];
+    const lastHop = route.hops[route.hops.length - 1];
     const finish = hops[hops.length - 1].end_us + lastHop.prop_delay_us;
     const e2e = round3(finish - packet.release_us);
     const ok = packet.deadline_abs_us == null || finish <= packet.deadline_abs_us + 1e-6;
@@ -315,6 +385,7 @@ function buildResult(model, packets, ilpRes) {
       packet_id: packet.packet_id,
       flow_id: packet.flow_id,
       priority: packet.priority,
+      selected_route: selectedR,
       release_us: round3(packet.release_us),
       end_us: round3(finish),
       e2e_delay_us: e2e,
@@ -397,7 +468,7 @@ function buildResult(model, packets, ilpRes) {
   );
 
   return {
-    method: 'ILP(GLPK, Node)',
+    method: 'ILP(GLPK, Node, Route+Schedule)',
     objective,
     worst_util_percent: round3(worstUtil),
     packetRows,
@@ -422,7 +493,7 @@ function solve(model) {
   }
 
   const packets = expandPackets(model);
-  if (packets.length > 80) {
+  if (packets.length > 70) {
     throw new Error(`too many packets in cycle (${packets.length}); reduce flow count/period`);
   }
 

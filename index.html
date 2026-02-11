@@ -198,7 +198,7 @@
       <table>
         <thead>
           <tr>
-            <th>Packet</th><th>Flow</th><th>Release</th><th>End</th><th>E2E Delay</th><th>Deadline</th><th>Slack</th><th>Status</th>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E Delay</th><th>Deadline</th><th>Slack</th><th>Status</th>
           </tr>
         </thead>
         <tbody id="packetTable"></tbody>
@@ -227,8 +227,11 @@
       links: [
         { id: "l_esA_s1", from: "esA", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s1_s2", from: "s1", to: "s2", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_s2_s1", from: "s2", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s2_s3", from: "s2", to: "s3", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_s3_s2", from: "s3", to: "s2", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s3_s1", from: "s3", to: "s1", rate_mbps: 1000, prop_delay_us: 0.8 },
+        { id: "l_s1_s3", from: "s1", to: "s3", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s2_esB", from: "s2", to: "esB", rate_mbps: 1000, prop_delay_us: 0.8 },
         { id: "l_s3_esC", from: "s3", to: "esC", rate_mbps: 1000, prop_delay_us: 0.8 }
       ],
@@ -240,7 +243,10 @@
           period_us: 250,
           deadline_us: 130,
           traffic_type: "control",
-          path: ["l_esA_s1", "l_s1_s2", "l_s2_esB"]
+          candidate_paths: [
+            ["l_esA_s1", "l_s1_s2", "l_s2_esB"],
+            ["l_esA_s1", "l_s1_s3", "l_s3_s2", "l_s2_esB"]
+          ]
         },
         {
           id: "f_sensor_A_to_C",
@@ -249,7 +255,10 @@
           period_us: 500,
           deadline_us: 180,
           traffic_type: "sensor",
-          path: ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_esC"]
+          candidate_paths: [
+            ["l_esA_s1", "l_s1_s3", "l_s3_esC"],
+            ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_esC"]
+          ]
         },
         {
           id: "f_video_A_loop",
@@ -258,7 +267,10 @@
           period_us: 1000,
           deadline_us: null,
           traffic_type: "video",
-          path: ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_s1"]
+          candidate_paths: [
+            ["l_esA_s1", "l_s1_s2", "l_s2_s3", "l_s3_s1"],
+            ["l_esA_s1", "l_s1_s3", "l_s3_s2", "l_s2_s1"]
+          ]
         }
       ]
     };
@@ -331,7 +343,7 @@
         };
 
         pushNode("s1"); pushNode("s2"); pushNode("s3");
-        pushEdge("s1 -> s2"); pushEdge("s2 -> s3"); pushEdge("s3 -> s1");
+        pushEdge("s1 <-> s2"); pushEdge("s2 <-> s3"); pushEdge("s3 <-> s1");
         pushNode("esA"); pushNode("esB"); pushNode("esC");
 
         statusEl.textContent = "input rendered";
@@ -403,7 +415,7 @@
       packetTable.innerHTML = "";
       for (const p of result.packetRows) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${p.packet_id}</td><td>${p.flow_id}</td><td>${round3(p.release_us)}</td><td>${round3(p.end_us)}</td><td>${round3(p.e2e_delay_us)}</td><td>${p.deadline_abs_us == null ? "-" : round3(p.deadline_abs_us)}</td><td>${p.slack_us == null ? "-" : round3(p.slack_us)}</td><td class=\"${p.status === "OK" || p.status === "BE" ? "ok" : "miss"}\">${p.status}</td>`;
+        tr.innerHTML = `<td>${p.packet_id}</td><td>${p.flow_id}</td><td>R${p.selected_route}</td><td>${round3(p.release_us)}</td><td>${round3(p.end_us)}</td><td>${round3(p.e2e_delay_us)}</td><td>${p.deadline_abs_us == null ? "-" : round3(p.deadline_abs_us)}</td><td>${p.slack_us == null ? "-" : round3(p.slack_us)}</td><td class=\"${p.status === "OK" || p.status === "BE" ? "ok" : "miss"}\">${p.status}</td>`;
         packetTable.appendChild(tr);
       }
 
