@@ -690,7 +690,7 @@
       nodeColors: ROII_NODE_COLORS,
       height: 520
     });
-    const fcopts = { flowColorFn: roiiFlowColor };
+    const fcopts = { flowColorFn: roiiFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult);

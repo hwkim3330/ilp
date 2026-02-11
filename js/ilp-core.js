@@ -462,6 +462,8 @@ export function renderGCL(model, result, opts = {}) {
   const containerId = opts.containerId || "gclContainer";
   const legendId = opts.legendId || "gclLegend";
   const colorFn = opts.flowColorFn || flowColor;
+  const beColor = opts.beColor || '#0d1a30';
+  const beBorder = opts.beBorder || 'rgba(30,48,96,.3)';
 
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -477,7 +479,7 @@ export function renderGCL(model, result, opts = {}) {
       return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t} (P${rep?.priority ?? '?'})</div>`;
     }).join("") +
       `<div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>Guard Band</div>` +
-      `<div class="legend-item"><div class="legend-dot" style="background:var(--be,#e2e8f0)"></div>Best-Effort</div>`;
+      `<div class="legend-item"><div class="legend-dot" style="background:${beColor}"></div>Best-Effort</div>`;
   }
 
   // Filter to links with TSN entries
@@ -561,10 +563,10 @@ export function renderGCL(model, result, opts = {}) {
       .attr("height", y.bandwidth())
       .attr("fill", d => {
         if (d.note.includes("guard")) return "#f9a825";
-        if (d.note.includes("best-effort")) return "var(--be, #e2e8f0)";
+        if (d.note.includes("best-effort")) return beColor;
         return colorFn(d.note);
       })
-      .attr("stroke", d => d.note.includes("best-effort") ? "var(--border, rgba(59,130,246,.2))" : "none")
+      .attr("stroke", d => d.note.includes("best-effort") ? beBorder : "none")
       .attr("stroke-width", 0.5)
       .attr("opacity", d => d.note.includes("best-effort") ? 0.3 : 0.85)
       .attr("rx", 2)
@@ -618,14 +620,14 @@ export function renderGCL(model, result, opts = {}) {
     svg.append("rect")
       .attr("x", margin.left).attr("y", zoomBarY)
       .attr("width", innerW).attr("height", 6)
-      .attr("fill", "var(--border, rgba(59,130,246,0.1))").attr("rx", 3);
+      .attr("fill", beBorder).attr("opacity", 0.3).attr("rx", 3);
     svg.append("rect")
       .attr("x", margin.left).attr("y", zoomBarY)
       .attr("width", innerW * zoomRatio).attr("height", 6)
-      .attr("fill", "var(--blue, #3B82F6)").attr("opacity", 0.5).attr("rx", 3);
+      .attr("fill", "#3B82F6").attr("opacity", 0.5).attr("rx", 3);
     svg.append("text")
       .attr("x", margin.left + innerW * zoomRatio + 6).attr("y", zoomBarY + 5)
-      .attr("fill", "var(--text3)").attr("font-size", "8px")
+      .attr("fill", "#64748b").attr("font-size", "8px")
       .text(`${(zoomRatio * 100).toFixed(0)}% of cycle`);
   }
 }
