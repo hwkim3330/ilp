@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Automotive TSN Demo &mdash; In-Vehicle Network</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <h1>Automotive TSN Demo</h1>
+      <div class="sub">In-Vehicle Ethernet Backbone &mdash; IEEE 802.1Qbv GCL Scheduling</div>
+      <div style="margin-top:10px;">
+        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK/WASM...</span>
+      </div>
+    </div>
+
+    <!-- Scenario Description -->
+    <div class="auto-desc" id="scenarioDesc"></div>
+
+    <!-- Domain Legend -->
+    <div class="auto-domain-legend" id="domainLegend"></div>
+
+    <!-- Vehicle Architecture Topology -->
+    <div class="card">
+      <div class="card-title">Vehicle Architecture Topology</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:420px;"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics" id="metricsArea"></div>
+
+    <!-- GCL Gantt -->
+    <div class="card">
+      <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
+      <div class="legend" id="gclLegend"></div>
+      <div class="svg-container" id="gclContainer"></div>
+    </div>
+
+    <!-- Delay + Utilization -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Collapsible JSON Editor -->
+    <div class="card">
+      <div class="card-title collapsible" id="jsonEditorToggle">
+        <span class="arrow">&#9654;</span> Customize Model (JSON)
+      </div>
+      <div class="collapse-body">
+        <textarea id="input" style="min-height:300px;"></textarea>
+        <div class="toolbar">
+          <button class="btn btn-secondary" id="resetBtn">Reset to Default</button>
+          <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve</button>
+          <div id="status" style="margin-top:0; margin-left:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw GCL -->
+    <div class="card">
+      <div class="card-title collapsible" id="gclJsonToggle">
+        <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
+      </div>
+      <div class="collapse-body">
+        <pre id="jsonOut">-</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import GLPK from './vendor/glpk.js';
+  import {
+    initTooltip, solveILP, renderMetrics, renderTopology,
+    renderGCL, renderDelayChart, renderUtilization, renderTable
+  } from './js/ilp-core.js';
+  import {
+    AUTOMOTIVE_MODEL, getAutomotivePositions,
+    AUTOMOTIVE_NODE_COLORS, SCENARIO_DESC
+  } from './js/automotive-data.js';
+
+  /* ── State ───────────────────────────────────── */
+  let glpk = null;
+  let currentModel = JSON.parse(JSON.stringify(AUTOMOTIVE_MODEL));
+  let currentResult = null;
+
+  /* ── Init ────────────────────────────────────── */
+  initTooltip();
+
+  // Render scenario description
+  const descEl = document.getElementById("scenarioDesc");
+  descEl.innerHTML = `
+    <h3>${SCENARIO_DESC.title}</h3>
+    <p>${SCENARIO_DESC.description}</p>
+    <ul class="auto-flow-list">
+      ${SCENARIO_DESC.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+    </ul>
+  `;
+
+  // Render domain legend
+  const legendEl = document.getElementById("domainLegend");
+  legendEl.innerHTML = SCENARIO_DESC.domains.map(d =>
+    `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+  ).join("");
+
+  // Collapsibles
+  document.getElementById("jsonEditorToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+
+  const inputEl = document.getElementById("input");
+  const statusEl = document.getElementById("status");
+  const resolveBtn = document.getElementById("resolveBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  inputEl.value = JSON.stringify(AUTOMOTIVE_MODEL, null, 2);
+
+  resetBtn.addEventListener("click", () => {
+    inputEl.value = JSON.stringify(AUTOMOTIVE_MODEL, null, 2);
+    statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
+  });
+
+  resolveBtn.addEventListener("click", runSolve);
+
+  async function runSolve() {
+    try {
+      const model = JSON.parse(inputEl.value);
+      resolveBtn.disabled = true;
+      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP...';
+      statusEl.className = "";
+
+      const result = await solveILP(model, glpk);
+      currentModel = model;
+      currentResult = result;
+      renderAll();
+      statusEl.textContent = `Solved in ${result.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} bins, ${result.stats.constraints} constraints`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "status-err";
+    }
+    resolveBtn.disabled = false;
+  }
+
+  function renderAll() {
+    if (!currentResult) return;
+
+    // Use automotive layout
+    const container = document.getElementById("topoContainer");
+    const W = container.clientWidth;
+    const positions = getAutomotivePositions(W, 420);
+
+    renderMetrics(currentModel, currentResult);
+    renderTopology(currentModel, currentResult, {
+      nodePositions: positions,
+      nodeColors: AUTOMOTIVE_NODE_COLORS,
+      height: 420
+    });
+    renderGCL(currentModel, currentResult);
+    renderDelayChart(currentModel, currentResult);
+    renderUtilization(currentModel, currentResult);
+    renderTable(currentResult);
+    document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
+  }
+
+  // Responsive
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 300);
+  });
+
+  /* ── Init GLPK & Auto-Solve ──────────────────── */
+  (async () => {
+    const badge = document.getElementById("engineBadge");
+    try {
+      glpk = await GLPK();
+      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
+      badge.className = "engine-badge ready";
+      badge.innerHTML = `&#9679; GLPK ${ver} Ready`;
+      resolveBtn.disabled = false;
+      statusEl.textContent = "Auto-solving automotive scenario...";
+      statusEl.className = "status-ok";
+      await runSolve();
+    } catch (e) {
+      badge.className = "engine-badge loading";
+      badge.innerHTML = "&#10007; GLPK Load Failed";
+      statusEl.textContent = "GLPK failed: " + e.message;
+      statusEl.className = "status-err";
+      resolveBtn.disabled = true;
+    }
+  })();
+  </script>
+</body>
+</html>

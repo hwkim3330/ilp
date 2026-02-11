@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = __dirname;
-const glpkFactory = require(path.join(ROOT, 'vendor', 'glpk.min.js'));
+const glpkFactory = require(path.join(ROOT, 'vendor', 'glpk-node.js'));
 const wasmBinary = fs.readFileSync(path.join(ROOT, 'vendor', 'glpk.wasm'));
 const glpk = glpkFactory(wasmBinary);
 

@@ -1,0 +1,957 @@
+/* ═══════════════════════════════════════════════
+   ilp-core.js — TSN/GCL ILP Solver Engine + Visualizations
+   Shared ES module for solver.html & automotive.html
+   ═══════════════════════════════════════════════ */
+
+/* ── Color Mapping ─────────────────────────────── */
+const FLOW_COLORS_HEX = {
+  control: "#4895ef", sensor: "#00f5d4", video: "#f06292",
+  camera: "#4895ef", lidar: "#00f5d4", radar: "#f9a825",
+  brake: "#ff5252", powertrain: "#7b61ff", infotainment: "#f06292"
+};
+
+export function flowColor(flowId) {
+  const id = flowId.toLowerCase();
+  if (id.includes("ctrl") || id.includes("camera")) return FLOW_COLORS_HEX.control;
+  if (id.includes("sensor") || id.includes("lidar")) return FLOW_COLORS_HEX.sensor;
+  if (id.includes("video") || id.includes("infotain")) return FLOW_COLORS_HEX.video;
+  if (id.includes("radar")) return FLOW_COLORS_HEX.radar;
+  if (id.includes("brake")) return FLOW_COLORS_HEX.brake;
+  if (id.includes("powertrain") || id.includes("pwr")) return FLOW_COLORS_HEX.powertrain;
+  return "#7b61ff";
+}
+
+export function flowType(flowId) {
+  const id = flowId.toLowerCase();
+  if (id.includes("ctrl") || id.includes("camera")) return "control";
+  if (id.includes("sensor") || id.includes("lidar")) return "sensor";
+  if (id.includes("video") || id.includes("infotain")) return "video";
+  if (id.includes("radar")) return "radar";
+  if (id.includes("brake")) return "brake";
+  if (id.includes("powertrain") || id.includes("pwr")) return "powertrain";
+  return "unknown";
+}
+
+export function getFlowColorsHex() { return FLOW_COLORS_HEX; }
+
+/* ── Tooltip ───────────────────────────────────── */
+let tooltipEl = null;
+
+export function initTooltip() {
+  tooltipEl = document.getElementById("tooltip");
+}
+
+export function showTip(evt, html) {
+  if (!tooltipEl) return;
+  tooltipEl.innerHTML = html;
+  tooltipEl.classList.add("show");
+  const x = Math.min(evt.clientX + 14, window.innerWidth - 300);
+  const y = Math.min(evt.clientY - 10, window.innerHeight - 200);
+  tooltipEl.style.left = x + "px";
+  tooltipEl.style.top = y + "px";
+}
+
+export function hideTip() {
+  if (tooltipEl) tooltipEl.classList.remove("show");
+}
+
+/* ── ILP Solver Helpers ────────────────────────── */
+function round3(v) { return Math.round(v * 1000) / 1000; }
+function txTimeUs(bytes, mbps) { return ((bytes + 38) * 8) / mbps; }
+function isTsn(pri, dl) { return pri >= 6 || dl !== null; }
+function gateMask(p) { const b = Array(8).fill('0'); b[7 - Math.max(0, Math.min(7, p))] = '1'; return b.join(''); }
+
+export function generateKPaths(adj, src, dst, k, maxD) {
+  const found = [];
+  (function dfs(n, d, vis, path) {
+    if (found.length >= 2000 || d > maxD) return;
+    if (n === dst) { found.push(path.slice()); return; }
+    for (const e of (adj.get(n) || [])) {
+      if (vis.has(e.to)) continue;
+      vis.add(e.to); path.push(e.lid);
+      dfs(e.to, d + 1, vis, path);
+      path.pop(); vis.delete(e.to);
+    }
+  })(src, 0, new Set([src]), []);
+  found.sort((a, b) => a.length - b.length || a.join('|').localeCompare(b.join('|')));
+  const u = [], s = new Set();
+  for (const p of found) { const k2 = p.join('>'); if (!s.has(k2)) { s.add(k2); u.push(p); } if (u.length >= k) break; }
+  return u;
+}
+
+export function expandPackets(model) {
+  const lm = new Map(model.links.map(l => [l.id, l]));
+  const adj = new Map();
+  for (const l of model.links) { if (!adj.has(l.from)) adj.set(l.from, []); adj.get(l.from).push({ to: l.to, lid: l.id }); }
+  const pkts = [];
+  for (const f of model.flows) {
+    let cp = f.candidate_paths || (f.path ? [f.path] : null);
+    if (!cp && f.src && f.dst) {
+      cp = generateKPaths(adj, f.src, f.dst, Math.max(1, f.k_paths || 2), model.nodes.length + 2);
+      if (!cp.length) throw new Error(`No route: ${f.src}->${f.dst}`);
+    }
+    const reps = Math.round(model.cycle_time_us / f.period_us);
+    for (let k = 0; k < reps; k++) {
+      const rel = k * f.period_us;
+      pkts.push({
+        pid: `${f.id}#${k}`, fid: f.id, pri: f.priority, tt: f.traffic_type,
+        rel, dl: f.deadline_us == null ? null : rel + f.deadline_us,
+        tsn: isTsn(f.priority, f.deadline_us),
+        routes: cp.map((pl, ri) => ({ ri, hops: pl.map(lid => ({ lid, tx: txTimeUs(f.payload_bytes, lm.get(lid).rate_mbps), pd: lm.get(lid).prop_delay_us })) }))
+      });
+    }
+  }
+  return pkts;
+}
+
+export async function solveILP(model, glpk) {
+  if (!glpk) throw new Error('GLPK not ready');
+  if (!model.processing_delay_us) model.processing_delay_us = 2;
+  if (!model.guard_band_us) model.guard_band_us = 2;
+
+  const pkts = expandPackets(model);
+  if (pkts.length > 70) throw new Error(`Too many packets (${pkts.length}). Reduce flows or increase period.`);
+
+  const vars = new Set(), sub = [], bins = [], obj = [];
+  let ci = 0;
+  const M = model.cycle_time_us + model.guard_band_us + model.processing_delay_us + 100;
+  const zv = (p, r) => `z_${p}_${r}`, sv = (p, r, h) => `s_${p}_${r}_${h}`;
+  const yv = (l, a, b) => `y_${l.replace(/[^a-zA-Z0-9]/g, '_')}_${a}_${b}`;
+  const av = n => { vars.add(n); return n; };
+  const ac = (pre, terms, bnd) => { sub.push({ name: `${pre}_${ci++}`, vars: terms, bnds: bnd }); };
+  const ops = [];
+
+  for (let p = 0; p < pkts.length; p++) {
+    const pk = pkts[p], zt = [];
+    for (let r = 0; r < pk.routes.length; r++) {
+      const rt = pk.routes[r], z = av(zv(p, r));
+      bins.push(z); zt.push({ name: z, coef: 1 });
+      for (let h = 0; h < rt.hops.length; h++) {
+        const hp = rt.hops[h], s = av(sv(p, r, h));
+        ac('lb', [{ name: s, coef: 1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: pk.rel - M, ub: 0 });
+        ac('ub', [{ name: s, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: model.cycle_time_us - hp.tx + M });
+        if (h < rt.hops.length - 1) {
+          const sn = av(sv(p, r, h + 1));
+          ac('ch', [{ name: sn, coef: 1 }, { name: s, coef: -1 }, { name: z, coef: -M }], { type: glpk.GLP_LO, lb: hp.tx + hp.pd + model.processing_delay_us - M, ub: 0 });
+        }
+        ops.push({ oi: ops.length, p, r, h, lid: hp.lid, sn: s, zn: z, tx: hp.tx, blk: hp.tx + (pk.tsn ? model.guard_band_us : 0) });
+      }
+      const last = rt.hops.length - 1, sL = av(sv(p, r, last)), lH = rt.hops[last];
+      if (pk.dl != null) ac('dl', [{ name: sL, coef: 1 }, { name: z, coef: M }], { type: glpk.GLP_UP, lb: 0, ub: pk.dl - lH.tx - lH.pd + M });
+      if (pk.tsn) { obj.push({ name: sL, coef: 1 }); obj.push({ name: z, coef: lH.tx + lH.pd }); }
+    }
+    ac('sel', zt, { type: glpk.GLP_FX, lb: 1, ub: 1 });
+  }
+
+  for (const lnk of model.links) {
+    const lo = ops.filter(o => o.lid === lnk.id);
+    for (let a = 0; a < lo.length; a++) for (let b = a + 1; b < lo.length; b++) {
+      const oa = lo[a], ob = lo[b];
+      if (oa.p === ob.p && oa.r === ob.r) continue;
+      const y = av(yv(lnk.id, oa.oi, ob.oi)); bins.push(y);
+      ac('na', [{ name: ob.sn, coef: 1 }, { name: oa.sn, coef: -1 }, { name: y, coef: -M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: oa.blk - 3 * M, ub: 0 });
+      ac('nb', [{ name: oa.sn, coef: 1 }, { name: ob.sn, coef: -1 }, { name: y, coef: M }, { name: oa.zn, coef: -M }, { name: ob.zn, coef: -M }], { type: glpk.GLP_LO, lb: ob.blk - 2 * M, ub: 0 });
+    }
+  }
+
+  const lp = {
+    name: 'tsn_ilp',
+    objective: { direction: glpk.GLP_MIN, name: 'obj', vars: obj.length ? obj : [{ name: av('dum'), coef: 0 }] },
+    subjectTo: sub, binaries: bins,
+    bounds: Array.from(vars).map(n => ({ name: n, type: glpk.GLP_LO, lb: 0, ub: 0 }))
+  };
+
+  const solved = await glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF, presol: true });
+  if (!solved?.result || ![glpk.GLP_OPT, glpk.GLP_FEAS].includes(solved.result.status))
+    throw new Error('ILP infeasible (status=' + (solved?.result?.status ?? '?') + ')');
+
+  const rv = solved.result.vars;
+
+  // Build result
+  const linkRows = Object.fromEntries(model.links.map(l => [l.id, []]));
+  const pktRows = [];
+  for (let p = 0; p < pkts.length; p++) {
+    const pk = pkts[p]; let selR = 0, bz = -1;
+    for (let r = 0; r < pk.routes.length; r++) { const v = Number(rv[zv(p, r)] || 0); if (v > bz) { bz = v; selR = r; } }
+    const rt = pk.routes[selR], hops = [];
+    for (let h = 0; h < rt.hops.length; h++) {
+      const hp = rt.hops[h], s = Number(rv[sv(p, selR, h)] || 0), e = s + hp.tx;
+      hops.push({ link_id: hp.lid, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
+      linkRows[hp.lid].push({ type: 'flow', note: pk.pid, priority: pk.pri, start_us: round3(s), end_us: round3(e), duration_us: round3(hp.tx) });
+      if (pk.tsn) linkRows[hp.lid].push({ type: 'guard', note: 'guard band', priority: pk.pri, start_us: round3(e), end_us: round3(e + model.guard_band_us), duration_us: round3(model.guard_band_us) });
+    }
+    const lH = rt.hops.at(-1), fin = hops.at(-1).end_us + lH.pd, e2e = round3(fin - pk.rel);
+    const ok = pk.dl == null || fin <= pk.dl + 1e-6;
+    pktRows.push({ packet_id: pk.pid, flow_id: pk.fid, priority: pk.pri, selected_route: selR, release_us: round3(pk.rel), end_us: round3(fin), e2e_delay_us: e2e, deadline_abs_us: pk.dl == null ? null : round3(pk.dl), slack_us: pk.dl == null ? null : round3(pk.dl - fin), status: pk.dl == null ? 'BE' : ok ? 'OK' : 'MISS', hops });
+  }
+  pktRows.sort((a, b) => a.end_us - b.end_us);
+
+  const gcl = { cycle_time_us: model.cycle_time_us, base_time_us: 0, links: {} };
+  for (const lnk of model.links) {
+    const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
+    const entries = []; let cur = 0, idx = 0;
+    for (const r of rows) {
+      if (r.start_us > cur) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
+      entries.push({ index: idx++, gate_mask: r.type === 'guard' ? '00000000' : gateMask(r.priority), start_us: r.start_us, end_us: r.end_us, duration_us: r.duration_us, note: r.note });
+      cur = Math.max(cur, r.end_us);
+    }
+    if (cur < model.cycle_time_us) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
+    gcl.links[lnk.id] = { from: lnk.from, to: lnk.to, entries };
+  }
+
+  let worstUtil = 0;
+  for (const lnk of model.links) {
+    let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort')) act += e.duration_us;
+    worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
+  }
+
+  return {
+    method: 'ILP (GLPK v' + (typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?')) + ', WASM)',
+    objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
+    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl,
+    stats: { constraints: sub.length, variables: vars.size, binaries: bins.length, status: solved.result.status },
+    runtime_ms: Math.round(solved.time * 1000)
+  };
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: METRICS
+   ═══════════════════════════════════════════════ */
+export function renderMetrics(model, result, containerId = "metricsArea") {
+  const area = document.getElementById(containerId);
+  if (!area) return;
+  const tsnPkts = result.packetRows.filter(p => p.status !== "BE");
+  const allOk = tsnPkts.every(p => p.status === "OK");
+  const avgDelay = tsnPkts.length ? (tsnPkts.reduce((s, p) => s + p.e2e_delay_us, 0) / tsnPkts.length).toFixed(2) : "-";
+
+  const items = [
+    { val: model.nodes.length, label: "Nodes", sub: `${model.nodes.filter(n=>n.type==="switch").length} switches`, cls: "" },
+    { val: model.links.length, label: "Links", sub: "directional", cls: "" },
+    { val: model.flows.length, label: "Flows", sub: `${result.packetRows.length} pkts/cycle`, cls: "" },
+    { val: result.method.split("(")[0], label: "Solver", sub: `${result.stats.variables} vars, ${result.stats.binaries} bins`, cls: "" },
+    { val: result.objective + " us", label: "Objective", sub: "TSN delay sum", cls: "warn" },
+    { val: result.worst_util_percent + "%", label: "Worst Util", sub: "link utilization", cls: result.worst_util_percent > 80 ? "warn" : "" },
+    { val: avgDelay + " us", label: "Avg TSN Delay", sub: `${tsnPkts.length} TSN packets`, cls: "" },
+    { val: allOk ? "ALL OK" : "MISS", label: "Feasibility", sub: `${result.stats.constraints} constraints`, cls: allOk ? "ok" : "warn" }
+  ];
+
+  area.innerHTML = items.map(m => `
+    <div class="metric-card ${m.cls}">
+      <div class="metric-val">${m.val}</div>
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-sub">${m.sub}</div>
+    </div>
+  `).join("");
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: TOPOLOGY (Force Graph)
+   ═══════════════════════════════════════════════ */
+export function renderTopology(model, result, opts = {}) {
+  const containerId = opts.containerId || "topoContainer";
+  const legendId = opts.legendId || "topoLegend";
+  const nodePositions = opts.nodePositions || null;  // fixed positions map
+  const nodeColors = opts.nodeColors || null;         // custom color map
+  const height = opts.height || 380;
+
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  const W = container.clientWidth;
+  const H = height;
+
+  // Build legend
+  const legendEl = document.getElementById(legendId);
+  if (legendEl) {
+    legendEl.innerHTML = "";
+    const flowTypes = [...new Set(model.flows.map(f => f.traffic_type))];
+    flowTypes.forEach(ft => {
+      const c = FLOW_COLORS_HEX[ft] || "#7b61ff";
+      const prio = model.flows.find(f => f.traffic_type === ft);
+      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${ft} (P${prio?.priority ?? '?'})</div>`;
+    });
+    if (!nodeColors) {
+      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#2a4080"></div>switch</div>`;
+      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#1a5040"></div>endstation</div>`;
+    }
+  }
+
+  const svg = d3.select(container).append("svg")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+  // Defs
+  const defs = svg.append("defs");
+  const glow = defs.append("filter").attr("id", "glow");
+  glow.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
+  glow.append("feMerge").selectAll("feMergeNode")
+    .data(["blur", "SourceGraphic"]).enter()
+    .append("feMergeNode").attr("in", d => d);
+
+  defs.append("marker")
+    .attr("id", "arrowhead")
+    .attr("viewBox", "0 0 10 7").attr("refX", 35).attr("refY", 3.5)
+    .attr("markerWidth", 8).attr("markerHeight", 6)
+    .attr("orient", "auto")
+    .append("polygon").attr("points", "0 0, 10 3.5, 0 7").attr("fill", "#3a5590");
+
+  // Build unique links
+  const linkPairs = new Map();
+  model.links.forEach(l => {
+    const key = [l.from, l.to].sort().join("-");
+    if (!linkPairs.has(key)) linkPairs.set(key, []);
+    linkPairs.get(key).push(l);
+  });
+
+  const nodes = model.nodes.map(n => {
+    const custom = nodeColors ? nodeColors[n.id] : null;
+    return {
+      id: n.id, type: n.type,
+      color: custom ? custom.fill : (n.type === "switch" ? "#2a4080" : "#1a5040"),
+      stroke: custom ? custom.stroke : (n.type === "switch" ? "#4895ef" : "#00f5d4"),
+      label: custom?.label || n.id,
+      shortLabel: custom?.shortLabel || (n.type === "switch" ? "SW" : "ES")
+    };
+  });
+
+  const uniqueLinks = [];
+  linkPairs.forEach((links, key) => {
+    uniqueLinks.push({
+      source: links[0].from, target: links[0].to,
+      bidir: links.length > 1, ids: links.map(l => l.id)
+    });
+  });
+
+  // Set positions
+  if (nodePositions) {
+    nodes.forEach(n => {
+      if (nodePositions[n.id]) {
+        n.fx = nodePositions[n.id].x;
+        n.fy = nodePositions[n.id].y;
+      }
+    });
+  } else {
+    // Auto positions for generic topology
+    const defaultPos = {
+      s1: { x: W / 2, y: 80 }, s2: { x: W / 2 - 140, y: 240 }, s3: { x: W / 2 + 140, y: 240 },
+      esA: { x: W / 2 - 30, y: 20 }, esB: { x: W / 2 - 240, y: 310 }, esC: { x: W / 2 + 240, y: 310 }
+    };
+    nodes.forEach(n => {
+      if (defaultPos[n.id]) { n.fx = defaultPos[n.id].x; n.fy = defaultPos[n.id].y; }
+    });
+  }
+
+  const simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(120))
+    .force("charge", d3.forceManyBody().strength(-200))
+    .force("center", d3.forceCenter(W / 2, H / 2))
+    .alphaDecay(0.05);
+
+  // Draw links
+  const linkG = svg.append("g");
+  const linkLine = linkG.selectAll("line")
+    .data(uniqueLinks).enter().append("line")
+    .attr("class", "topo-link")
+    .attr("marker-end", "url(#arrowhead)");
+
+  // Draw flow paths from result
+  const flowPaths = [];
+  if (result) {
+    result.packetRows.forEach(p => {
+      if (p.selected_route === 0 && !flowPaths.some(fp => fp.flow_id === p.flow_id)) {
+        const pathNodes = [];
+        p.hops.forEach(h => {
+          const link = model.links.find(l => l.id === h.link_id);
+          if (link) {
+            if (pathNodes.length === 0) pathNodes.push(link.from);
+            pathNodes.push(link.to);
+          }
+        });
+        flowPaths.push({ flow_id: p.flow_id, path: pathNodes, color: flowColor(p.flow_id) });
+      }
+    });
+  }
+
+  // Flow path lines (curved)
+  const flowG = svg.append("g");
+  const flowLines = flowG.selectAll("path")
+    .data(flowPaths).enter().append("path")
+    .attr("class", "flow-path")
+    .attr("stroke", d => d.color)
+    .attr("stroke-dasharray", "8,4")
+    .attr("filter", "url(#glow)");
+
+  function animateFlows() {
+    flowLines.attr("stroke-dashoffset", 0)
+      .transition().duration(2000).ease(d3.easeLinear)
+      .attr("stroke-dashoffset", -24)
+      .on("end", animateFlows);
+  }
+
+  // Particles
+  const particleG = svg.append("g");
+  function createParticles() {
+    flowPaths.forEach(fp => {
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const points = fp.path.map(id => nodeMap.get(id)).filter(Boolean);
+      if (points.length < 2) return;
+
+      const particle = particleG.append("circle")
+        .attr("class", "flow-particle")
+        .attr("r", 4).attr("fill", fp.color).attr("filter", "url(#glow)");
+
+      function animateParticle() {
+        let chain = particle
+          .attr("cx", points[0].x || points[0].fx)
+          .attr("cy", points[0].y || points[0].fy)
+          .attr("opacity", 0.9);
+
+        for (let i = 1; i < points.length; i++) {
+          chain = chain.transition().duration(600).ease(d3.easeLinear)
+            .attr("cx", points[i].x || points[i].fx)
+            .attr("cy", points[i].y || points[i].fy);
+        }
+        chain.transition().duration(200).attr("opacity", 0)
+          .transition().delay(500 + Math.random() * 1000).on("end", animateParticle);
+      }
+      setTimeout(animateParticle, Math.random() * 2000);
+    });
+  }
+
+  // Draw nodes
+  const nodeG = svg.append("g");
+  const node = nodeG.selectAll("g")
+    .data(nodes).enter().append("g")
+    .attr("class", "topo-node")
+    .call(d3.drag()
+      .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end", (e, d) => { if (!e.active) simulation.alphaTarget(0); })
+    );
+
+  node.append("circle").attr("r", 30).attr("fill", "none")
+    .attr("stroke", d => d.stroke).attr("stroke-width", 1).attr("opacity", 0.15);
+  node.append("circle").attr("r", 22).attr("fill", d => d.color)
+    .attr("stroke", d => d.stroke).attr("stroke-width", 2);
+  node.append("text").attr("class", "topo-label").attr("dy", -1).text(d => d.label);
+  node.append("text").attr("class", "topo-type").attr("dy", 12).text(d => d.shortLabel);
+
+  simulation.on("tick", () => {
+    linkLine
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);
+    flowLines.attr("d", fp => {
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const points = fp.path.map(id => nodeMap.get(id)).filter(Boolean);
+      if (points.length < 2) return "";
+      const lineGen = d3.line().x(d => d.x).y(d => d.y).curve(d3.curveCatmullRom.alpha(0.5));
+      const offset = flowPaths.indexOf(fp) * 3 - 3;
+      return lineGen(points.map(p => ({ x: p.x + offset, y: p.y + offset })));
+    });
+  });
+
+  setTimeout(() => { animateFlows(); createParticles(); }, 500);
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: GCL TIMELINE (Gantt)
+   ═══════════════════════════════════════════════ */
+export function renderGCL(model, result, opts = {}) {
+  const containerId = opts.containerId || "gclContainer";
+  const legendId = opts.legendId || "gclLegend";
+
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  // Legend
+  const legendEl = document.getElementById(legendId);
+  if (legendEl) {
+    const types = [...new Set(model.flows.map(f => f.traffic_type))];
+    legendEl.innerHTML = types.map(t => {
+      const c = FLOW_COLORS_HEX[t] || "#7b61ff";
+      return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t}</div>`;
+    }).join("") +
+      `<div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>Guard Band</div>` +
+      `<div class="legend-item"><div class="legend-dot" style="background:#1a3050"></div>Best-Effort</div>`;
+  }
+
+  // Filter to links with TSN entries
+  const activeLinks = model.links.filter(l => {
+    const entries = result.gcl.links[l.id]?.entries || [];
+    return entries.some(e => !e.note.includes("best-effort"));
+  });
+
+  const margin = { top: 30, right: 30, bottom: 40, left: 110 };
+  const rowH = 44;
+  const W = container.clientWidth;
+  const H = margin.top + activeLinks.length * rowH + margin.bottom;
+
+  const svg = d3.select(container).append("svg")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  const innerW = W - margin.left - margin.right;
+  const innerH = activeLinks.length * rowH;
+
+  const x = d3.scaleLinear().domain([0, model.cycle_time_us]).range([0, innerW]);
+  const y = d3.scaleBand().domain(activeLinks.map(l => l.id)).range([0, innerH]).padding(0.2);
+
+  // Grid
+  g.append("g").attr("class", "gcl-grid")
+    .selectAll("line").data(x.ticks(10)).enter().append("line")
+    .attr("x1", d => x(d)).attr("x2", d => x(d))
+    .attr("y1", 0).attr("y2", innerH);
+
+  // X axis
+  g.append("g").attr("class", "gcl-axis")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(x).ticks(10).tickFormat(d => d + " us"))
+    .selectAll("text").attr("fill", "var(--text3)");
+
+  // Y axis
+  g.append("g").attr("class", "gcl-axis")
+    .call(d3.axisLeft(y).tickSize(0).tickPadding(8))
+    .selectAll("text")
+    .attr("fill", "var(--text2)")
+    .attr("font-size", "10px")
+    .text(d => {
+      const link = model.links.find(l => l.id === d);
+      return link ? `${link.from} \u2192 ${link.to}` : d;
+    });
+
+  // Row backgrounds
+  g.selectAll(".row-bg")
+    .data(activeLinks).enter().append("rect")
+    .attr("x", 0).attr("y", d => y(d.id))
+    .attr("width", innerW).attr("height", y.bandwidth())
+    .attr("fill", "rgba(255,255,255,.015)").attr("rx", 4);
+
+  // GCL bars
+  activeLinks.forEach(link => {
+    const entries = result.gcl.links[link.id]?.entries || [];
+    const barG = g.append("g");
+
+    barG.selectAll("rect")
+      .data(entries).enter().append("rect")
+      .attr("class", "gcl-bar")
+      .attr("x", d => x(d.start_us))
+      .attr("y", y(link.id))
+      .attr("width", 0)
+      .attr("height", y.bandwidth())
+      .attr("fill", d => {
+        if (d.note.includes("guard")) return "#f9a825";
+        if (d.note.includes("best-effort")) return "#0d1a30";
+        return flowColor(d.note);
+      })
+      .attr("stroke", d => d.note.includes("best-effort") ? "rgba(30,48,96,.5)" : "none")
+      .attr("stroke-width", 0.5)
+      .attr("opacity", d => d.note.includes("best-effort") ? 0.3 : 0.85)
+      .on("mouseover", (evt, d) => {
+        showTip(evt, `
+          <div class="tt-title">${d.note}</div>
+          <div class="tt-row"><span class="tt-k">Gate</span><span class="tt-v">${d.gate_mask}</span></div>
+          <div class="tt-row"><span class="tt-k">Start</span><span class="tt-v">${d.start_us} us</span></div>
+          <div class="tt-row"><span class="tt-k">End</span><span class="tt-v">${d.end_us} us</span></div>
+          <div class="tt-row"><span class="tt-k">Duration</span><span class="tt-v">${d.duration_us} us</span></div>
+        `);
+      })
+      .on("mousemove", (evt) => {
+        tooltipEl.style.left = (evt.clientX + 14) + "px";
+        tooltipEl.style.top = (evt.clientY - 10) + "px";
+      })
+      .on("mouseout", hideTip)
+      .transition().duration(800).delay((d, i) => i * 30)
+      .attr("width", d => Math.max(x(d.duration_us) - x(0), 1));
+
+    // Labels on flow bars
+    barG.selectAll("text")
+      .data(entries.filter(e => !e.note.includes("best-effort") && !e.note.includes("guard") && (x(e.duration_us) - x(0)) > 30))
+      .enter().append("text")
+      .attr("class", "gcl-label")
+      .attr("x", d => x(d.start_us) + (x(d.duration_us) - x(0)) / 2)
+      .attr("y", d => y(link.id) + y.bandwidth() / 2)
+      .attr("text-anchor", "middle").attr("dominant-baseline", "central")
+      .attr("opacity", 0)
+      .text(d => d.note.split("#")[0].replace("f_", "").substring(0, 8))
+      .transition().delay(800).duration(300).attr("opacity", 1);
+  });
+
+  // Cycle info
+  svg.append("text")
+    .attr("x", margin.left).attr("y", margin.top - 10)
+    .attr("fill", "var(--text3)").attr("font-size", "10px")
+    .text(`Cycle: ${model.cycle_time_us} us | Guard: ${model.guard_band_us} us | Active Links: ${activeLinks.length}/${model.links.length}`);
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: PACKET DELAY CHART
+   ═══════════════════════════════════════════════ */
+export function renderDelayChart(model, result, containerId = "delayContainer") {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  const margin = { top: 20, right: 20, bottom: 60, left: 55 };
+  const W = container.clientWidth;
+  const H = 380;
+
+  const svg = d3.select(container).append("svg")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const pkts = result.packetRows;
+
+  const x = d3.scaleBand().domain(pkts.map(p => p.packet_id)).range([0, innerW]).padding(0.25);
+  const maxDelay = Math.max(...pkts.map(p => Math.max(p.e2e_delay_us, p.deadline_abs_us || 0)));
+  const y = d3.scaleLinear().domain([0, maxDelay * 1.15]).range([innerH, 0]);
+
+  // Grid
+  g.append("g").attr("class", "gcl-grid")
+    .selectAll("line").data(y.ticks(6)).enter().append("line")
+    .attr("x1", 0).attr("x2", innerW)
+    .attr("y1", d => y(d)).attr("y2", d => y(d));
+
+  // Deadline lines
+  const deadlineGroups = {};
+  pkts.forEach(p => {
+    if (p.deadline_abs_us != null) {
+      const dlRel = p.deadline_abs_us - p.release_us;
+      const key = p.flow_id;
+      if (!deadlineGroups[key]) deadlineGroups[key] = { flow_id: key, deadline: dlRel };
+    }
+  });
+
+  Object.values(deadlineGroups).forEach(dg => {
+    g.append("line").attr("class", "deadline-line")
+      .attr("x1", 0).attr("x2", innerW)
+      .attr("y1", y(dg.deadline)).attr("y2", y(dg.deadline));
+    g.append("text")
+      .attr("x", innerW - 4).attr("y", y(dg.deadline) - 5)
+      .attr("text-anchor", "end").attr("fill", "var(--red)").attr("font-size", "9px")
+      .text(`Deadline: ${dg.flow_id.replace("f_", "")} (${dg.deadline} us)`);
+  });
+
+  // Bars
+  g.selectAll(".delay-bar")
+    .data(pkts).enter().append("rect")
+    .attr("class", "delay-bar")
+    .attr("x", d => x(d.packet_id)).attr("y", innerH)
+    .attr("width", x.bandwidth()).attr("height", 0)
+    .attr("fill", d => flowColor(d.flow_id)).attr("opacity", 0.85)
+    .on("mouseover", (evt, d) => {
+      showTip(evt, `
+        <div class="tt-title">${d.packet_id}</div>
+        <div class="tt-row"><span class="tt-k">E2E Delay</span><span class="tt-v">${d.e2e_delay_us} us</span></div>
+        <div class="tt-row"><span class="tt-k">Release</span><span class="tt-v">${d.release_us} us</span></div>
+        <div class="tt-row"><span class="tt-k">Finish</span><span class="tt-v">${d.end_us} us</span></div>
+        ${d.deadline_abs_us != null ? `<div class="tt-row"><span class="tt-k">Slack</span><span class="tt-v" style="color:${d.slack_us > 0 ? 'var(--green)' : 'var(--red)'}">${d.slack_us} us</span></div>` : ''}
+        <div class="tt-row"><span class="tt-k">Status</span><span class="tt-v">${d.status}</span></div>
+      `);
+    })
+    .on("mousemove", (evt) => {
+      tooltipEl.style.left = (evt.clientX + 14) + "px";
+      tooltipEl.style.top = (evt.clientY - 10) + "px";
+    })
+    .on("mouseout", hideTip)
+    .transition().duration(800).delay((d, i) => i * 80).ease(d3.easeCubicOut)
+    .attr("y", d => y(d.e2e_delay_us))
+    .attr("height", d => innerH - y(d.e2e_delay_us));
+
+  // Value labels
+  g.selectAll(".bar-val")
+    .data(pkts).enter().append("text")
+    .attr("x", d => x(d.packet_id) + x.bandwidth() / 2)
+    .attr("y", d => y(d.e2e_delay_us) - 6)
+    .attr("text-anchor", "middle").attr("fill", "var(--text2)")
+    .attr("font-size", "9px").attr("font-weight", "600").attr("opacity", 0)
+    .text(d => d.e2e_delay_us.toFixed(1))
+    .transition().delay(800).duration(300).attr("opacity", 1);
+
+  // Axes
+  g.append("g").attr("class", "delay-axis")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(x).tickSize(0).tickPadding(8))
+    .selectAll("text")
+    .attr("transform", "rotate(-35)").attr("text-anchor", "end").attr("font-size", "8px")
+    .text(d => d.replace("f_", "").replace(/_/g, " ").substring(0, 20));
+
+  g.append("g").attr("class", "delay-axis")
+    .call(d3.axisLeft(y).ticks(6).tickFormat(d => d + " us"));
+
+  svg.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -H / 2).attr("y", 14)
+    .attr("text-anchor", "middle").attr("fill", "var(--text3)").attr("font-size", "10px")
+    .text("E2E Delay (us)");
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: LINK UTILIZATION (Donuts)
+   ═══════════════════════════════════════════════ */
+export function renderUtilization(model, result, containerId = "utilContainer") {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  const linkData = model.links.map(l => {
+    const entries = result.gcl.links[l.id]?.entries || [];
+    let flowTime = 0, guardTime = 0, beTime = 0;
+    entries.forEach(e => {
+      if (e.note.includes("best-effort")) beTime += e.duration_us;
+      else if (e.note.includes("guard")) guardTime += e.duration_us;
+      else flowTime += e.duration_us;
+    });
+    return {
+      id: l.id, from: l.from, to: l.to,
+      flow: flowTime, guard: guardTime, be: beTime,
+      util: ((flowTime + guardTime) / model.cycle_time_us * 100).toFixed(1)
+    };
+  }).filter(l => l.flow > 0 || l.guard > 0);
+
+  const donutSize = 90;
+  const cols = Math.min(linkData.length, Math.floor(container.clientWidth / (donutSize + 30)));
+  const rows = Math.ceil(linkData.length / cols);
+  const W = container.clientWidth;
+  const H = rows * (donutSize + 40) + 20;
+
+  const svg = d3.select(container).append("svg")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+  const pie = d3.pie().value(d => d.value).sort(null);
+  const arc = d3.arc().innerRadius(28).outerRadius(40);
+
+  linkData.forEach((link, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = (W / cols) * (col + 0.5);
+    const cy = 50 + row * (donutSize + 40);
+    const g = svg.append("g").attr("transform", `translate(${cx},${cy})`);
+
+    const data = [
+      { label: "Flow", value: link.flow, color: "#4895ef" },
+      { label: "Guard", value: link.guard, color: "#f9a825" },
+      { label: "BE", value: link.be, color: "#0d1a30" }
+    ];
+
+    g.selectAll(".util-arc")
+      .data(pie(data)).enter().append("path")
+      .attr("class", "util-arc")
+      .attr("fill", d => d.data.color)
+      .attr("stroke", "var(--bg)").attr("stroke-width", 1.5)
+      .attr("opacity", d => d.data.label === "BE" ? 0.3 : 0.85)
+      .on("mouseover", (evt, d) => {
+        showTip(evt, `
+          <div class="tt-title">${link.from} \u2192 ${link.to}</div>
+          <div class="tt-row"><span class="tt-k">${d.data.label}</span><span class="tt-v">${d.data.value.toFixed(1)} us</span></div>
+        `);
+      })
+      .on("mouseout", hideTip)
+      .transition().duration(800).delay(i * 100)
+      .attrTween("d", function(d) {
+        const interp = d3.interpolate({ startAngle: 0, endAngle: 0 }, d);
+        return t => arc(interp(t));
+      });
+
+    g.append("text").attr("class", "util-label").attr("dy", 1)
+      .text(link.util + "%").attr("opacity", 0)
+      .transition().delay(800 + i * 100).duration(300).attr("opacity", 1);
+
+    g.append("text").attr("class", "util-name").attr("y", 52)
+      .text(`${link.from} \u2192 ${link.to}`);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER: PACKET TABLE
+   ═══════════════════════════════════════════════ */
+export function renderTable(result, containerId = "pktTableBody") {
+  const tbody = document.getElementById(containerId);
+  if (!tbody) return;
+  tbody.innerHTML = result.packetRows.map(p => {
+    const ft = flowType(p.flow_id);
+    const badgeColor = FLOW_COLORS_HEX[ft] || "#7b61ff";
+    const statusCls = p.status === "OK" ? "ok" : p.status === "MISS" ? "miss" : "be";
+    return `<tr>
+      <td>${p.packet_id.replace("f_", "")}</td>
+      <td><span class="flow-badge" style="background:${badgeColor}20;color:${badgeColor};border:1px solid ${badgeColor}40">${ft}</span></td>
+      <td>R${p.selected_route}</td>
+      <td>${p.release_us}</td>
+      <td>${p.end_us}</td>
+      <td>${p.e2e_delay_us}</td>
+      <td>${p.deadline_abs_us ?? "-"}</td>
+      <td>${p.slack_us != null ? p.slack_us : "-"}</td>
+      <td class="${statusCls}">${p.status}</td>
+    </tr>`;
+  }).join("");
+}
+
+/* ═══════════════════════════════════════════════
+   INPUT PREVIEW — BFS-based topology + flow table
+   Renders model topology without needing solve results
+   ═══════════════════════════════════════════════ */
+export function renderInputPreview(model, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !model) return;
+
+  container.innerHTML = "";
+
+  // Topology mini-view
+  const topoDiv = document.createElement("div");
+  topoDiv.className = "svg-container";
+  topoDiv.style.height = "220px";
+  topoDiv.style.marginBottom = "10px";
+  container.appendChild(topoDiv);
+
+  const W = container.clientWidth - 28; // account for padding
+  const H = 220;
+
+  if (!model.nodes || !model.links) {
+    topoDiv.innerHTML = '<div style="padding:20px;color:var(--text3);font-size:0.8rem;">Invalid model: missing nodes or links</div>';
+    return;
+  }
+
+  const svg = d3.select(topoDiv).append("svg")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+  // Build adjacency for BFS
+  const adj = new Map();
+  for (const l of model.links) {
+    if (!adj.has(l.from)) adj.set(l.from, []);
+    adj.get(l.from).push({ to: l.to, lid: l.id });
+  }
+
+  // Simple force layout for preview
+  const nodes = model.nodes.map(n => ({
+    id: n.id, type: n.type,
+    color: n.type === "switch" ? "#2a4080" : "#1a5040",
+    stroke: n.type === "switch" ? "#4895ef" : "#00f5d4"
+  }));
+
+  const linkPairs = new Map();
+  model.links.forEach(l => {
+    const key = [l.from, l.to].sort().join("-");
+    if (!linkPairs.has(key)) linkPairs.set(key, []);
+    linkPairs.get(key).push(l);
+  });
+
+  const uniqueLinks = [];
+  linkPairs.forEach((links) => {
+    uniqueLinks.push({ source: links[0].from, target: links[0].to });
+  });
+
+  const simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(60))
+    .force("charge", d3.forceManyBody().strength(-120))
+    .force("center", d3.forceCenter(W / 2, H / 2))
+    .alphaDecay(0.08);
+
+  const linkLine = svg.append("g").selectAll("line")
+    .data(uniqueLinks).enter().append("line")
+    .attr("stroke", "var(--border)").attr("stroke-width", 1);
+
+  // BFS flow paths
+  const flowPaths = [];
+  if (model.flows) {
+    for (const f of model.flows) {
+      if (f.src && f.dst) {
+        // BFS shortest path
+        const path = bfsPath(adj, f.src, f.dst);
+        if (path.length > 0) {
+          // Convert link ids to node ids
+          const pathNodes = [f.src];
+          for (const lid of path) {
+            const link = model.links.find(l => l.id === lid);
+            if (link) pathNodes.push(link.to);
+          }
+          flowPaths.push({ flow_id: f.id, path: pathNodes, color: flowColor(f.id) });
+        }
+      }
+    }
+  }
+
+  // Draw flow paths
+  const flowLines = svg.append("g").selectAll("path")
+    .data(flowPaths).enter().append("path")
+    .attr("fill", "none").attr("stroke", d => d.color)
+    .attr("stroke-width", 2).attr("stroke-dasharray", "4,3").attr("opacity", 0.6);
+
+  const nodeG = svg.append("g").selectAll("g")
+    .data(nodes).enter().append("g");
+
+  nodeG.append("circle").attr("r", 14)
+    .attr("fill", d => d.color).attr("stroke", d => d.stroke).attr("stroke-width", 1.5);
+  nodeG.append("text")
+    .attr("font-size", "8px").attr("fill", "var(--text)")
+    .attr("text-anchor", "middle").attr("dominant-baseline", "central")
+    .attr("pointer-events", "none")
+    .text(d => d.id.length > 5 ? d.id.substring(0, 5) : d.id);
+
+  simulation.on("tick", () => {
+    linkLine
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    nodeG.attr("transform", d => `translate(${d.x},${d.y})`);
+    flowLines.attr("d", fp => {
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const points = fp.path.map(id => nodeMap.get(id)).filter(Boolean);
+      if (points.length < 2) return "";
+      const offset = flowPaths.indexOf(fp) * 2 - 2;
+      return d3.line().x(d => d.x + offset).y(d => d.y + offset).curve(d3.curveCatmullRom.alpha(0.5))(points);
+    });
+  });
+
+  // Flow summary table
+  if (model.flows && model.flows.length > 0) {
+    const tableDiv = document.createElement("div");
+    tableDiv.style.marginTop = "8px";
+    tableDiv.innerHTML = `
+      <div class="preview-title">Flows (${model.flows.length})</div>
+      <table class="preview-flow-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Pri</th><th>Size</th><th>Period</th><th>Deadline</th></tr></thead>
+        <tbody>${model.flows.map(f => `<tr>
+          <td style="color:${flowColor(f.id)}">${f.id.replace("f_","")}</td>
+          <td>${f.traffic_type || "-"}</td>
+          <td>P${f.priority}</td>
+          <td>${f.payload_bytes}B</td>
+          <td>${f.period_us}us</td>
+          <td>${f.deadline_us != null ? f.deadline_us + "us" : "BE"}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+    `;
+    container.appendChild(tableDiv);
+  }
+
+  // Model summary
+  const summaryDiv = document.createElement("div");
+  summaryDiv.style.cssText = "margin-top:8px;font-size:0.72rem;color:var(--text3);";
+  const totalPkts = model.flows ? model.flows.reduce((s, f) => s + Math.round(model.cycle_time_us / f.period_us), 0) : 0;
+  summaryDiv.textContent = `${model.nodes?.length || 0} nodes, ${model.links?.length || 0} links, ${totalPkts} pkts/cycle, cycle=${model.cycle_time_us}us`;
+  container.appendChild(summaryDiv);
+}
+
+/* BFS shortest path (returns link IDs) */
+function bfsPath(adj, src, dst) {
+  const visited = new Set([src]);
+  const queue = [[src, []]];
+  while (queue.length > 0) {
+    const [node, path] = queue.shift();
+    for (const edge of (adj.get(node) || [])) {
+      if (visited.has(edge.to)) continue;
+      const newPath = [...path, edge.lid];
+      if (edge.to === dst) return newPath;
+      visited.add(edge.to);
+      queue.push([edge.to, newPath]);
+    }
+  }
+  return [];
+}
