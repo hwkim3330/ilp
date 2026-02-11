@@ -145,6 +145,27 @@ export const ROII_NODE_COLORS = {
   ADAS_PC:   { fill: "#fef3c7", stroke: "#f59e0b", label: "ADAS PC",  shortLabel: "PC" }
 };
 
+/* ── 3D Node Positions (on shuttle body, front=+Z) ── */
+export const ROII_3D_POSITIONS = {
+  // LiDAR — roof-mounted
+  LIDAR_FL:  { x: -6,  y: 8.5, z: 15 },
+  LIDAR_FC:  { x:  0,  y: 9.5, z: 18 },
+  LIDAR_FR:  { x:  6,  y: 8.5, z: 15 },
+  LIDAR_RC:  { x:  0,  y: 9,   z:-16 },
+  // Radar — bumper-level
+  RADAR_FC:  { x:  0,  y: 3,   z: 20 },
+  RADAR_FL:  { x: -7,  y: 3.5, z: 13 },
+  RADAR_FR:  { x:  7,  y: 3.5, z: 13 },
+  RADAR_RL:  { x: -7,  y: 3.5, z:-13 },
+  RADAR_RR:  { x:  7,  y: 3.5, z:-13 },
+  // Switches — inside vehicle
+  SW_FL:     { x: -4,  y: 5,   z:  8 },
+  SW_FR:     { x:  4,  y: 5,   z:  8 },
+  SW_REAR:   { x:  0,  y: 5,   z: -8 },
+  // ADAS PC — rear floor
+  ADAS_PC:   { x:  0,  y: 2.5, z:-15 }
+};
+
 /* ── Scenario Description ──────────────────────── */
 export const ROII_SCENARIO = {
   title: "ROii Autonomous Shuttle TSN Network",
