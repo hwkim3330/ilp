@@ -231,15 +231,15 @@
           <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
         </tr></thead>
         <tbody>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>64 KB</td><td>50ms (20Hz)</td><td>524.6 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>16 KB</td><td>50ms (20Hz)</td><td>131.4 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>16 KB</td><td>50ms (20Hz)</td><td>131.4 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>64 KB</td><td>50ms (20Hz)</td><td>524.6 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1 KB</td><td>20ms (50Hz)</td><td>8.5 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1 KB</td><td>20ms (50Hz)</td><td>8.5 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1 KB</td><td>20ms (50Hz)</td><td>8.5 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1 KB</td><td>20ms (50Hz)</td><td>8.5 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1 KB</td><td>20ms (50Hz)</td><td>8.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>128 KB</td><td>50ms (20Hz)</td><td>1048.9 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32 KB</td><td>50ms (20Hz)</td><td>262.4 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32 KB</td><td>50ms (20Hz)</td><td>262.4 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>128 KB</td><td>50ms (20Hz)</td><td>1048.9 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
         </tbody>
       </table>
     </div>
@@ -382,6 +382,7 @@
   let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
   let dynamicGroup = null;
   let nodeMeshes3d = {};
+  let linkMeshes3d = {};  // key: sorted 'A|B' → { tube, glow, linkIds }
   let particles3d = [];
   let clock3d = null;
   let glbModel = null;
@@ -461,6 +462,28 @@
     });
   });
 
+  /* ── 3D Link Failure Highlight ── */
+  function update3DLinks() {
+    const fail = LINK_FAIL[currentScenario];
+    const failIds = fail ? new Set(fail.links) : new Set();
+    for (const [key, m] of Object.entries(linkMeshes3d)) {
+      const isFailed = m.linkIds.some(id => failIds.has(id));
+      if (isFailed) {
+        m.tube.material.color.setHex(0xdc2626);
+        m.tube.material.emissive.setHex(0xdc2626);
+        m.tube.material.opacity = 0.4;
+        m.glow.material.color.setHex(0xdc2626);
+        m.glow.material.opacity = 0.15;
+      } else {
+        m.tube.material.color.setHex(0x3B82F6);
+        m.tube.material.emissive.setHex(0x3B82F6);
+        m.tube.material.opacity = 0.95;
+        m.glow.material.color.setHex(0x3B82F6);
+        m.glow.material.opacity = 0.35;
+      }
+    }
+  }
+
   /* ── Scenario Buttons ── */
   function updateScenarioUI() {
     document.querySelectorAll('.scenario-btn').forEach(btn => {
@@ -481,6 +504,7 @@
     btn.addEventListener('click', () => {
       currentScenario = btn.dataset.scenario;
       updateScenarioUI();
+      update3DLinks();
       reload();
     });
   });
@@ -488,6 +512,7 @@
   resetBtn.addEventListener("click", () => {
     currentScenario = 'normal';
     updateScenarioUI();
+    update3DLinks();
     reload();
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
@@ -832,7 +857,8 @@
       nodeMeshes3d[id] = dev.mesh;
     }
 
-    // Draw deduplicated connection tubes
+    // Draw deduplicated connection tubes (store refs for failure highlighting)
+    linkMeshes3d = {};
     const drawnLinks = new Set();
     for (const link of mode.model.links) {
       const key = [link.from, link.to].sort().join('|');
@@ -853,13 +879,21 @@
         color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9,
         transparent: true, opacity: 0.95
       });
-      dynamicGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+      const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      dynamicGroup.add(tubeMesh);
 
       const glowGeo = new THREE.TubeGeometry(curve, 20, 0.2, 8, false);
       const glowMat = new THREE.MeshBasicMaterial({
         color: 0x3B82F6, transparent: true, opacity: 0.35
       });
-      dynamicGroup.add(new THREE.Mesh(glowGeo, glowMat));
+      const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+      dynamicGroup.add(glowMesh);
+
+      // Collect link IDs that share this visual edge
+      const linkIds = mode.model.links.filter(l =>
+        [l.from, l.to].sort().join('|') === key
+      ).map(l => l.id);
+      linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
     }
 
     // Animated particles

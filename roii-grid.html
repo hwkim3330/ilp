@@ -366,6 +366,7 @@
   let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
   let dynamicGroup = null;
   let nodeMeshes3d = {};
+  let linkMeshes3d = {};
   let particles3d = [];
   let clock3d = null;
   let glbModel = null;
@@ -432,6 +433,28 @@
     ).join("");
   }
 
+  /* ── 3D Link Failure Highlight ── */
+  function update3DLinks() {
+    const fail = LINK_FAIL[currentScenario];
+    const failIds = fail ? new Set(fail.links) : new Set();
+    for (const [key, m] of Object.entries(linkMeshes3d)) {
+      const isFailed = m.linkIds.some(id => failIds.has(id));
+      if (isFailed) {
+        m.tube.material.color.setHex(0xdc2626);
+        m.tube.material.emissive.setHex(0xdc2626);
+        m.tube.material.opacity = 0.4;
+        m.glow.material.color.setHex(0xdc2626);
+        m.glow.material.opacity = 0.15;
+      } else {
+        m.tube.material.color.setHex(0x3B82F6);
+        m.tube.material.emissive.setHex(0x3B82F6);
+        m.tube.material.opacity = 0.95;
+        m.glow.material.color.setHex(0x3B82F6);
+        m.glow.material.opacity = 0.35;
+      }
+    }
+  }
+
   /* ── Scenario Buttons ── */
   function updateScenarioUI() {
     document.querySelectorAll('.scenario-btn').forEach(btn => {
@@ -452,6 +475,7 @@
     btn.addEventListener('click', () => {
       currentScenario = btn.dataset.scenario;
       updateScenarioUI();
+      update3DLinks();
       reload();
     });
   });
@@ -459,6 +483,7 @@
   resetBtn.addEventListener("click", () => {
     currentScenario = 'normal';
     updateScenarioUI();
+    update3DLinks();
     reload();
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
@@ -748,7 +773,8 @@
       nodeMeshes3d[id] = dev.mesh;
     }
 
-    // Draw deduplicated connection tubes
+    // Draw deduplicated connection tubes (store refs for failure highlighting)
+    linkMeshes3d = {};
     const drawnLinks = new Set();
     for (const link of reconfModel.links) {
       const key = [link.from, link.to].sort().join('|');
@@ -769,13 +795,20 @@
         color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9,
         transparent: true, opacity: 0.95
       });
-      dynamicGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+      const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      dynamicGroup.add(tubeMesh);
 
       const glowGeo = new THREE.TubeGeometry(curve, 20, 0.2, 8, false);
       const glowMat = new THREE.MeshBasicMaterial({
         color: 0x3B82F6, transparent: true, opacity: 0.35
       });
-      dynamicGroup.add(new THREE.Mesh(glowGeo, glowMat));
+      const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+      dynamicGroup.add(glowMesh);
+
+      const linkIds = reconfModel.links.filter(l =>
+        [l.from, l.to].sort().join('|') === key
+      ).map(l => l.id);
+      linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
     }
 
     // Animated particles (11 flows)

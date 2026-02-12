@@ -55,25 +55,25 @@ export const ROII_REAL_STANDARD = {
   nodes: JSON.parse(JSON.stringify(NODES)),
   links: JSON.parse(JSON.stringify(LINKS)),
   flows: [
-    // LiDAR flows (P7) — G32: 64KB point cloud burst, Pandar: 16KB sub-sampled
-    { id: "f_lidar_fc", priority: 7, payload_bytes: 65536, period_us: 10000, deadline_us: 5000,
+    // LiDAR flows (P7) — G32: 128KB point cloud burst, Pandar: 32KB sub-sampled
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_lidar_fl", priority: 7, payload_bytes: 16384, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_lidar_fr", priority: 7, payload_bytes: 16384, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_lidar_r",  priority: 7, payload_bytes: 65536, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 1 },
-    // Radar flows (P6) — MRR-35: 1KB object list + metadata
-    { id: "f_radar_f",   priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    // Radar flows (P6) — MRR-35: 4KB detection data, 50Hz (2 pkts per 10ms cycle)
+    { id: "f_radar_f",   priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_flc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_frc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_rlc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_rrc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 }
   ]
 };
@@ -142,17 +142,17 @@ export function realFlowColor(fid) {
 /* ── Scenario Descriptions ───────────────────── */
 export const ROII_REAL_STANDARD_SCENARIO = {
   title: "ROii Realistic \u2014 Standard 10ms Cycle",
-  description: "Realistic ROii shuttle sensor network. All links 1000BASE-T1 (1 Gbps). Robosense G32 sends 64KB point cloud burst (524.6\u00b5s tx), Hesai Pandar 40P sends 16KB sub-sampled data (131.4\u00b5s tx), Continental MRR-35 sends 1KB object list (8.5\u00b5s tx). Cycle time = 10ms, 9 flows, 9 pkts/cycle. Bottleneck link (SW_REAR\u2192ACU_IT) utilization \u2248 13.8%.",
+  description: "Realistic ROii shuttle sensor network. All links 1 Gbps. Robosense G32 sends 128KB point cloud burst (1048.9\u00b5s tx), Hesai Pandar 40P sends 32KB sub-sampled data (262.4\u00b5s tx), Continental MRR-35 sends 4KB detection data at 50Hz (2 pkts/cycle, 33.1\u00b5s tx each). <strong>9 flows, 14 pkts/cycle</strong>. Bottleneck utilization \u2248 30%.",
   flows: [
-    { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "64KB point cloud, P7, 1Gbps (524.6\u00b5s tx)" },
-    { name: "Pandar FL \u2192 ACU-IT",   color: "#0D9488", desc: "16KB sub-sampled, P7, 1Gbps (131.4\u00b5s tx)" },
-    { name: "Pandar FR \u2192 ACU-IT",   color: "#0D9488", desc: "16KB sub-sampled, P7, 1Gbps (131.4\u00b5s tx)" },
-    { name: "G32 Rear \u2192 ACU-IT",    color: "#10B981", desc: "64KB point cloud, P7, 1Gbps (524.6\u00b5s tx)" },
-    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "1KB obj list, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "1KB obj list, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "1KB obj list, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "1KB obj list, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "1KB obj list, P6, 1Gbps (8.5\u00b5s tx)" }
+    { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "128KB point cloud, P7, 1Gbps (1048.9\u00b5s tx)" },
+    { name: "Pandar FL \u2192 ACU-IT",   color: "#0D9488", desc: "32KB sub-sampled, P7, 1Gbps (262.4\u00b5s tx)" },
+    { name: "Pandar FR \u2192 ACU-IT",   color: "#0D9488", desc: "32KB sub-sampled, P7, 1Gbps (262.4\u00b5s tx)" },
+    { name: "G32 Rear \u2192 ACU-IT",    color: "#10B981", desc: "128KB point cloud, P7, 1Gbps (1048.9\u00b5s tx)" },
+    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" }
   ],
   domains: [
     { name: "LiDAR G32 (1Gbps)",       color: "#10B981" },
@@ -291,36 +291,36 @@ export const ROII_REAL_RECONF = {
   links: JSON.parse(JSON.stringify(RECONF_LINKS)),
   flows: [
     // LiDAR FC → REP → SW_FL (copy 1)
-    { id: "f_lidar_fc", priority: 7, payload_bytes: 65536, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
       path: ["l_lidarfc_rep", "l_rep_swfl", "l_swfl_swrear", "l_swrear_acu"] },
     // LiDAR FC → REP → SW_FR (copy 2, replicated)
-    { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 65536, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
       path: ["l_lidarfc_rep", "l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other LiDAR flows (P7)
-    { id: "f_lidar_fl", priority: 7, payload_bytes: 16384, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_lidar_fr", priority: 7, payload_bytes: 16384, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_lidar_r",  priority: 7, payload_bytes: 65536, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 1 },
-    // Radar F → REP → SW_FL (copy 1)
-    { id: "f_radar_f",  priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    // Radar F → REP → SW_FL (copy 1) — 50Hz (2 pkts per cycle)
+    { id: "f_radar_f",  priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
       path: ["l_radarf_rep", "l_rep_swfl", "l_swfl_swrear", "l_swrear_acu"] },
     // Radar F → REP → SW_FR (copy 2, replicated)
-    { id: "f_radar_f_rep",  priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_f_rep",  priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
       path: ["l_radarf_rep", "l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
-    // Other Radar flows (P6)
-    { id: "f_radar_flc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    // Other Radar flows (P6) — 50Hz
+    { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_frc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_rlc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
-    { id: "f_radar_rrc", priority: 6, payload_bytes: 1024, period_us: 10000, deadline_us: 2000,
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 }
   ]
 };
@@ -377,19 +377,19 @@ export const ROII_RECONF_NODE_COLORS = {
 /* ── Reconf Scenario Descriptions ── */
 export const ROII_RECONF_SCENARIO = {
   title: "ROii Reconfigured \u2014 802.1CB Replicator 10ms",
-  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicator</strong>: LIDAR_FC and RADAR_F feed into a single REP device, which duplicates frames to both SW_FL and SW_FR for balanced load distribution. All links 1 Gbps. <strong>14 nodes, 18 links, 11 flows</strong>, 10ms cycle \u2014 11 pkts/cycle. Bottleneck link utilization \u2248 19%.",
+  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicator</strong>: LIDAR_FC and RADAR_F feed into REP, which duplicates frames to both SW_FL and SW_FR. All links 1 Gbps. <strong>14 nodes, 18 links, 11 flows, 22 pkts/cycle</strong>. Radar at 50Hz (2 pkts/cycle). Bottleneck utilization \u2248 41%.",
   flows: [
-    { name: "G32 FC \u2192 REP \u2192 SW_FL \u2192 ACU-IT", color: "#10B981", desc: "64KB, P7, via REP (copy 1, 524.6\u00b5s tx)" },
-    { name: "G32 FC \u2192 REP \u2192 SW_FR \u2192 ACU-IT", color: "#d97706", desc: "64KB, P7, via REP (copy 2, 802.1CB)" },
-    { name: "Pandar FL \u2192 ACU-IT",           color: "#0D9488", desc: "16KB, P7, 1Gbps (131.4\u00b5s tx)" },
-    { name: "Pandar FR \u2192 ACU-IT",           color: "#0D9488", desc: "16KB, P7, 1Gbps (131.4\u00b5s tx)" },
-    { name: "G32 Rear \u2192 ACU-IT",            color: "#10B981", desc: "64KB, P7, 1Gbps (524.6\u00b5s tx)" },
-    { name: "MRR-35 F \u2192 REP \u2192 SW_FL \u2192 ACU-IT", color: "#952aff", desc: "1KB, P6, via REP (copy 1)" },
-    { name: "MRR-35 F \u2192 REP \u2192 SW_FR \u2192 ACU-IT", color: "#d97706", desc: "1KB, P6, via REP (copy 2, 802.1CB)" },
-    { name: "MRR-35 FLC \u2192 ACU-IT",          color: "#952aff", desc: "1KB, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 FRC \u2192 ACU-IT",          color: "#952aff", desc: "1KB, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 RLC \u2192 ACU-IT",          color: "#952aff", desc: "1KB, P6, 1Gbps (8.5\u00b5s tx)" },
-    { name: "MRR-35 RRC \u2192 ACU-IT",          color: "#952aff", desc: "1KB, P6, 1Gbps (8.5\u00b5s tx)" }
+    { name: "G32 FC \u2192 REP \u2192 SW_FL \u2192 ACU-IT", color: "#10B981", desc: "128KB, P7, via REP (copy 1, 1048.9\u00b5s tx)" },
+    { name: "G32 FC \u2192 REP \u2192 SW_FR \u2192 ACU-IT", color: "#d97706", desc: "128KB, P7, via REP (copy 2, 802.1CB)" },
+    { name: "Pandar FL \u2192 ACU-IT",           color: "#0D9488", desc: "32KB, P7, 1Gbps (262.4\u00b5s tx)" },
+    { name: "Pandar FR \u2192 ACU-IT",           color: "#0D9488", desc: "32KB, P7, 1Gbps (262.4\u00b5s tx)" },
+    { name: "G32 Rear \u2192 ACU-IT",            color: "#10B981", desc: "128KB, P7, 1Gbps (1048.9\u00b5s tx)" },
+    { name: "MRR-35 F \u2192 REP \u2192 SW_FL \u2192 ACU-IT", color: "#952aff", desc: "4KB \u00d72pkts, P6, via REP (copy 1)" },
+    { name: "MRR-35 F \u2192 REP \u2192 SW_FR \u2192 ACU-IT", color: "#d97706", desc: "4KB \u00d72pkts, P6, via REP (copy 2)" },
+    { name: "MRR-35 FLC \u2192 ACU-IT",          color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 FRC \u2192 ACU-IT",          color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RLC \u2192 ACU-IT",          color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RRC \u2192 ACU-IT",          color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" }
   ],
   domains: [
     { name: "LiDAR G32 (1Gbps)",           color: "#10B981" },
