@@ -217,6 +217,25 @@
       <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
     </div>
 
+    <!-- Solve Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div class="scenario-group" id="scenarioGroup">
+          <button class="scenario-btn active" data-scenario="normal">Normal</button>
+          <button class="scenario-btn" data-scenario="fail-SW_FL">SW_FL Fail</button>
+          <button class="scenario-btn" data-scenario="fail-SW_FR">SW_FR Fail</button>
+          <button class="scenario-btn" data-scenario="fail-SW_REAR">SW_REAR Fail</button>
+        </div>
+        <div id="status" style="font-size:0.82rem;"></div>
+        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+      </div>
+      <div class="failure-banner" id="failureBanner">
+        <span>&#9888;</span> <span id="failureText"></span>
+      </div>
+    </div>
+
     <!-- Scenario Description -->
     <div class="auto-desc" id="scenarioDesc"></div>
 
@@ -292,25 +311,6 @@
           </tr></thead>
           <tbody id="pktTableBody"></tbody>
         </table>
-      </div>
-    </div>
-
-    <!-- Solve Controls -->
-    <div class="card" style="padding:12px 20px;">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
-        <button class="btn btn-secondary" id="resetBtn">Reset</button>
-        <div class="scenario-group" id="scenarioGroup">
-          <button class="scenario-btn active" data-scenario="normal">Normal</button>
-          <button class="scenario-btn" data-scenario="fail-SW_FL">SW_FL Fail</button>
-          <button class="scenario-btn" data-scenario="fail-SW_FR">SW_FR Fail</button>
-          <button class="scenario-btn" data-scenario="fail-SW_REAR">SW_REAR Fail</button>
-        </div>
-        <div id="status" style="font-size:0.82rem;"></div>
-        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
-      </div>
-      <div class="failure-banner" id="failureBanner">
-        <span>&#9888;</span> <span id="failureText"></span>
       </div>
     </div>
 
