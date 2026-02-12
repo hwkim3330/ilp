@@ -154,8 +154,8 @@ function buildResult(model, pkts, schedHops, method, stats) {
    No GLPK dependency, runs in <1ms
    ═══════════════════════════════════════════════ */
 export function solveGreedy(model) {
-  if (!model.processing_delay_us) model.processing_delay_us = 2;
-  if (!model.guard_band_us) model.guard_band_us = 2;
+  if (!model.processing_delay_us) model.processing_delay_us = 3;
+  if (!model.guard_band_us) model.guard_band_us = 3;
   const t0 = performance.now();
   const pkts = expandPackets(model);
 
@@ -249,8 +249,8 @@ export function solveGreedy(model) {
    ═══════════════════════════════════════════════ */
 export async function solveILP(model, glpk, opts = {}) {
   if (!glpk) throw new Error('GLPK not ready');
-  if (!model.processing_delay_us) model.processing_delay_us = 2;
-  if (!model.guard_band_us) model.guard_band_us = 2;
+  if (!model.processing_delay_us) model.processing_delay_us = 3;
+  if (!model.guard_band_us) model.guard_band_us = 3;
   const tmlim = opts.tmlim || 15;
 
   const pkts = expandPackets(model);

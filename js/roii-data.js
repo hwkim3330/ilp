@@ -5,8 +5,8 @@
 
 export const ROII_MODEL = {
   cycle_time_us: 1000,
-  guard_band_us: 1,
-  processing_delay_us: 1,
+  guard_band_us: 3,
+  processing_delay_us: 3,
   nodes: [
     // LiDAR sensors (4)
     { id: "LIDAR_FL", type: "endstation" },

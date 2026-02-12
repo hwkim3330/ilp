@@ -5,8 +5,8 @@
 
 export const AUTOMOTIVE_MODEL = {
   cycle_time_us: 500,
-  guard_band_us: 1,
-  processing_delay_us: 1,
+  guard_band_us: 3,
+  processing_delay_us: 3,
   nodes: [
     { id: "CAMERA",       type: "endstation" },
     { id: "LIDAR",        type: "endstation" },
