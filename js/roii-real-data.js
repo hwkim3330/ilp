@@ -452,3 +452,136 @@ export const ROII_REAL_FLOW_PATHS_RECONF = [
   { path: ['RADAR_RLC','SW_REAR','ACU_IT'],               color: 0x952aff },
   { path: ['RADAR_RRC','SW_REAR','ACU_IT'],               color: 0x952aff }
 ];
+
+/* ═══════════════════════════════════════════════════
+   OPTIMAL TRI-STAR TOPOLOGY
+   Each switch has a direct link to ACU_IT → all flows 2 hops
+   13 nodes, 18 links (9 sensor + 6 backbone + 3 gateway)
+   ═══════════════════════════════════════════════════ */
+
+const OPTIMAL_LINKS = [
+  // Sensor → switches (same assignments as Standard)
+  { id: "l_lidarfc_swfl",   from: "LIDAR_FC",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfl_swfl",   from: "LIDAR_FL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfr_swfr",   from: "LIDAR_FR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarr_swrear",  from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarf_swfl",    from: "RADAR_F",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  // Triangle backbone (bidirectional, failover only)
+  { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  // THREE direct gateway links (key difference from Standard)
+  { id: "l_swfl_acu",     from: "SW_FL",   to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 },
+  { id: "l_swfr_acu",     from: "SW_FR",   to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 },
+  { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
+];
+
+/* ── Optimal Model (10ms, 9 flows, 14 pkts/cycle) ── */
+export const ROII_OPTIMAL = {
+  cycle_time_us: 10000,
+  guard_band_us: 3,
+  processing_delay_us: 3,
+  nodes: JSON.parse(JSON.stringify(NODES)),
+  links: JSON.parse(JSON.stringify(OPTIMAL_LINKS)),
+  flows: [
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_f",   priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
+  ]
+};
+
+/* ── Optimal 2D Positions ── */
+export function getOptimalPositions(W, H) {
+  return {
+    RADAR_FLC:  { x: W * 0.04, y: H * 0.06 },
+    LIDAR_FL:   { x: W * 0.20, y: H * 0.06 },
+    LIDAR_FC:   { x: W * 0.36, y: H * 0.06 },
+    RADAR_F:    { x: W * 0.50, y: H * 0.06 },
+    LIDAR_FR:   { x: W * 0.64, y: H * 0.06 },
+    RADAR_FRC:  { x: W * 0.80, y: H * 0.06 },
+    SW_FL:      { x: W * 0.22, y: H * 0.34 },
+    SW_FR:      { x: W * 0.78, y: H * 0.34 },
+    RADAR_RLC:  { x: W * 0.08, y: H * 0.55 },
+    SW_REAR:    { x: W * 0.50, y: H * 0.52 },
+    RADAR_RRC:  { x: W * 0.92, y: H * 0.55 },
+    LIDAR_R:    { x: W * 0.50, y: H * 0.72 },
+    ACU_IT:     { x: W * 0.50, y: H * 0.92 }
+  };
+}
+
+/* ── Optimal Node Colors (same as Standard) ── */
+export const ROII_OPTIMAL_NODE_COLORS = { ...ROII_REAL_NODE_COLORS };
+
+/* ── Optimal Scenario Description ── */
+export const ROII_OPTIMAL_SCENARIO = {
+  title: "ROii Optimal Tri-Star \u2014 3\u00d7 Direct ACU Links",
+  description: "Optimized topology: <strong>each switch has a direct 1 Gbps link to ACU-IT</strong>. All flows are 2 hops (sensor \u2192 zone switch \u2192 ACU-IT). Triangle backbone serves as failover only. Compared to Standard topology: <strong>max e2e drops from ~4200\u00b5s to ~2100\u00b5s</strong> (\u221250%), bottleneck utilization drops from 30% to 14.4%. <strong>13 nodes, 18 links, 9 flows, 14 pkts/cycle</strong>.",
+  flows: [
+    { name: "G32 FC \u2192 SW_FL \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 2 hops (1048.9\u00b5s tx/hop)" },
+    { name: "Pandar FL \u2192 SW_FL \u2192 ACU-IT",  color: "#0D9488", desc: "32KB, P7, 2 hops (262.4\u00b5s tx/hop)" },
+    { name: "Pandar FR \u2192 SW_FR \u2192 ACU-IT",  color: "#0D9488", desc: "32KB, P7, 2 hops (262.4\u00b5s tx/hop)" },
+    { name: "G32 Rear \u2192 SW_REAR \u2192 ACU-IT", color: "#10B981", desc: "128KB, P7, 2 hops (1048.9\u00b5s tx/hop)" },
+    { name: "MRR-35 F \u2192 SW_FL \u2192 ACU-IT",   color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 FLC \u2192 SW_FL \u2192 ACU-IT", color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 FRC \u2192 SW_FR \u2192 ACU-IT", color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RLC \u2192 SW_REAR \u2192 ACU-IT", color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
+    { name: "MRR-35 RRC \u2192 SW_REAR \u2192 ACU-IT", color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" }
+  ],
+  domains: [
+    { name: "LiDAR G32 (1Gbps)",       color: "#10B981" },
+    { name: "LiDAR Pandar 40P (1Gbps)", color: "#0D9488" },
+    { name: "Radar MRR-35 (1Gbps)",    color: "#952aff" },
+    { name: "LAN9692 Backbone",        color: "#3B82F6" },
+    { name: "ACU-IT Processing",       color: "#dc2626" }
+  ]
+};
+
+/* ── Optimal 3D Positions ── */
+export const ROII_OPTIMAL_3D_POSITIONS = {
+  LIDAR_FC:   { x:  0,    y: 5.5,  z: 18.5 },
+  LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },
+  LIDAR_FR:   { x:  8.5,  y: 10,   z: 16.2 },
+  LIDAR_R:    { x:  0,    y: 5.5,  z:-18.5 },
+  RADAR_F:    { x:  0,    y: 7,    z: 18.5 },
+  RADAR_FLC:  { x: -7,    y: 6.5,  z: 17.5 },
+  RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 },
+  RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },
+  RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },
+  SW_FL:      { x: -4,    y: 2,    z: 10   },
+  SW_FR:      { x:  4,    y: 2,    z: 10   },
+  SW_REAR:    { x:  0,    y: 2,    z: -8   },
+  ACU_IT:     { x:  0,    y: 2,    z:-15   }
+};
+
+/* ── Optimal 3D Labels ── */
+export const ROII_OPTIMAL_3D_LABELS = {
+  LIDAR_FC:  'G32-Front-Center',  LIDAR_FL:  'Pandar-FL',
+  LIDAR_FR:  'Pandar-FR',         LIDAR_R:   'G32-Rear',
+  RADAR_F:   'MRR35-Front',       RADAR_FLC: 'MRR35-FLC',
+  RADAR_FRC: 'MRR35-FRC',         RADAR_RLC: 'MRR35-RLC',
+  RADAR_RRC: 'MRR35-RRC',
+  SW_FL:     'Front-L ZC',        SW_FR:     'Front-R ZC',
+  SW_REAR:   'Rear ZC',           ACU_IT:    'ACU-IT'
+};

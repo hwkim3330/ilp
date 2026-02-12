@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROii Optimal Tri-Star Topology &mdash; 3&times; Direct ACU Links</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+    textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative;
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      backdrop-filter: blur(20px);
+    }
+    #canvas3d {
+      width: 100%;
+      height: 500px;
+      display: block;
+      cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute;
+      bottom: 12px;
+      left: 16px;
+      font-size: 0.72rem;
+      color: var(--text3);
+      background: rgba(255,255,255,0.85);
+      padding: 4px 10px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
+    /* ── Mode & Scenario Controls ─────────────── */
+    .mode-group { display: flex; gap: 6px; justify-content: center; margin: 10px 0 6px; flex-wrap: wrap; }
+    .mode-btn {
+      padding: 6px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 700;
+      border: 1px solid rgba(59,130,246,0.25); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .mode-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .mode-btn.active {
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      color: #fff; border-color: transparent;
+    }
+    .scenario-group { display: flex; gap: 4px; }
+    .scenario-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid rgba(59,130,246,0.2); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .scenario-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .scenario-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .scenario-btn.active.fail { background: var(--red); border-color: var(--red); }
+    .failure-banner {
+      display: none; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25); color: var(--red);
+      margin-top: 8px; align-items: center; gap: 8px;
+    }
+    .failure-banner.show { display: flex; }
+
+    /* ── Sensor Spec Table ────────────────────── */
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 10px; }
+    .spec-table th { text-align: left; padding: 5px 8px; color: var(--text3); font-weight: 600; border-bottom: 1px solid rgba(59,130,246,0.2); }
+    .spec-table td { padding: 5px 8px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .spec-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .spec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+    /* ── Per-Switch GCL Cards ──────────────────── */
+    .gcl-switch-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600;
+    }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
+    }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
+    .gate-mask {
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+      letter-spacing: 1px; font-weight: 700;
+    }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>ROii Optimal Tri-Star Topology</h1>
+        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
+      </div>
+      <div class="sub">Each Switch Has a Direct Link to ACU-IT &mdash; All Flows 2 Hops &mdash; Triangle Backbone for Failover Only</div>
+    </div>
+
+    <!-- 3D Shuttle Visualization (Hero) -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
+    </div>
+
+    <!-- Solve Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div class="scenario-group" id="scenarioGroup">
+          <button class="scenario-btn active" data-scenario="normal">Normal</button>
+          <button class="scenario-btn" data-scenario="fail-fl-acu">SW_FL&rarr;ACU &#10005;</button>
+          <button class="scenario-btn" data-scenario="fail-fr-acu">SW_FR&rarr;ACU &#10005;</button>
+          <button class="scenario-btn" data-scenario="fail-rear-acu">SW_REAR&rarr;ACU &#10005;</button>
+        </div>
+        <div id="status" style="font-size:0.82rem;"></div>
+        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+      </div>
+      <div class="failure-banner" id="failureBanner">
+        <span>&#9888;</span> <span id="failureText"></span>
+      </div>
+    </div>
+
+    <!-- Scenario Description -->
+    <div class="auto-desc" id="scenarioDesc"></div>
+
+    <!-- Domain Legend -->
+    <div class="auto-domain-legend" id="domainLegend"></div>
+
+    <!-- Sensor Hardware Spec -->
+    <div class="card">
+      <div class="card-title">Sensor Hardware Specifications</div>
+      <table class="spec-table">
+        <thead><tr>
+          <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>131072B (128KB)</td><td>10ms (100Hz)</td><td>1048.9 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32768B (32KB)</td><td>10ms (100Hz)</td><td>262.4 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32768B (32KB)</td><td>10ms (100Hz)</td><td>262.4 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>131072B (128KB)</td><td>10ms (100Hz)</td><td>1048.9 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B (4KB)</td><td>5ms (50Hz, &times;2/cycle)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B (4KB)</td><td>5ms (50Hz, &times;2/cycle)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B (4KB)</td><td>5ms (50Hz, &times;2/cycle)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B (4KB)</td><td>5ms (50Hz, &times;2/cycle)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B (4KB)</td><td>5ms (50Hz, &times;2/cycle)</td><td>33.1 &micro;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Network Topology -->
+    <div class="card">
+      <div class="card-title">Network Topology &mdash; Tri-Star (3&times; ACU Links)</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:520px;"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics" id="metricsArea"></div>
+
+    <!-- Per-Switch GCL Detail -->
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <!-- GCL Gantt -->
+    <div class="card">
+      <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
+      <div class="legend" id="gclLegend"></div>
+      <div class="svg-container" id="gclContainer"></div>
+    </div>
+
+    <!-- Delay + Utilization -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Collapsible JSON Editor -->
+    <div class="card">
+      <div class="card-title collapsible" id="jsonEditorToggle">
+        <span class="arrow">&#9654;</span> Customize Model (JSON)
+      </div>
+      <div class="collapse-body">
+        <textarea id="input" style="min-height:300px;"></textarea>
+      </div>
+    </div>
+
+    <!-- Raw GCL -->
+    <div class="card">
+      <div class="card-title collapsible" id="gclJsonToggle">
+        <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
+      </div>
+      <div class="collapse-body">
+        <pre id="jsonOut">-</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import {
+    initTooltip, solveGreedy, solveILP, renderMetrics, renderTopology,
+    renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
+  } from './js/ilp-core.js';
+  import {
+    ROII_OPTIMAL,
+    getOptimalPositions, ROII_OPTIMAL_NODE_COLORS,
+    ROII_OPTIMAL_SCENARIO,
+    ROII_OPTIMAL_3D_POSITIONS, ROII_OPTIMAL_3D_LABELS,
+    ROII_REAL_3D_TILTS,
+    realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
+  } from './js/roii-real-data.js?v=5';
+
+  /* ── Single Mode (optimal tri-star topology) ── */
+  const MODE = {
+    model: ROII_OPTIMAL, scenario: ROII_OPTIMAL_SCENARIO,
+    getPositions: getOptimalPositions, nodeColors: ROII_OPTIMAL_NODE_COLORS,
+    pos3d: ROII_OPTIMAL_3D_POSITIONS, labels3d: ROII_OPTIMAL_3D_LABELS,
+    tilts3d: ROII_REAL_3D_TILTS
+  };
+
+  const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+
+  /* ── State ───────────────────────────────────── */
+  let glpk = null;
+  let currentScenario = 'normal';
+  let currentModel = null;
+  let currentResult = null;
+
+  /* ── 3D State (module-scoped) ── */
+  let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
+  let dynamicGroup = null;
+  let nodeMeshes3d = {};
+  let linkMeshes3d = {};
+  let clock3d = null;
+  let glbModel = null;
+
+  /* ── Link Failure Scenarios ── */
+  const LINK_FAIL = {
+    'fail-fl-acu':   { links: ['l_swfl_acu'], desc: 'SW_FL\u2192ACU_IT link down \u2014 front-left traffic reroutes via SW_FR or SW_REAR' },
+    'fail-fr-acu':   { links: ['l_swfr_acu'], desc: 'SW_FR\u2192ACU_IT link down \u2014 front-right traffic reroutes via SW_FL or SW_REAR' },
+    'fail-rear-acu': { links: ['l_swrear_acu'], desc: 'SW_REAR\u2192ACU_IT link down \u2014 rear traffic reroutes via SW_FL or SW_FR' }
+  };
+
+  /* ── Build Model for Scenario ── */
+  function buildModel() {
+    const m = JSON.parse(JSON.stringify(MODE.model));
+    if (currentScenario !== 'normal') {
+      const fail = LINK_FAIL[currentScenario];
+      if (fail) {
+        const failSet = new Set(fail.links);
+        m.links = m.links.filter(l => !failSet.has(l.id));
+        // Clear broken hardcoded paths — let BFS re-route
+        const linkIds = new Set(m.links.map(l => l.id));
+        m.flows.forEach(f => {
+          if (f.path && !f.path.every(lid => linkIds.has(lid))) delete f.path;
+        });
+      }
+    }
+    return m;
+  }
+
+  /* ── Init ────────────────────────────────────── */
+  initTooltip();
+
+  // Collapsibles
+  document.getElementById("jsonEditorToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+
+  const inputEl = document.getElementById("input");
+  const statusEl = document.getElementById("status");
+  const resolveBtn = document.getElementById("resolveBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const failureBanner = document.getElementById("failureBanner");
+  const failureText = document.getElementById("failureText");
+
+  /* ── Render Scenario Description ── */
+  function renderScenarioDesc() {
+    const sc = MODE.scenario;
+    const descEl = document.getElementById("scenarioDesc");
+    descEl.innerHTML = `
+      <h3>${sc.title}</h3>
+      <p>${sc.description}</p>
+      <ul class="auto-flow-list">
+        ${sc.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+      </ul>
+    `;
+    const legendEl = document.getElementById("domainLegend");
+    legendEl.innerHTML = sc.domains.map(d =>
+      `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+    ).join("");
+  }
+
+  /* ── 3D Link Failure Highlight ── */
+  function update3DLinks() {
+    const fail = LINK_FAIL[currentScenario];
+    const failIds = fail ? new Set(fail.links) : new Set();
+    for (const [key, m] of Object.entries(linkMeshes3d)) {
+      const isFailed = m.linkIds.some(id => failIds.has(id));
+      if (isFailed) {
+        m.tube.material.color.setHex(0xdc2626);
+        m.tube.material.emissive.setHex(0xdc2626);
+        m.tube.material.opacity = 0.4;
+        m.glow.material.color.setHex(0xdc2626);
+        m.glow.material.opacity = 0.15;
+      } else {
+        m.tube.material.color.setHex(0x3B82F6);
+        m.tube.material.emissive.setHex(0x3B82F6);
+        m.tube.material.opacity = 0.95;
+        m.glow.material.color.setHex(0x3B82F6);
+        m.glow.material.opacity = 0.35;
+      }
+    }
+  }
+
+  /* ── Scenario Buttons ── */
+  function updateScenarioUI() {
+    document.querySelectorAll('.scenario-btn').forEach(btn => {
+      const s = btn.dataset.scenario;
+      btn.classList.toggle('active', s === currentScenario);
+      btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
+    });
+    const fail = LINK_FAIL[currentScenario];
+    if (fail) {
+      failureBanner.classList.add('show');
+      failureText.textContent = fail.desc;
+    } else {
+      failureBanner.classList.remove('show');
+    }
+  }
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentScenario = btn.dataset.scenario;
+      updateScenarioUI();
+      update3DLinks();
+      reload();
+    });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    currentScenario = 'normal';
+    updateScenarioUI();
+    update3DLinks();
+    reload();
+    statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
+  });
+
+  resolveBtn.addEventListener("click", runILPSolve);
+
+  function reload() {
+    const model = buildModel();
+    inputEl.value = JSON.stringify(model, null, 2);
+    runGreedy();
+  }
+
+  /* ── Greedy Solver ── */
+  function runGreedy() {
+    try {
+      const model = JSON.parse(inputEl.value);
+      const t0 = performance.now();
+      const result = solveGreedy(model);
+      const wallMs = Math.round(performance.now() - t0);
+      currentModel = model;
+      currentResult = result;
+      renderAll();
+      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets scheduled`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "status-err";
+    }
+  }
+
+  /* ── ILP Solver ── */
+  async function runILPSolve() {
+    if (!glpk) { runGreedy(); return; }
+    try {
+      const model = JSON.parse(inputEl.value);
+      resolveBtn.disabled = true;
+      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=15s)...';
+      statusEl.className = "";
+      await new Promise(r => setTimeout(r, 50));
+
+      const result = await solveILP(model, glpk, { tmlim: 15 });
+      currentModel = model;
+      currentResult = result;
+      renderAll();
+      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "ILP failed: " + e.message + " \u2014 using greedy";
+      statusEl.className = "status-err";
+      runGreedy();
+    }
+    resolveBtn.disabled = false;
+  }
+
+  function renderAll() {
+    if (!currentResult) return;
+
+    const container = document.getElementById("topoContainer");
+    const W = container.clientWidth;
+    const positions = MODE.getPositions(W, 520);
+
+    renderMetrics(currentModel, currentResult);
+    renderTopology(currentModel, currentResult, {
+      nodePositions: positions,
+      nodeColors: MODE.nodeColors,
+      height: 520
+    });
+    renderSwitchGCL(currentModel, currentResult, {
+      switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor
+    });
+    renderGCL(currentModel, currentResult, fcopts);
+    renderDelayChart(currentModel, currentResult, fcopts);
+    renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
+    renderTable(currentResult, fcopts);
+    document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
+  }
+
+  // Responsive
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 300);
+  });
+
+  /* ═══════════════════════════════════════════════
+     3D Shuttle Visualization — init3D only (static topology)
+     ═══════════════════════════════════════════════ */
+
+  /* Device Templates */
+  const TMPL = {
+    lidar_g32:    { w: 1, h: 1, d: 1, color: 0x10B981 },
+    lidar_pandar: { w: 1, h: 1, d: 1, color: 0x0D9488 },
+    radar:        { w: 1, h: 1, d: 1, color: 0x952aff },
+    switch_f:     { w: 4, h: 2, d: 4, color: 0x3B82F6 },
+    switch_r:     { w: 4, h: 2, d: 4, color: 0x06B6D4 },
+    ecu:          { w: 4, h: 2, d: 4, color: 0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId);
+    const t = TMPL[type];
+    const group = new THREE.Group();
+    const { w, h, d } = t;
+
+    let geometry;
+    if (type === 'lidar_g32') {
+      geometry = new THREE.BoxGeometry(w, h, d);
+    } else if (type === 'lidar_pandar') {
+      geometry = new THREE.CylinderGeometry(w * 0.6, w * 0.6, h * 0.8, 16);
+    } else {
+      geometry = new THREE.BoxGeometry(w, h, d);
+    }
+
+    const mat = new THREE.MeshPhongMaterial({
+      color: t.color, emissive: t.color, emissiveIntensity: 0.5,
+      specular: 0x888888, shininess: 30
+    });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+
+    // Edge wireframe
+    group.add(new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry),
+      new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 })
+    ));
+
+    // Label sprite
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.9)';
+    ctx.fillRect(0, 0, 512, 128);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 256, 75);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) })
+    );
+    const ls = Math.max(w, d) * 1.2;
+    sprite.scale.set(ls, ls * 0.25, 1);
+    sprite.position.y = h + 1;
+    group.add(sprite);
+
+    group.position.copy(position);
+    if (tilt) {
+      if (tilt.x !== undefined) group.rotation.x = tilt.x;
+      if (tilt.y !== undefined) group.rotation.y = tilt.y;
+      if (tilt.z !== undefined) group.rotation.z = tilt.z;
+    }
+    return { mesh, group };
+  }
+
+  /* init3D — called once (topology is static for this page) */
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+
+    scene3d = new THREE.Scene();
+    scene3d.background = new THREE.Color(0xf0f0f0);
+    scene3d.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+
+    camera3d = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera3d.position.set(50, 35, 70);
+
+    renderer3d = new THREE.WebGLRenderer({ antialias: true });
+    renderer3d.shadowMap.enabled = true;
+    renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    function updateSize() {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera3d.aspect = w / h;
+      camera3d.updateProjectionMatrix();
+      renderer3d.setSize(w, h);
+    }
+    updateSize();
+    container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+
+    controls3d = new THREE.OrbitControls(camera3d, renderer3d.domElement);
+    controls3d.enableDamping = true;
+    controls3d.dampingFactor = 0.05;
+    controls3d.autoRotate = true;
+    controls3d.autoRotateSpeed = 1.2;
+    controls3d.minDistance = 20;
+    controls3d.maxDistance = 120;
+    controls3d.target.set(0, 0, 0);
+
+    // Lighting
+    scene3d.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(30, 50, 30);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.set(2048, 2048);
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 200;
+    mainLight.shadow.camera.left = -60;
+    mainLight.shadow.camera.right = 60;
+    mainLight.shadow.camera.top = 60;
+    mainLight.shadow.camera.bottom = -60;
+    scene3d.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    fillLight.position.set(0, 50, 0);
+    scene3d.add(fillLight);
+    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100);
+    pl1.position.set(20, 15, 20);
+    scene3d.add(pl1);
+    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80);
+    pl2.position.set(-20, 15, -20);
+    scene3d.add(pl2);
+
+    // Grid + Ground
+    const grid = new THREE.GridHelper(100, 50, 0x3B82F6, 0xCCCCCC);
+    grid.material.opacity = 0.4;
+    grid.material.transparent = true;
+    grid.position.y = -0.5;
+    scene3d.add(grid);
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.ShadowMaterial({ opacity: 0.3 })
+    );
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -0.5;
+    plane.receiveShadow = true;
+    scene3d.add(plane);
+
+    // Load GLB
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb',
+      (gltf) => {
+        glbModel = gltf.scene;
+        const box = new THREE.Box3().setFromObject(glbModel);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const targetSize = 40;
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = targetSize / maxDim;
+        glbModel.scale.set(scale, scale, scale);
+        const scaledHeight = size.y * scale;
+        glbModel.position.x = -center.x;
+        glbModel.position.y = -center.y + (scaledHeight * 0.5) + 0.5;
+        glbModel.position.z = -center.z;
+        glbModel.traverse((child) => {
+          if (!child.isMesh) return;
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(mat => {
+            mat.transparent = true;
+            mat.opacity = 0.3;
+            mat.side = THREE.DoubleSide;
+            mat.depthWrite = true;
+            if (mat.color) mat.color.multiplyScalar(1.5);
+            mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.3) : new THREE.Color(0xffffff);
+            mat.emissiveIntensity = 0.4;
+          });
+          child.castShadow = true;
+          child.receiveShadow = true;
+        });
+        scene3d.add(glbModel);
+      },
+      undefined,
+      (err) => { console.warn('GLB load failed:', err); }
+    );
+
+    // Build static 3D content (optimal tri-star topology)
+    dynamicGroup = new THREE.Group();
+    scene3d.add(dynamicGroup);
+
+    const pos3d = ROII_OPTIMAL_3D_POSITIONS;
+    const labels3d = ROII_OPTIMAL_3D_LABELS;
+    const tilts3d = ROII_REAL_3D_TILTS;
+    const optimalModel = ROII_OPTIMAL;
+
+    // Create devices
+    const nodePos3D = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const tilt = tilts3d[id] || null;
+      const dev = createDevice(id, v, labels3d[id] || id, tilt);
+      dynamicGroup.add(dev.group);
+      nodePos3D[id] = v;
+      nodeMeshes3d[id] = dev.mesh;
+    }
+
+    // Draw deduplicated connection tubes (store refs for failure highlighting)
+    linkMeshes3d = {};
+    const drawnLinks = new Set();
+    for (const link of optimalModel.links) {
+      const key = [link.from, link.to].sort().join('|');
+      if (drawnLinks.has(key)) continue;
+      drawnLinks.add(key);
+      const p1 = nodePos3D[link.from], p2 = nodePos3D[link.to];
+      if (!p1 || !p2) continue;
+
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.3
+      });
+      dynamicGroup.add(new THREE.Line(lineGeo, lineMat));
+
+      const curve = new THREE.CatmullRomCurve3([p1.clone(), p2.clone()]);
+      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9,
+        transparent: true, opacity: 0.95
+      });
+      const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      dynamicGroup.add(tubeMesh);
+
+      const glowGeo = new THREE.TubeGeometry(curve, 20, 0.2, 8, false);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.35
+      });
+      const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+      dynamicGroup.add(glowMesh);
+
+      const linkIds = optimalModel.links.filter(l =>
+        [l.from, l.to].sort().join('|') === key
+      ).map(l => l.id);
+      linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
+    }
+
+    // Animation loop
+    clock3d = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock3d.getDelta();
+      controls3d.update();
+
+      // Pulse on device emissive
+      const pulse = Math.sin(clock3d.elapsedTime * 2.5) * 0.06;
+      for (const m of Object.values(nodeMeshes3d)) {
+        if (m && m.material) m.material.emissiveIntensity = 0.2 + pulse;
+      }
+
+      renderer3d.render(scene3d, camera3d);
+    }
+    animate();
+  }
+
+  /* ── Initialize ────────────────────────────── */
+  renderScenarioDesc();
+  const badge = document.getElementById("engineBadge");
+  badge.className = "engine-badge ready";
+  badge.innerHTML = "&#9679; Greedy Ready";
+  resolveBtn.disabled = false;
+  reload();
+
+  // Init 3D
+  try { init3D(); } catch(e) { console.warn('3D init error:', e); }
+
+  /* ── Load GLPK/WASM in background ─────────── */
+  (async () => {
+    try {
+      const GLPK = (await import('./vendor/glpk.js')).default;
+      glpk = await GLPK();
+      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
+      badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
+      resolveBtn.textContent = "Re-Solve (ILP)";
+      runILPSolve();  // Auto-solve with ILP once ready
+    } catch (e) {
+      console.warn('GLPK load failed (greedy works):', e);
+      resolveBtn.textContent = "Re-Solve (Greedy)";
+    }
+  })();
+  </script>
+</body>
+</html>
