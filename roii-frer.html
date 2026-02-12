@@ -420,22 +420,22 @@
     plane.receiveShadow = true;
     scene.add(plane);
 
-    // Device Templates — includes HUB_F (orange)
+    // Device Templates — all switches LAN9692, HUB_F orange
     const TMPL = {
-      lidar:   { w: 1,   h: 1,   d: 1,   color: 0x10B981 },
-      radar:   { w: 1,   h: 1,   d: 1,   color: 0x952aff },
-      hub:     { w: 2,   h: 1,   d: 2,   color: 0xf97316 },
-      lan9662: { w: 4,   h: 2,   d: 4,   color: 0x3B82F6 },
-      lan9692: { w: 4,   h: 2,   d: 4,   color: 0x06B6D4 },
-      ecu:     { w: 4,   h: 2,   d: 4,   color: 0x8B5CF6 }
+      lidar:     { w: 1, h: 1, d: 1, color: 0x10B981 },
+      radar:     { w: 1, h: 1, d: 1, color: 0x952aff },
+      hub:       { w: 2, h: 1, d: 2, color: 0xf97316 },
+      switch_f:  { w: 4, h: 2, d: 4, color: 0x3B82F6 },
+      switch_r:  { w: 4, h: 2, d: 4, color: 0x06B6D4 },
+      ecu:       { w: 4, h: 2, d: 4, color: 0x8B5CF6 }
     };
 
     function getType(id) {
       if (id.startsWith('LIDAR')) return 'lidar';
       if (id.startsWith('RADAR')) return 'radar';
       if (id === 'HUB_F') return 'hub';
-      if (id === 'SW_REAR') return 'lan9692';
-      if (id.startsWith('SW')) return 'lan9662';
+      if (id === 'SW_REAR') return 'switch_r';
+      if (id.startsWith('SW')) return 'switch_f';
       return 'ecu';
     }
 

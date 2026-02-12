@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════
    roii-data.js — ROii Autonomous Shuttle TSN Scenario
-   LAN9662 x2 (Front) + LAN9692 x1 (Rear) → ACU-IT
+   LAN9692 x3 (Front-L, Front-R, Rear GW) → ACU-IT
    ═══════════════════════════════════════════════ */
 
 export const ROII_MODEL = {
@@ -20,8 +20,8 @@ export const ROII_MODEL = {
     { id: "RADAR_RL", type: "endstation" },
     { id: "RADAR_RR", type: "endstation" },
     // Switches — triangle topology
-    { id: "SW_FL",   type: "switch" },   // LAN9662 Front-Left Zone Controller
-    { id: "SW_FR",   type: "switch" },   // LAN9662 Front-Right Zone Controller
+    { id: "SW_FL",   type: "switch" },   // LAN9692 Front-Left Zone Controller
+    { id: "SW_FR",   type: "switch" },   // LAN9692 Front-Right Zone Controller
     { id: "SW_REAR", type: "switch" },   // LAN9692 Rear Gateway
     // Processing — rear-mounted
     { id: "ACU_IT",  type: "endstation" }
@@ -136,9 +136,9 @@ export const ROII_NODE_COLORS = {
   RADAR_FR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar FR",   shortLabel: "Radar" },
   RADAR_RL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL",   shortLabel: "Radar" },
   RADAR_RR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR",   shortLabel: "Radar" },
-  // LAN9662 Front Zone Controllers — light blue tint
-  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC", shortLabel: "LAN9662" },
-  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC", shortLabel: "LAN9662" },
+  // LAN9692 Front Zone Controllers — light blue tint
+  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC", shortLabel: "LAN9692" },
+  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC", shortLabel: "LAN9692" },
   // LAN9692 Rear Gateway — light cyan tint
   SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "Rear GW",    shortLabel: "LAN9692" },
   // ACU-IT — light amber tint
@@ -174,10 +174,17 @@ export const ROII_3D_TILTS = {
   RADAR_RR:  { y: -Math.PI / 6 }
 };
 
+/* ── Switch Definitions (for per-switch GCL view) ── */
+export const ROII_SWITCHES = [
+  { id: "SW_FL",   label: "Front-Left Zone Controller",  chip: "LAN9692", color: "#3B82F6" },
+  { id: "SW_FR",   label: "Front-Right Zone Controller", chip: "LAN9692", color: "#3B82F6" },
+  { id: "SW_REAR", label: "Rear Gateway",                chip: "LAN9692", color: "#06B6D4" }
+];
+
 /* ── Scenario Description ──────────────────────── */
 export const ROII_SCENARIO = {
   title: "ROii Autonomous Shuttle TSN Network",
-  description: "ROii autonomous shuttle sensor fusion network with 4 LiDAR and 5 Radar sensors. Two LAN9662 front zone controllers (Front-L, Front-R) and one LAN9692 rear gateway form a triangle switch topology, connecting all sensors to the rear-mounted ACU-IT processing unit. IEEE 802.1Qbv GCL scheduling ensures deterministic delivery of safety-critical perception data.",
+  description: "ROii autonomous shuttle sensor fusion network with 4 LiDAR and 5 Radar sensors. Three LAN9692 switches &mdash; two front zone controllers (Front-L, Front-R) and one rear gateway &mdash; form a triangle switch topology, connecting all sensors to the rear-mounted ACU-IT processing unit. IEEE 802.1Qbv GCL scheduling ensures deterministic delivery of safety-critical perception data.",
   flows: [
     { name: "LiDAR FL → ACU-IT", color: "#10B981", desc: "1200B point cloud, P7, 200µs deadline, 2 pkts/cycle" },
     { name: "LiDAR FR → ACU-IT", color: "#10B981", desc: "1200B point cloud, P7, 200µs deadline, 2 pkts/cycle" },
@@ -192,7 +199,7 @@ export const ROII_SCENARIO = {
   domains: [
     { name: "LiDAR Sensors",     color: "#10B981" },
     { name: "Radar Sensors",     color: "#952aff" },
-    { name: "LAN9662 Front ZC",  color: "#3B82F6" },
+    { name: "LAN9692 Front ZC",  color: "#3B82F6" },
     { name: "LAN9692 Rear GW",   color: "#06B6D4" },
     { name: "ACU-IT Processing", color: "#f9a825" }
   ]

@@ -23,8 +23,8 @@ export const FRER_MODEL = {
     // Front Hub (aggregation point)
     { id: "HUB_F",    type: "switch" },
     // TSN Switches — triangle topology
-    { id: "SW_FL",    type: "switch" },   // LAN9662 Front-Left
-    { id: "SW_FR",    type: "switch" },   // LAN9662 Front-Right
+    { id: "SW_FL",    type: "switch" },   // LAN9692 Front-Left
+    { id: "SW_FR",    type: "switch" },   // LAN9692 Front-Right
     { id: "SW_REAR",  type: "switch" },   // LAN9692 Rear Gateway
     // Processing
     { id: "ACU_IT",   type: "endstation" }
@@ -109,8 +109,8 @@ export const FRER_MODEL = {
 /* ── Switch Definitions (for per-switch GCL view) ── */
 export const FRER_SWITCHES = [
   { id: "HUB_F",   label: "Front Hub",                chip: "Hub",     color: "#f97316" },
-  { id: "SW_FL",   label: "Front-Left Zone Controller", chip: "LAN9662", color: "#3B82F6" },
-  { id: "SW_FR",   label: "Front-Right Zone Controller", chip: "LAN9662", color: "#3B82F6" },
+  { id: "SW_FL",   label: "Front-Left Zone Controller", chip: "LAN9692", color: "#3B82F6" },
+  { id: "SW_FR",   label: "Front-Right Zone Controller", chip: "LAN9692", color: "#3B82F6" },
   { id: "SW_REAR", label: "Rear Gateway",              chip: "LAN9692", color: "#06B6D4" }
 ];
 
@@ -151,8 +151,8 @@ export const FRER_NODE_COLORS = {
   RADAR_RL:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RL",     shortLabel: "Radar" },
   RADAR_RR:  { fill: "#ede9fe", stroke: "#8B5CF6", label: "Radar RR",     shortLabel: "Radar" },
   HUB_F:     { fill: "#ffedd5", stroke: "#f97316", label: "Front Hub",    shortLabel: "Hub" },
-  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC",   shortLabel: "LAN9662" },
-  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC",   shortLabel: "LAN9662" },
+  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC",   shortLabel: "LAN9692" },
+  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC",   shortLabel: "LAN9692" },
   SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "Rear GW",      shortLabel: "LAN9692" },
   ACU_IT:    { fill: "#fef3c7", stroke: "#f59e0b", label: "ACU-IT",       shortLabel: "ECU" }
 };
@@ -193,7 +193,7 @@ export const FRER_SCENARIO = {
     { name: "LiDAR (TC7)",        color: "#10B981" },
     { name: "Radar (TC6)",        color: "#952aff" },
     { name: "Front Hub",          color: "#f97316" },
-    { name: "LAN9662 Front ZC",   color: "#3B82F6" },
+    { name: "LAN9692 Front ZC",   color: "#3B82F6" },
     { name: "LAN9692 Rear GW",    color: "#06B6D4" },
     { name: "ACU-IT Processing",  color: "#f9a825" }
   ]

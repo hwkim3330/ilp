@@ -172,6 +172,46 @@
       backdrop-filter: blur(10px);
       border: 1px solid rgba(59,130,246,0.1);
     }
+
+    /* ── Per-Switch GCL Cards (white theme) ──── */
+    .gcl-switch-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600;
+    }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
+    }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
+    .gate-mask {
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+      letter-spacing: 1px; font-weight: 700;
+    }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -221,6 +261,12 @@
       <div class="legend" id="topoLegend"></div>
       <div class="svg-container" id="topoContainer" style="height:520px;"></div>
     </div>
+
+    <!-- Per-Switch GCL Detail -->
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
 
     <!-- GCL Gantt -->
     <div class="card">
@@ -285,7 +331,8 @@
   } from './js/ilp-core.js';
   import {
     ROII_MODEL, getRoiiPositions,
-    ROII_NODE_COLORS, ROII_3D_POSITIONS, ROII_3D_TILTS, ROII_SCENARIO
+    ROII_NODE_COLORS, ROII_3D_POSITIONS, ROII_3D_TILTS, ROII_SCENARIO,
+    ROII_SWITCHES
   } from './js/roii-data.js';
 
   /* ── 3D Shuttle + Network Topology ────────────── */
@@ -363,20 +410,20 @@
     plane.receiveShadow = true;
     scene.add(plane);
 
-    // === Device Templates (from latest web roii project) ===
+    // === Device Templates (all switches are LAN9692) ===
     const TMPL = {
-      lidar:   { w: 1,   h: 1,   d: 1,   color: 0x10B981 },
-      radar:   { w: 1,   h: 1,   d: 1,   color: 0x952aff },
-      lan9662: { w: 4,   h: 2,   d: 4,   color: 0x3B82F6 },
-      lan9692: { w: 4,   h: 2,   d: 4,   color: 0x10B981 },
-      ecu:     { w: 4,   h: 2,   d: 4,   color: 0x8B5CF6 }
+      lidar:     { w: 1, h: 1, d: 1, color: 0x10B981 },
+      radar:     { w: 1, h: 1, d: 1, color: 0x952aff },
+      switch_f:  { w: 4, h: 2, d: 4, color: 0x3B82F6 },
+      switch_r:  { w: 4, h: 2, d: 4, color: 0x06B6D4 },
+      ecu:       { w: 4, h: 2, d: 4, color: 0x8B5CF6 }
     };
 
     function getType(id) {
       if (id.startsWith('LIDAR')) return 'lidar';
       if (id.startsWith('RADAR')) return 'radar';
-      if (id === 'SW_REAR') return 'lan9692';
-      if (id.startsWith('SW')) return 'lan9662';
+      if (id === 'SW_REAR') return 'switch_r';
+      if (id.startsWith('SW')) return 'switch_f';
       return 'ecu';
     }
 
@@ -709,11 +756,92 @@
       height: 520
     });
     const fcopts = { flowColorFn: roiiFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+    renderSwitchGCL(currentModel, currentResult);
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult);
     renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
+  }
+
+  /* ═══════════════════════════════════════════════
+     Per-Switch GCL Detail Cards
+     Shows GCL entries per egress port of each switch
+     ═══════════════════════════════════════════════ */
+  function renderSwitchGCL(model, result) {
+    const area = document.getElementById("switchGclArea");
+    area.innerHTML = "";
+
+    ROII_SWITCHES.forEach(sw => {
+      const egressLinks = model.links.filter(l => l.from === sw.id);
+      const activeEgress = egressLinks.filter(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        return entries.some(e => !e.note.includes("best-effort"));
+      });
+      if (activeEgress.length === 0) return;
+
+      let totalFlow = 0, totalGuard = 0, tsnCount = 0;
+      activeEgress.forEach(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        entries.forEach(e => {
+          if (e.note.includes("guard")) totalGuard += e.duration_us;
+          else if (!e.note.includes("best-effort")) { totalFlow += e.duration_us; tsnCount++; }
+        });
+      });
+      const utilPct = ((totalFlow + totalGuard) / model.cycle_time_us / activeEgress.length * 100).toFixed(1);
+
+      const card = document.createElement("div");
+      card.className = "gcl-switch-card";
+
+      card.innerHTML = `
+        <div class="sw-header">
+          <div class="sw-dot" style="background:${sw.color};"></div>
+          <span class="sw-name">${sw.label}</span>
+          <span class="sw-chip">${sw.chip}</span>
+          <span class="sw-stats">${activeEgress.length} port${activeEgress.length > 1 ? 's' : ''} &middot; ${tsnCount} entries &middot; ${utilPct}% util</span>
+        </div>
+      `;
+
+      activeEgress.forEach(link => {
+        const entries = result.gcl.links[link.id]?.entries || [];
+        const linkDiv = document.createElement("div");
+        linkDiv.style.marginBottom = "14px";
+
+        let html = `<div class="link-label-dir">${link.from} &rarr; ${link.to}</div>`;
+        html += `<table class="gcl-entry-table">
+          <thead><tr><th>#</th><th>Gate Mask</th><th>TC</th><th>Start (µs)</th><th>End (µs)</th><th>Duration</th><th>Type</th></tr></thead><tbody>`;
+
+        entries.forEach(e => {
+          const isBE = e.note.includes("best-effort");
+          const isGuard = e.note.includes("guard");
+          const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
+          let tcLabel = "-";
+          if (!isBE && !isGuard) {
+            const oneIdx = e.gate_mask.indexOf('1');
+            if (oneIdx >= 0) tcLabel = "TC" + (7 - oneIdx);
+          } else if (isGuard) { tcLabel = "guard"; }
+          const typeLabel = isGuard ? "Guard Band" : isBE ? "BE Window" : e.note.split("#")[0].replace("f_","");
+          const barColor = isGuard ? "#f59e0b" : isBE ? "rgba(0,0,0,0.08)" : roiiFlowColor(e.note);
+          const barW = Math.max((e.duration_us / model.cycle_time_us * 100), 1.5).toFixed(1);
+
+          html += `<tr>
+            <td>${e.index}</td>
+            <td class="gate-mask ${cls}">${e.gate_mask}</td>
+            <td style="font-weight:600;${isGuard ? 'color:#f59e0b' : isBE ? 'opacity:0.4' : 'color:' + barColor}">${tcLabel}</td>
+            <td>${e.start_us}</td><td>${e.end_us}</td>
+            <td>${e.duration_us} µs</td>
+            <td><span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
+              <div class="entry-bar" style="background:${barColor};width:${barW}%;opacity:${isBE ? 0.15 : 0.7};"></div>
+            </td></tr>`;
+        });
+
+        html += `</tbody></table>`;
+        linkDiv.innerHTML = html;
+        card.appendChild(linkDiv);
+      });
+
+      area.appendChild(card);
+    });
   }
 
   // Responsive
