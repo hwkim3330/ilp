@@ -3,15 +3,63 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ROii FRER Demo &mdash; Dual-Path Redundancy</title>
+  <title>ROii Multi-Path Demo &mdash; Route Selection + GCL</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Per-Switch GCL Cards (dark theme) ─────── */
+    .gcl-switch-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px;
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; }
+    .sw-chip {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.15); color: #60a5fa; font-weight: 600;
+    }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid var(--border); font-weight: 600;
+    }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .gcl-entry-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .gate-mask {
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+      letter-spacing: 1px; font-weight: 700;
+    }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Route table ────────────────────────────── */
+    .route-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .route-tbl th { text-align: left; padding: 6px 10px; color: var(--text3); font-weight: 600; border-bottom: 1px solid var(--border); }
+    .route-tbl td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .route-tbl tr:hover td { background: rgba(255,255,255,0.03); }
+    .route-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .route-path { font-weight: 600; color: var(--blue); }
+    .route-path.alt { color: var(--green); }
+  </style>
 </head>
 <body>
   <div class="bg-grid"></div>
   <div class="wrap">
     <div class="header">
-      <h1>ROii FRER Demo</h1>
-      <div class="sub">IEEE 802.1CB Frame Replication &amp; Elimination &mdash; Dual-Path Route Selection + GCL Scheduling</div>
+      <h1>ROii Multi-Path Demo</h1>
+      <div class="sub">Route Selection + IEEE 802.1Qbv GCL Scheduling &mdash; Triangle Switch Topology</div>
       <div style="margin-top:10px;">
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK/WASM...</span>
       </div>
@@ -19,13 +67,11 @@
 
     <!-- Scenario Description -->
     <div class="auto-desc" id="scenarioDesc"></div>
-
-    <!-- Domain Legend -->
     <div class="auto-domain-legend" id="domainLegend"></div>
 
     <!-- Network Topology -->
     <div class="card">
-      <div class="card-title">FRER Network Topology</div>
+      <div class="card-title">Network Topology &mdash; Triangle + Hub</div>
       <div class="legend" id="topoLegend"></div>
       <div class="svg-container" id="topoContainer" style="height:480px;"></div>
     </div>
@@ -33,7 +79,13 @@
     <!-- Metrics -->
     <div class="metrics" id="metricsArea"></div>
 
-    <!-- GCL Gantt -->
+    <!-- Per-Switch GCL Detail -->
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <!-- GCL Gantt (all links) -->
     <div class="card">
       <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
       <div class="legend" id="gclLegend"></div>
@@ -54,7 +106,7 @@
 
     <!-- Route Selection Summary -->
     <div class="card">
-      <div class="card-title">Route Selection (ILP vs Greedy)</div>
+      <div class="card-title">Route Selection Summary</div>
       <div id="routeSelection" style="padding:10px 16px;"></div>
     </div>
 
@@ -71,7 +123,7 @@
       </div>
     </div>
 
-    <!-- Collapsible JSON Editor -->
+    <!-- JSON Editor (collapsible) -->
     <div class="card">
       <div class="card-title collapsible" id="jsonEditorToggle">
         <span class="arrow">&#9654;</span> Customize Model (JSON)
@@ -86,7 +138,7 @@
       </div>
     </div>
 
-    <!-- Raw GCL -->
+    <!-- Raw GCL JSON (collapsible) -->
     <div class="card">
       <div class="card-title collapsible" id="gclJsonToggle">
         <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
@@ -106,83 +158,66 @@
     renderGCL, renderDelayChart, renderUtilization, renderTable
   } from './js/ilp-core.js';
   import {
-    FRER_MODEL, getFrerPositions,
-    FRER_NODE_COLORS, FRER_SCENARIO
+    FRER_MODEL, getFrerPositions, FRER_NODE_COLORS, FRER_SCENARIO, FRER_SWITCHES
   } from './js/roii-frer-data.js';
 
-  /* ── Flow Colors (lidar/radar) ── */
+  /* ── Flow Colors ── */
   function frerFlowColor(fid) {
-    return fid.toLowerCase().includes('lidar') ? '#10B981' : '#952aff';
+    return (fid || '').toLowerCase().includes('lidar') ? '#10B981' : '#952aff';
   }
-  const fcopts = {
-    flowColorFn: frerFlowColor,
-    beColor: '#e2e8f0',
-    beBorder: 'rgba(59,130,246,0.15)'
-  };
+  const fcopts = { flowColorFn: frerFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
-  /* ── State ───────────────────────────────────── */
+  /* ── State ── */
   let glpk = null;
   let currentModel = JSON.parse(JSON.stringify(FRER_MODEL));
   let currentResult = null;
 
-  /* ── Init ────────────────────────────────────── */
+  /* ── Init ── */
   initTooltip();
 
-  // Render scenario description
-  const descEl = document.getElementById("scenarioDesc");
-  descEl.innerHTML = `
+  document.getElementById("scenarioDesc").innerHTML = `
     <h3>${FRER_SCENARIO.title}</h3>
     <p>${FRER_SCENARIO.description}</p>
     <ul class="auto-flow-list">
       ${FRER_SCENARIO.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
     </ul>
   `;
-
-  // Render domain legend
-  const legendEl = document.getElementById("domainLegend");
-  legendEl.innerHTML = FRER_SCENARIO.domains.map(d =>
+  document.getElementById("domainLegend").innerHTML = FRER_SCENARIO.domains.map(d =>
     `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
   ).join("");
 
   // Collapsibles
-  document.getElementById("jsonEditorToggle").addEventListener("click", function() {
-    this.classList.toggle("open");
-    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
-  });
-  document.getElementById("gclJsonToggle").addEventListener("click", function() {
-    this.classList.toggle("open");
-    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  ["jsonEditorToggle", "gclJsonToggle"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function() {
+      this.classList.toggle("open");
+      this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+    });
   });
 
   const inputEl = document.getElementById("input");
   const statusEl = document.getElementById("status");
   const resolveBtn = document.getElementById("resolveBtn");
   const resetBtn = document.getElementById("resetBtn");
-
   inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
 
   resetBtn.addEventListener("click", () => {
     inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
-
   resolveBtn.addEventListener("click", runILPSolve);
 
+  /* ── Solvers ── */
   function runGreedy() {
     try {
       const model = JSON.parse(inputEl.value);
       const t0 = performance.now();
       const result = solveGreedy(model);
       const wallMs = Math.round(performance.now() - t0);
-      currentModel = model;
-      currentResult = result;
+      currentModel = model; currentResult = result;
       renderAll();
       statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong>`;
       statusEl.className = "status-ok";
-    } catch (e) {
-      statusEl.textContent = "Error: " + e.message;
-      statusEl.className = "status-err";
-    }
+    } catch (e) { statusEl.textContent = "Error: " + e.message; statusEl.className = "status-err"; }
   }
 
   async function runILPSolve() {
@@ -193,87 +228,184 @@
       statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=15s)...';
       statusEl.className = "";
       await new Promise(r => setTimeout(r, 50));
-
       const result = await solveILP(model, glpk, { tmlim: 15 });
-      currentModel = model;
-      currentResult = result;
+      currentModel = model; currentResult = result;
       renderAll();
       const label = result.stats.status === 5 ? 'optimal' : 'feasible';
       statusEl.innerHTML = `<strong style="color:var(--green)">ILP ${label} in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
       statusEl.className = "status-ok";
     } catch (e) {
       statusEl.textContent = "ILP failed: " + e.message + " — using greedy";
-      statusEl.className = "status-err";
-      runGreedy();
+      statusEl.className = "status-err"; runGreedy();
     }
     resolveBtn.disabled = false;
   }
 
-  function renderRouteSelection() {
-    const el = document.getElementById("routeSelection");
-    if (!el || !currentResult) return;
-    const rows = currentResult.packetRows.filter(p => p.status !== 'BE');
-    // Group by flow: show route 0 = SW_FL path, route 1 = SW_FR path
-    const flowMap = {};
-    for (const r of rows) {
-      if (!flowMap[r.flow_id]) flowMap[r.flow_id] = [];
-      flowMap[r.flow_id].push(r);
-    }
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-    html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="text-align:left;padding:6px;">Flow</th><th>Path</th><th>Hops</th><th>E2E (avg)</th></tr>';
-    for (const [fid, pkts] of Object.entries(flowMap)) {
-      const routeNums = pkts.map(p => p.selected_route);
-      const uniqueRoutes = [...new Set(routeNums)];
-      const avgE2e = (pkts.reduce((s, p) => s + p.e2e_delay_us, 0) / pkts.length).toFixed(1);
-      const pathLabel = uniqueRoutes.map(r => r === 0 ? 'SW_FL' : 'SW_FR').join(', ');
-      const hopsStr = pkts[0].hops.map(h => h.link_id.replace(/^l_/, '').replace(/_/g, ' > ')).join(' ');
-      const color = frerFlowColor(fid);
-      html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">`;
-      html += `<td style="padding:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle;"></span>${fid}</td>`;
-      html += `<td style="text-align:center;"><strong>${pathLabel}</strong></td>`;
-      html += `<td style="text-align:center;font-size:0.75rem;color:var(--text3);">${pkts[0].hops.length} hops</td>`;
-      html += `<td style="text-align:center;">${avgE2e} us</td>`;
-      html += `</tr>`;
-    }
-    html += '</table>';
-    el.innerHTML = html;
-  }
-
+  /* ── Render All ── */
   function renderAll() {
     if (!currentResult) return;
     const container = document.getElementById("topoContainer");
     const W = container.clientWidth;
-    const positions = getFrerPositions(W, 480);
-
     renderMetrics(currentModel, currentResult);
     renderTopology(currentModel, currentResult, {
-      nodePositions: positions,
-      nodeColors: FRER_NODE_COLORS,
-      height: 480
+      nodePositions: getFrerPositions(W, 480), nodeColors: FRER_NODE_COLORS, height: 480
     });
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, fcopts);
     renderTable(currentResult);
+    renderSwitchGCL(currentModel, currentResult);
     renderRouteSelection();
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
 
-  // Responsive
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(renderAll, 300);
-  });
+  /* ═══════════════════════════════════════════════
+     Per-Switch GCL Detail Cards
+     Shows GCL entries per egress port of each switch
+     ═══════════════════════════════════════════════ */
+  function renderSwitchGCL(model, result) {
+    const area = document.getElementById("switchGclArea");
+    area.innerHTML = "";
 
-  /* ── Auto-Solve with Greedy ──────────────────── */
+    FRER_SWITCHES.forEach(sw => {
+      // Find egress links (links FROM this switch)
+      const egressLinks = model.links.filter(l => l.from === sw.id);
+      const activeEgress = egressLinks.filter(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        return entries.some(e => !e.note.includes("best-effort"));
+      });
+      if (activeEgress.length === 0) return;
+
+      // Calculate per-switch stats
+      let totalFlow = 0, totalGuard = 0, tsnCount = 0;
+      activeEgress.forEach(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        entries.forEach(e => {
+          if (e.note.includes("guard")) totalGuard += e.duration_us;
+          else if (!e.note.includes("best-effort")) { totalFlow += e.duration_us; tsnCount++; }
+        });
+      });
+      const utilPct = ((totalFlow + totalGuard) / model.cycle_time_us / activeEgress.length * 100).toFixed(1);
+
+      const card = document.createElement("div");
+      card.className = "gcl-switch-card";
+
+      card.innerHTML = `
+        <div class="sw-header">
+          <div class="sw-dot" style="background:${sw.color};"></div>
+          <span class="sw-name">${sw.label}</span>
+          <span class="sw-chip">${sw.chip}</span>
+          <span class="sw-stats">${activeEgress.length} port${activeEgress.length > 1 ? 's' : ''} &middot; ${tsnCount} entries &middot; ${utilPct}% util</span>
+        </div>
+      `;
+
+      activeEgress.forEach(link => {
+        const entries = result.gcl.links[link.id]?.entries || [];
+        const linkDiv = document.createElement("div");
+        linkDiv.style.marginBottom = "14px";
+
+        let html = `<div class="link-label-dir">${link.from} &rarr; ${link.to}</div>`;
+        html += `<table class="gcl-entry-table">
+          <thead><tr><th>#</th><th>Gate Mask</th><th>TC</th><th>Start (µs)</th><th>End (µs)</th><th>Duration</th><th>Type</th></tr></thead><tbody>`;
+
+        entries.forEach(e => {
+          const isBE = e.note.includes("best-effort");
+          const isGuard = e.note.includes("guard");
+          const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
+          // Determine TC from gate mask
+          let tcLabel = "-";
+          if (!isBE && !isGuard) {
+            const oneIdx = e.gate_mask.indexOf('1');
+            if (oneIdx >= 0) tcLabel = "TC" + (7 - oneIdx);
+          } else if (isGuard) { tcLabel = "guard"; }
+          const typeLabel = isGuard ? "Guard Band" : isBE ? "BE Window" : e.note.split("#")[0].replace("f_","");
+          const barColor = isGuard ? "#f59e0b" : isBE ? "rgba(255,255,255,0.1)" : frerFlowColor(e.note);
+          const barW = Math.max((e.duration_us / model.cycle_time_us * 100), 1.5).toFixed(1);
+
+          html += `<tr>
+            <td>${e.index}</td>
+            <td class="gate-mask ${cls}">${e.gate_mask}</td>
+            <td style="font-weight:600;${isGuard ? 'color:#f59e0b' : isBE ? 'opacity:0.4' : 'color:' + barColor}">${tcLabel}</td>
+            <td>${e.start_us}</td><td>${e.end_us}</td>
+            <td>${e.duration_us} µs</td>
+            <td><span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
+              <div class="entry-bar" style="background:${barColor};width:${barW}%;opacity:${isBE ? 0.2 : 0.7};"></div>
+            </td></tr>`;
+        });
+
+        html += `</tbody></table>`;
+        linkDiv.innerHTML = html;
+        card.appendChild(linkDiv);
+      });
+
+      area.appendChild(card);
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     Route Selection Summary
+     Shows which path each flow was assigned
+     ═══════════════════════════════════════════════ */
+  function renderRouteSelection() {
+    const el = document.getElementById("routeSelection");
+    if (!el || !currentResult) return;
+
+    const flowMap = {};
+    for (const r of currentResult.packetRows) {
+      if (!flowMap[r.flow_id]) flowMap[r.flow_id] = [];
+      flowMap[r.flow_id].push(r);
+    }
+
+    let html = `<table class="route-tbl">
+      <thead><tr><th>Flow</th><th>TC</th><th>Selected Path</th><th>Hops</th><th>Avg E2E</th><th>Status</th></tr></thead><tbody>`;
+
+    for (const [fid, pkts] of Object.entries(flowMap)) {
+      const color = frerFlowColor(fid);
+      const tc = fid.includes('lidar') ? 'TC7' : 'TC6';
+      const routes = [...new Set(pkts.map(p => p.selected_route))];
+      const avgE2e = (pkts.reduce((s, p) => s + p.e2e_delay_us, 0) / pkts.length).toFixed(1);
+      const allOk = pkts.every(p => p.status === 'OK' || p.status === 'BE');
+
+      // Build path description from hops
+      const samplePkt = pkts[0];
+      const hopLinks = samplePkt.hops.map(h => h.link_id);
+      let pathDesc = "direct";
+      if (hopLinks.some(l => l.includes("swfl") || l.includes("hub_swfl"))) {
+        if (hopLinks.some(l => l.includes("swfr"))) pathDesc = "SW_FL + SW_FR";
+        else pathDesc = "via SW_FL";
+      } else if (hopLinks.some(l => l.includes("swfr") || l.includes("hub_swfr"))) {
+        pathDesc = "via SW_FR";
+      }
+
+      const isFront = hopLinks.some(l => l.includes("hub"));
+      const pathClass = routes[0] === 0 ? "route-path" : "route-path alt";
+
+      html += `<tr>
+        <td><span class="route-dot" style="background:${color}"></span>${fid}</td>
+        <td style="font-weight:600;color:${color}">${tc}</td>
+        <td><span class="${pathClass}">${pathDesc}</span>${routes.length > 1 ? ' (mixed)' : ''}</td>
+        <td>${samplePkt.hops.length} hops</td>
+        <td>${avgE2e} µs</td>
+        <td style="color:${allOk ? 'var(--green)' : 'var(--red)'}; font-weight:700;">${allOk ? 'OK' : 'MISS'}</td>
+      </tr>`;
+    }
+
+    html += `</tbody></table>`;
+    el.innerHTML = html;
+  }
+
+  /* ── Responsive ── */
+  let resizeTimer;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 300); });
+
+  /* ── Auto-Solve ── */
   const badge = document.getElementById("engineBadge");
   badge.className = "engine-badge ready";
   badge.innerHTML = "&#9679; Greedy Ready";
   resolveBtn.disabled = false;
   runGreedy();
 
-  /* ── Load GLPK/WASM in background ─────────────── */
+  /* ── GLPK Background Load ── */
   (async () => {
     try {
       const GLPK = (await import('./vendor/glpk.js')).default;
@@ -282,7 +414,7 @@
       badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
       resolveBtn.textContent = "Re-Solve (ILP)";
     } catch (e) {
-      console.warn('GLPK load failed (greedy works):', e);
+      console.warn('GLPK load failed:', e);
       resolveBtn.textContent = "Re-Solve (Greedy)";
     }
   })();
