@@ -157,6 +157,23 @@ export const FRER_NODE_COLORS = {
   ACU_IT:    { fill: "#fef3c7", stroke: "#f59e0b", label: "ACU-IT",       shortLabel: "ECU" }
 };
 
+/* ── 3D Shuttle Positions (matches roii.html + HUB_F) ── */
+export const FRER_3D_POSITIONS = {
+  LIDAR_FL: {x:-8.5, y:10, z:16.2}, LIDAR_FC: {x:0, y:5.5, z:18.5},
+  LIDAR_FR: {x:8.5, y:10, z:16.2},  LIDAR_RC: {x:0, y:5.5, z:-18.5},
+  RADAR_FC: {x:0, y:7, z:18.5},     RADAR_FL: {x:-7, y:6.5, z:17.5},
+  RADAR_FR: {x:7, y:6.5, z:17.5},   RADAR_RL: {x:-7, y:6.5, z:-18},
+  RADAR_RR: {x:7, y:6.5, z:-18},
+  HUB_F:    {x:0, y:4, z:14},
+  SW_FL:    {x:-4, y:2, z:10},       SW_FR: {x:4, y:2, z:10},
+  SW_REAR:  {x:0, y:2, z:-8},       ACU_IT: {x:0, y:2, z:-15}
+};
+
+export const FRER_3D_TILTS = {
+  RADAR_FL: {y:-Math.PI/6}, RADAR_FR: {y:Math.PI/6},
+  RADAR_RL: {y:Math.PI/6},  RADAR_RR: {y:-Math.PI/6}
+};
+
 /* ── Scenario Description ──────────────────────── */
 export const FRER_SCENARIO = {
   title: "ROii Multi-Path Route Selection",
