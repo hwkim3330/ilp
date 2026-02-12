@@ -394,10 +394,31 @@
       m.nodes = m.nodes.filter(n => n.id !== failNode);
       m.links = m.links.filter(l => l.from !== failNode && l.to !== failNode);
       const linkIds = new Set(m.links.map(l => l.id));
+      // Clear broken hardcoded paths — let BFS re-route
+      m.flows.forEach(f => {
+        if (f.path && !f.path.every(lid => linkIds.has(lid))) delete f.path;
+      });
+      // BFS reachability — remove genuinely stranded flows
+      const adj = new Map();
+      for (const l of m.links) {
+        if (!adj.has(l.from)) adj.set(l.from, []);
+        adj.get(l.from).push(l.to);
+      }
+      function canReach(src, dst) {
+        const visited = new Set([src]);
+        const queue = [src];
+        while (queue.length) {
+          const node = queue.shift();
+          if (node === dst) return true;
+          for (const next of (adj.get(node) || [])) {
+            if (!visited.has(next)) { visited.add(next); queue.push(next); }
+          }
+        }
+        return false;
+      }
       m.flows = m.flows.filter(f => {
         if (f.src === failNode || f.dst === failNode) return false;
-        if (f.path && !f.path.every(lid => linkIds.has(lid))) return false;
-        return true;
+        return canReach(f.src, f.dst);
       });
     }
     return m;
