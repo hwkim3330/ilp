@@ -661,7 +661,7 @@ export function renderGCL(model, result, opts = {}) {
       const c = rep ? colorFn(rep.id) : (FLOW_COLORS_HEX[t] || "#7b61ff");
       return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t} (P${rep?.priority ?? '?'})</div>`;
     }).join("") +
-      `<div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>Guard Band</div>` +
+      `<div class="legend-item"><div class="legend-dot" style="background:#f9a825;background-image:repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)"></div>Guard Band</div>` +
       `<div class="legend-item"><div class="legend-dot" style="background:${beColor}"></div>Best-Effort</div>`;
   }
 
@@ -692,6 +692,21 @@ export function renderGCL(model, result, opts = {}) {
     .attr("viewBox", `0 0 ${W} ${H}`)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
+  // Defs: hatched pattern for guard bands + drop shadow
+  const defs = svg.append("defs");
+  const guardPat = defs.append("pattern")
+    .attr("id", "guardHatch").attr("patternUnits", "userSpaceOnUse")
+    .attr("width", 6).attr("height", 6).attr("patternTransform", "rotate(45)");
+  guardPat.append("rect").attr("width", 6).attr("height", 6).attr("fill", "#f9a825");
+  guardPat.append("line").attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 6)
+    .attr("stroke", "rgba(0,0,0,0.2)").attr("stroke-width", 2);
+
+  const dropShadow = defs.append("filter").attr("id", "barShadow")
+    .attr("x", "-5%").attr("y", "-5%").attr("width", "110%").attr("height", "120%");
+  dropShadow.append("feDropShadow")
+    .attr("dx", 0).attr("dy", 1).attr("stdDeviation", 1.5)
+    .attr("flood-color", "rgba(0,0,0,0.12)");
+
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
   const innerW = W - margin.left - margin.right;
   const innerH = activeLinks.length * rowH;
@@ -708,7 +723,7 @@ export function renderGCL(model, result, opts = {}) {
   // X axis
   g.append("g").attr("class", "gcl-axis")
     .attr("transform", `translate(0,${innerH})`)
-    .call(d3.axisBottom(x).ticks(10).tickFormat(d => d + " µs"))
+    .call(d3.axisBottom(x).ticks(10).tickFormat(d => d + " \u00b5s"))
     .selectAll("text").attr("fill", "var(--text3)");
 
   // Y axis
@@ -729,6 +744,9 @@ export function renderGCL(model, result, opts = {}) {
     .attr("width", innerW).attr("height", y.bandwidth())
     .attr("fill", (d, i) => i % 2 === 0 ? "rgba(59,130,246,0.03)" : "transparent").attr("rx", 4);
 
+  // Collect all flow bars for cross-flow highlighting
+  const allFlowBars = [];
+
   // GCL bars
   activeLinks.forEach(link => {
     const entries = result.gcl.links[link.id]?.entries || [];
@@ -737,42 +755,79 @@ export function renderGCL(model, result, opts = {}) {
     // When zoomed, only show entries within visible range
     const visibleEntries = isZoomed ? entries.filter(e => e.start_us < xMax) : entries;
 
-    barG.selectAll("rect")
+    barG.selectAll("rect.gcl-bar")
       .data(visibleEntries).enter().append("rect")
-      .attr("class", "gcl-bar")
+      .attr("class", d => {
+        const fid = d.note.includes("guard") || d.note.includes("best-effort") ? '' : d.note.split("#")[0];
+        return `gcl-bar ${fid ? 'flow-bar' : ''}`
+      })
+      .attr("data-flow", d => {
+        if (d.note.includes("guard") || d.note.includes("best-effort")) return '';
+        return d.note.split("#")[0];
+      })
       .attr("x", d => x(d.start_us))
       .attr("y", y(link.id))
       .attr("width", 0)
       .attr("height", y.bandwidth())
       .attr("fill", d => {
-        if (d.note.includes("guard")) return "#f9a825";
+        if (d.note.includes("guard")) return "url(#guardHatch)";
         if (d.note.includes("best-effort")) return beColor;
         return colorFn(d.note);
       })
-      .attr("stroke", d => d.note.includes("best-effort") ? beBorder : "none")
-      .attr("stroke-width", 0.5)
-      .attr("opacity", d => d.note.includes("best-effort") ? 0.3 : 0.85)
-      .attr("rx", 2)
-      .on("mouseover", (evt, d) => {
+      .attr("stroke", d => {
+        if (d.note.includes("guard")) return "#e8a317";
+        if (d.note.includes("best-effort")) return beBorder;
+        return "rgba(255,255,255,0.4)";
+      })
+      .attr("stroke-width", d => d.note.includes("best-effort") ? 0.5 : 0.8)
+      .attr("opacity", d => d.note.includes("best-effort") ? 0.3 : 0.9)
+      .attr("rx", 3)
+      .attr("filter", d => d.note.includes("best-effort") || d.note.includes("guard") ? "none" : "url(#barShadow)")
+      .on("mouseover", function(evt, d) {
+        const fid = d.note.split("#")[0];
+        // Cross-flow highlight: dim all, brighten same flow
+        if (!d.note.includes("best-effort") && !d.note.includes("guard")) {
+          g.selectAll(".flow-bar").attr("opacity", function() {
+            return d3.select(this).attr("data-flow") === fid ? 1.0 : 0.25;
+          });
+        }
+        const flowId = d.note.split("#")[0];
+        const pktId = d.note;
+        const pktRow = result.packetRows.find(p => p.packet_id === pktId);
         showTip(evt, `
-          <div class="tt-title">${d.note}</div>
+          <div class="tt-title">${pktId}</div>
+          <div class="tt-row"><span class="tt-k">Flow</span><span class="tt-v">${flowId.replace("f_","")}</span></div>
           <div class="tt-row"><span class="tt-k">Gate</span><span class="tt-v">${d.gate_mask}</span></div>
-          <div class="tt-row"><span class="tt-k">Start</span><span class="tt-v">${d.start_us} µs</span></div>
-          <div class="tt-row"><span class="tt-k">End</span><span class="tt-v">${d.end_us} µs</span></div>
-          <div class="tt-row"><span class="tt-k">Duration</span><span class="tt-v">${d.duration_us} µs</span></div>
+          <div class="tt-row"><span class="tt-k">Start</span><span class="tt-v">${d.start_us} \u00b5s</span></div>
+          <div class="tt-row"><span class="tt-k">End</span><span class="tt-v">${d.end_us} \u00b5s</span></div>
+          <div class="tt-row"><span class="tt-k">Duration</span><span class="tt-v">${d.duration_us} \u00b5s</span></div>
+          ${pktRow ? `<div class="tt-row"><span class="tt-k">E2E Delay</span><span class="tt-v">${pktRow.e2e_delay_us} \u00b5s</span></div>` : ''}
         `);
       })
       .on("mousemove", (evt) => {
         tooltipEl.style.left = (evt.clientX + 14) + "px";
         tooltipEl.style.top = (evt.clientY - 10) + "px";
       })
-      .on("mouseout", hideTip)
+      .on("mouseout", function() {
+        g.selectAll(".flow-bar").attr("opacity", 0.9);
+        hideTip();
+      })
       .transition().duration(800).delay((d, i) => i * 30)
       .attr("width", d => {
         const endClamped = Math.min(d.start_us + d.duration_us, xMax);
         const w = x(endClamped) - x(d.start_us);
         return d.note.includes("best-effort") ? Math.max(w, 0) : Math.max(w, 3);
       });
+
+    // Gate transition markers — small ticks at flow/guard boundaries
+    const transitions = visibleEntries.filter(e => !e.note.includes("best-effort"));
+    barG.selectAll("line.gate-tick")
+      .data(transitions).enter().append("line")
+      .attr("class", "gate-tick")
+      .attr("x1", d => x(d.start_us)).attr("x2", d => x(d.start_us))
+      .attr("y1", y(link.id) - 2).attr("y2", y(link.id) + 4)
+      .attr("stroke", d => d.note.includes("guard") ? "#e8a317" : "rgba(0,0,0,0.3)")
+      .attr("stroke-width", 1);
 
     // Labels on flow bars
     barG.selectAll("text")
@@ -794,9 +849,9 @@ export function renderGCL(model, result, opts = {}) {
   svg.append("text")
     .attr("x", margin.left).attr("y", margin.top - 10)
     .attr("fill", "var(--text3)").attr("font-size", "10px")
-    .text(`Cycle: ${model.cycle_time_us} µs | Guard: ${model.guard_band_us} µs | Active: ${activeLinks.length}/${model.links.length} links${isZoomed ? ` | Zoom: 0–${Math.round(xMax)} µs` : ''}`);
+    .text(`Cycle: ${model.cycle_time_us} \u00b5s | Guard: ${model.guard_band_us} \u00b5s | Active: ${activeLinks.length}/${model.links.length} links${isZoomed ? ` | Zoom: 0\u2013${Math.round(xMax)} \u00b5s` : ''}`);
 
-  // Zoom indicator bar (shows which portion of the full cycle is displayed)
+  // Zoom indicator bar
   if (isZoomed) {
     const zoomBarY = H - 14;
     const zoomRatio = xMax / model.cycle_time_us;
@@ -1044,6 +1099,20 @@ export function renderSwitchGCL(model, result, opts = {}) {
   if (!area || !switches.length) return;
   area.innerHTML = "";
 
+  // Compute auto-zoom range across all switches
+  let globalMaxActive = 0;
+  switches.forEach(sw => {
+    model.links.filter(l => l.from === sw.id).forEach(l => {
+      const entries = result.gcl.links[l.id]?.entries || [];
+      entries.forEach(e => {
+        if (!e.note.includes("best-effort")) globalMaxActive = Math.max(globalMaxActive, e.end_us);
+      });
+    });
+  });
+  const zoomThreshold = model.cycle_time_us * 0.3;
+  const isZoomed = globalMaxActive > 0 && globalMaxActive < zoomThreshold;
+  const xMax = isZoomed ? Math.max(globalMaxActive * 1.5, globalMaxActive + 20) : model.cycle_time_us;
+
   switches.forEach(sw => {
     const egressLinks = model.links.filter(l => l.from === sw.id);
     const activeEgress = egressLinks.filter(l => {
@@ -1070,45 +1139,138 @@ export function renderSwitchGCL(model, result, opts = {}) {
         <div class="sw-dot" style="background:${sw.color};"></div>
         <span class="sw-name">${sw.label}</span>
         <span class="sw-chip">${sw.chip}</span>
-        <span class="sw-stats">${activeEgress.length} port${activeEgress.length > 1 ? 's' : ''} &middot; ${tsnCount} entries &middot; ${utilPct}% util</span>
+        <span class="sw-stats">${activeEgress.length} port${activeEgress.length > 1 ? 's' : ''} \u00b7 ${tsnCount} entries \u00b7 ${utilPct}% util</span>
       </div>
     `;
 
+    // Mini SVG Gantt per egress port
     activeEgress.forEach(link => {
       const entries = result.gcl.links[link.id]?.entries || [];
       const linkDiv = document.createElement("div");
       linkDiv.style.marginBottom = "14px";
 
-      let html = `<div class="link-label-dir">${link.from} &rarr; ${link.to}</div>`;
-      html += `<table class="gcl-entry-table">
-        <thead><tr><th>#</th><th>Gate Mask</th><th>TC</th><th>Start (µs)</th><th>End (µs)</th><th>Duration</th><th>Type</th></tr></thead><tbody>`;
+      // Label
+      const labelDiv = document.createElement("div");
+      labelDiv.className = "link-label-dir";
+      labelDiv.innerHTML = `${link.from} \u2192 ${link.to}`;
+      linkDiv.appendChild(labelDiv);
 
-      entries.forEach(e => {
+      // Mini Gantt SVG
+      const ganttH = 28;
+      const ganttW = 100; // percentage-based via viewBox
+      const svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svgEl.setAttribute("viewBox", `0 0 400 ${ganttH}`);
+      svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      svgEl.style.width = "100%";
+      svgEl.style.height = ganttH + "px";
+      svgEl.style.borderRadius = "6px";
+      svgEl.style.overflow = "hidden";
+
+      // Hatched pattern for guard bands (inline in each mini SVG)
+      const defsEl = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const patEl = document.createElementNS("http://www.w3.org/2000/svg", "pattern");
+      patEl.setAttribute("id", `gh_${sw.id}_${link.id.replace(/[^a-zA-Z0-9]/g,'_')}`);
+      patEl.setAttribute("patternUnits", "userSpaceOnUse");
+      patEl.setAttribute("width", "5"); patEl.setAttribute("height", "5");
+      patEl.setAttribute("patternTransform", "rotate(45)");
+      const patBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      patBg.setAttribute("width", "5"); patBg.setAttribute("height", "5"); patBg.setAttribute("fill", "#f9a825");
+      patEl.appendChild(patBg);
+      const patLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      patLine.setAttribute("x1", "0"); patLine.setAttribute("y1", "0");
+      patLine.setAttribute("x2", "0"); patLine.setAttribute("y2", "5");
+      patLine.setAttribute("stroke", "rgba(0,0,0,0.2)"); patLine.setAttribute("stroke-width", "1.5");
+      patEl.appendChild(patLine);
+      defsEl.appendChild(patEl);
+      svgEl.appendChild(defsEl);
+
+      // Background
+      const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bgRect.setAttribute("width", "400"); bgRect.setAttribute("height", String(ganttH));
+      bgRect.setAttribute("fill", "rgba(0,0,0,0.03)"); bgRect.setAttribute("rx", "4");
+      svgEl.appendChild(bgRect);
+
+      const visibleEntries = isZoomed ? entries.filter(e => e.start_us < xMax) : entries;
+      const patId = `gh_${sw.id}_${link.id.replace(/[^a-zA-Z0-9]/g,'_')}`;
+
+      visibleEntries.forEach(e => {
         const isBE = e.note.includes("best-effort");
         const isGuard = e.note.includes("guard");
-        const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
-        let tcLabel = "-";
-        if (!isBE && !isGuard) {
-          const oneIdx = e.gate_mask.indexOf('1');
-          if (oneIdx >= 0) tcLabel = "TC" + (7 - oneIdx);
-        } else if (isGuard) { tcLabel = "guard"; }
-        const typeLabel = isGuard ? "Guard Band" : isBE ? "BE Window" : e.note.split("#")[0].replace("f_","");
-        const barColor = isGuard ? "#f59e0b" : isBE ? "rgba(0,0,0,0.08)" : colorFn(e.note);
-        const barW = Math.max((e.duration_us / model.cycle_time_us * 100), 1.5).toFixed(1);
+        const sx = (e.start_us / xMax) * 400;
+        const ew = Math.max(((Math.min(e.end_us, xMax) - e.start_us) / xMax) * 400, isBE ? 0 : 2);
 
-        html += `<tr>
-          <td>${e.index}</td>
-          <td class="gate-mask ${cls}">${e.gate_mask}</td>
-          <td style="font-weight:600;${isGuard ? 'color:#f59e0b' : isBE ? 'opacity:0.4' : 'color:' + barColor}">${tcLabel}</td>
-          <td>${e.start_us}</td><td>${e.end_us}</td>
-          <td>${e.duration_us} µs</td>
-          <td><span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
-            <div class="entry-bar" style="background:${barColor};width:${barW}%;opacity:${isBE ? 0.15 : 0.7};"></div>
-          </td></tr>`;
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", String(sx));
+        rect.setAttribute("y", "0");
+        rect.setAttribute("width", String(ew));
+        rect.setAttribute("height", String(ganttH));
+        rect.setAttribute("rx", "2");
+
+        if (isGuard) {
+          rect.setAttribute("fill", `url(#${patId})`);
+          rect.setAttribute("opacity", "0.85");
+        } else if (isBE) {
+          rect.setAttribute("fill", "rgba(0,0,0,0.04)");
+        } else {
+          rect.setAttribute("fill", colorFn(e.note));
+          rect.setAttribute("opacity", "0.85");
+        }
+        svgEl.appendChild(rect);
+
+        // Flow label inside bar if wide enough
+        if (!isBE && !isGuard && ew > 30) {
+          const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          txt.setAttribute("x", String(sx + ew / 2));
+          txt.setAttribute("y", String(ganttH / 2 + 1));
+          txt.setAttribute("text-anchor", "middle");
+          txt.setAttribute("dominant-baseline", "central");
+          txt.setAttribute("font-size", "9");
+          txt.setAttribute("fill", "#fff");
+          txt.setAttribute("font-weight", "600");
+          txt.textContent = e.note.split("#")[0].replace("f_", "");
+          svgEl.appendChild(txt);
+        }
       });
 
-      html += `</tbody></table>`;
-      linkDiv.innerHTML = html;
+      linkDiv.appendChild(svgEl);
+
+      // Gate mask row — visual 8-queue blocks
+      const gateDiv = document.createElement("div");
+      gateDiv.style.cssText = "display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;";
+
+      // Show unique gate states (excluding BE)
+      const uniqueGates = [];
+      const seenMasks = new Set();
+      visibleEntries.forEach(e => {
+        if (e.note.includes("best-effort")) return;
+        if (!seenMasks.has(e.gate_mask)) {
+          seenMasks.add(e.gate_mask);
+          uniqueGates.push(e);
+        }
+      });
+
+      uniqueGates.forEach(e => {
+        const isGuard = e.note.includes("guard");
+        const gateEl = document.createElement("div");
+        gateEl.style.cssText = "display:flex;align-items:center;gap:2px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,0.03);font-size:0.7rem;";
+
+        // 8 queue blocks
+        for (let q = 0; q < 8; q++) {
+          const qOpen = e.gate_mask[q] === '1';
+          const block = document.createElement("span");
+          block.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:2px;border:1px solid ${isGuard ? '#e8a317' : qOpen ? colorFn(e.note) : 'rgba(0,0,0,0.15)'};background:${isGuard ? '#f9a825' : qOpen ? colorFn(e.note) : 'transparent'};opacity:${qOpen || isGuard ? '0.85' : '0.3'};`;
+          block.title = `TC${7 - q}: ${qOpen ? 'OPEN' : 'CLOSED'}`;
+          gateEl.appendChild(block);
+        }
+
+        const lbl = document.createElement("span");
+        lbl.style.cssText = `margin-left:4px;font-weight:600;color:${isGuard ? '#e8a317' : 'var(--text2)'};`;
+        lbl.textContent = isGuard ? 'guard' : e.note.split("#")[0].replace("f_","");
+        gateEl.appendChild(lbl);
+        gateDiv.appendChild(gateEl);
+      });
+
+      linkDiv.appendChild(gateDiv);
       card.appendChild(linkDiv);
     });
 
