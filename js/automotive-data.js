@@ -93,17 +93,17 @@ export function getAutomotivePositions(W, H) {
 
 /* ── Domain Color Map ──────────────────────────── */
 export const AUTOMOTIVE_NODE_COLORS = {
-  CAMERA:       { fill: "#1a3a6b", stroke: "#4895ef", label: "CAM",   shortLabel: "Sensor" },
-  LIDAR:        { fill: "#0a3a3a", stroke: "#00f5d4", label: "LiDAR", shortLabel: "Sensor" },
-  RADAR:        { fill: "#3a3000", stroke: "#f9a825", label: "Radar", shortLabel: "Sensor" },
-  ADAS_ECU:     { fill: "#1a3a6b", stroke: "#4895ef", label: "ADAS",  shortLabel: "ECU" },
-  SW1:          { fill: "#2a2060", stroke: "#7b61ff", label: "SW1",   shortLabel: "Switch" },
-  GATEWAY:      { fill: "#2a2060", stroke: "#7b61ff", label: "GW",    shortLabel: "Gateway" },
-  SW2:          { fill: "#2a2060", stroke: "#7b61ff", label: "SW2",   shortLabel: "Switch" },
-  BRAKE_ECU:    { fill: "#3a1020", stroke: "#ff5252", label: "Brake", shortLabel: "ECU" },
-  POWERTRAIN:   { fill: "#3a1020", stroke: "#ff5252", label: "PWR",   shortLabel: "ECU" },
-  INFOTAINMENT: { fill: "#3a1040", stroke: "#f06292", label: "IVI",   shortLabel: "Head Unit" },
-  BODY_CTRL:    { fill: "#0a3020", stroke: "#69f0ae", label: "Body",  shortLabel: "ECU" }
+  CAMERA:       { fill: "#3B82F6", stroke: "#93c5fd", label: "CAM",   shortLabel: "Sensor" },
+  LIDAR:        { fill: "#0891b2", stroke: "#67e8f9", label: "LiDAR", shortLabel: "Sensor" },
+  RADAR:        { fill: "#d97706", stroke: "#fbbf24", label: "Radar", shortLabel: "Sensor" },
+  ADAS_ECU:     { fill: "#3B82F6", stroke: "#93c5fd", label: "ADAS",  shortLabel: "ECU" },
+  SW1:          { fill: "#7c3aed", stroke: "#a78bfa", label: "SW1",   shortLabel: "Switch" },
+  GATEWAY:      { fill: "#7c3aed", stroke: "#a78bfa", label: "GW",    shortLabel: "Gateway" },
+  SW2:          { fill: "#7c3aed", stroke: "#a78bfa", label: "SW2",   shortLabel: "Switch" },
+  BRAKE_ECU:    { fill: "#dc2626", stroke: "#fca5a5", label: "Brake", shortLabel: "ECU" },
+  POWERTRAIN:   { fill: "#dc2626", stroke: "#fca5a5", label: "PWR",   shortLabel: "ECU" },
+  INFOTAINMENT: { fill: "#db2777", stroke: "#f9a8d4", label: "IVI",   shortLabel: "Head Unit" },
+  BODY_CTRL:    { fill: "#059669", stroke: "#6ee7b7", label: "Body",  shortLabel: "ECU" }
 };
 
 /* ── Scenario Description ──────────────────────── */
@@ -111,18 +111,18 @@ export const SCENARIO_DESC = {
   title: "Automotive In-Vehicle TSN Network",
   description: "A realistic automotive Ethernet backbone demonstrating IEEE 802.1Qbv Time-Aware Shaping for in-vehicle communication. The network connects ADAS sensors (camera, LiDAR, radar) through TSN switches to safety-critical actuator ECUs (brake, powertrain) and infotainment.",
   flows: [
-    { name: "Camera \u2192 ADAS ECU", color: "#4895ef", desc: "1400B raw frame, P7, 100\u00b5s deadline" },
-    { name: "LiDAR \u2192 ADAS ECU", color: "#00f5d4", desc: "1200B point cloud, P7, 200\u00b5s deadline" },
-    { name: "Radar \u2192 ADAS ECU", color: "#f9a825", desc: "256B detection, P6, 150\u00b5s deadline" },
-    { name: "ADAS \u2192 Brake ECU", color: "#ff5252", desc: "64B command, P7, 50\u00b5s deadline, 2 pkts/cycle" },
-    { name: "ADAS \u2192 Powertrain", color: "#7b61ff", desc: "128B torque request, P7, 80\u00b5s deadline, 2 pkts/cycle" },
-    { name: "Camera \u2192 Infotainment", color: "#f06292", desc: "1024B video stream, P3, best-effort" }
+    { name: "Camera \u2192 ADAS ECU", color: "#3B82F6", desc: "1400B raw frame, P7, 100\u00b5s deadline" },
+    { name: "LiDAR \u2192 ADAS ECU", color: "#0891b2", desc: "1200B point cloud, P7, 200\u00b5s deadline" },
+    { name: "Radar \u2192 ADAS ECU", color: "#d97706", desc: "256B detection, P6, 150\u00b5s deadline" },
+    { name: "ADAS \u2192 Brake ECU", color: "#dc2626", desc: "64B command, P7, 50\u00b5s deadline, 2 pkts/cycle" },
+    { name: "ADAS \u2192 Powertrain", color: "#7c3aed", desc: "128B torque request, P7, 80\u00b5s deadline, 2 pkts/cycle" },
+    { name: "Camera \u2192 Infotainment", color: "#db2777", desc: "1024B video stream, P3, best-effort" }
   ],
   domains: [
-    { name: "ADAS / Perception", color: "#4895ef" },
-    { name: "Chassis / Safety", color: "#ff5252" },
-    { name: "Body Control", color: "#69f0ae" },
-    { name: "Backbone / Network", color: "#7b61ff" },
-    { name: "Infotainment", color: "#f06292" }
+    { name: "ADAS / Perception", color: "#3B82F6" },
+    { name: "Chassis / Safety", color: "#dc2626" },
+    { name: "Body Control", color: "#059669" },
+    { name: "Backbone / Network", color: "#7c3aed" },
+    { name: "Infotainment", color: "#db2777" }
   ]
 };

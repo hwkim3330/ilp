@@ -68,6 +68,23 @@
     pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
     textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
 
+    /* ── Scenario Controls ─────────────────────── */
+    .scenario-group { display: flex; gap: 4px; }
+    .scenario-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid rgba(59,130,246,0.2); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .scenario-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .scenario-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .scenario-btn.active.fail { background: var(--red); border-color: var(--red); }
+    .failure-banner {
+      display: none; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25); color: var(--red);
+      margin-top: 8px; align-items: center; gap: 8px;
+    }
+    .failure-banner.show { display: flex; }
+
     /* ── Header ─────────────────────────────────── */
     .keti-header {
       display: flex; align-items: center; justify-content: center;
@@ -146,8 +163,16 @@
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div class="scenario-group">
+          <button class="scenario-btn active" data-scenario="normal">Normal</button>
+          <button class="scenario-btn" data-scenario="fail-gw">GW Failure</button>
+          <button class="scenario-btn" data-scenario="fail-sw1">SW1 Failure</button>
+        </div>
         <div id="status" style="font-size:0.82rem;"></div>
         <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+      </div>
+      <div class="failure-banner" id="failureBanner">
+        <span>&#9888;</span> <span id="failureText"></span>
       </div>
     </div>
 
@@ -187,8 +212,20 @@
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;
+  let currentScenario = 'normal';
   let currentModel = JSON.parse(JSON.stringify(AUTOMOTIVE_MODEL));
   let currentResult = null;
+
+  /* ── Build Model for Scenario ── */
+  function buildModel(scenario) {
+    const m = JSON.parse(JSON.stringify(AUTOMOTIVE_MODEL));
+    if (scenario === 'fail-gw') {
+      m.links = m.links.filter(l => l.from !== 'GATEWAY' && l.to !== 'GATEWAY');
+    } else if (scenario === 'fail-sw1') {
+      m.links = m.links.filter(l => l.from !== 'SW1' && l.to !== 'SW1');
+    }
+    return m;
+  }
 
   /* ── Init ────────────────────────────────────── */
   initTooltip();
@@ -227,6 +264,8 @@
   inputEl.value = JSON.stringify(AUTOMOTIVE_MODEL, null, 2);
 
   resetBtn.addEventListener("click", () => {
+    currentScenario = 'normal';
+    updateScenarioUI();
     inputEl.value = JSON.stringify(AUTOMOTIVE_MODEL, null, 2);
     currentModel = JSON.parse(JSON.stringify(AUTOMOTIVE_MODEL));
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
@@ -234,6 +273,39 @@
   });
 
   resolveBtn.addEventListener("click", runILPSolve);
+
+  /* ── Scenario Buttons ── */
+  const failureBanner = document.getElementById("failureBanner");
+  const failureText = document.getElementById("failureText");
+
+  const SCENARIO_MESSAGES = {
+    'fail-gw': 'GATEWAY offline \u2014 SW1\u2194SW2 disconnected, brake/powertrain unreachable from sensors',
+    'fail-sw1': 'SW1 offline \u2014 all sensor\u2192ADAS paths broken, safety-critical flows disrupted'
+  };
+
+  function updateScenarioUI() {
+    document.querySelectorAll('.scenario-btn').forEach(btn => {
+      const s = btn.dataset.scenario;
+      btn.classList.toggle('active', s === currentScenario);
+      btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
+    });
+    if (currentScenario !== 'normal' && SCENARIO_MESSAGES[currentScenario]) {
+      failureBanner.classList.add('show');
+      failureText.textContent = SCENARIO_MESSAGES[currentScenario];
+    } else {
+      failureBanner.classList.remove('show');
+    }
+  }
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentScenario = btn.dataset.scenario;
+      updateScenarioUI();
+      const model = buildModel(currentScenario);
+      inputEl.value = JSON.stringify(model, null, 2);
+      runGreedy();
+    });
+  });
 
   function runGreedy() {
     try {

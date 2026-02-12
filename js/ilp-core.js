@@ -5,9 +5,9 @@
 
 /* ── Color Mapping ─────────────────────────────── */
 const FLOW_COLORS_HEX = {
-  control: "#4895ef", sensor: "#00f5d4", video: "#f06292",
-  camera: "#4895ef", lidar: "#00f5d4", radar: "#f9a825",
-  brake: "#ff5252", powertrain: "#7b61ff", infotainment: "#f06292"
+  control: "#3B82F6", sensor: "#0d9488", video: "#db2777",
+  camera: "#3B82F6", lidar: "#0d9488", radar: "#d97706",
+  brake: "#dc2626", powertrain: "#7c3aed", infotainment: "#db2777"
 };
 
 export function flowColor(flowId) {
@@ -455,8 +455,8 @@ export function renderTopology(model, result, opts = {}) {
       legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${ft} (P${prio?.priority ?? '?'})</div>`;
     });
     if (!nodeColors) {
-      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#2a4080"></div>switch</div>`;
-      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#1a5040"></div>endstation</div>`;
+      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>switch</div>`;
+      legendEl.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#059669"></div>endstation</div>`;
     }
   }
 
@@ -477,7 +477,7 @@ export function renderTopology(model, result, opts = {}) {
     .attr("viewBox", "0 0 10 7").attr("refX", 35).attr("refY", 3.5)
     .attr("markerWidth", 8).attr("markerHeight", 6)
     .attr("orient", "auto")
-    .append("polygon").attr("points", "0 0, 10 3.5, 0 7").attr("fill", "#3a5590");
+    .append("polygon").attr("points", "0 0, 10 3.5, 0 7").attr("fill", "#94a3b8");
 
   // Build unique links
   const linkPairs = new Map();
@@ -491,8 +491,8 @@ export function renderTopology(model, result, opts = {}) {
     const custom = nodeColors ? nodeColors[n.id] : null;
     return {
       id: n.id, type: n.type,
-      color: custom ? custom.fill : (n.type === "switch" ? "#2a4080" : "#1a5040"),
-      stroke: custom ? custom.stroke : (n.type === "switch" ? "#4895ef" : "#00f5d4"),
+      color: custom ? custom.fill : (n.type === "switch" ? "#6366f1" : "#059669"),
+      stroke: custom ? custom.stroke : (n.type === "switch" ? "#a5b4fc" : "#6ee7b7"),
       label: custom?.label || n.id,
       shortLabel: custom?.shortLabel || (n.type === "switch" ? "SW" : "ES")
     };
@@ -645,8 +645,8 @@ export function renderGCL(model, result, opts = {}) {
   const containerId = opts.containerId || "gclContainer";
   const legendId = opts.legendId || "gclLegend";
   const colorFn = opts.flowColorFn || flowColor;
-  const beColor = opts.beColor || '#0d1a30';
-  const beBorder = opts.beBorder || 'rgba(30,48,96,.3)';
+  const beColor = opts.beColor || '#cbd5e1';
+  const beBorder = opts.beBorder || 'rgba(100,116,139,.2)';
 
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -1070,8 +1070,8 @@ export function renderInputPreview(model, containerId) {
   // Simple force layout for preview
   const nodes = model.nodes.map(n => ({
     id: n.id, type: n.type,
-    color: n.type === "switch" ? "#2a4080" : "#1a5040",
-    stroke: n.type === "switch" ? "#4895ef" : "#00f5d4"
+    color: n.type === "switch" ? "#6366f1" : "#059669",
+    stroke: n.type === "switch" ? "#a5b4fc" : "#6ee7b7"
   }));
 
   const linkPairs = new Map();

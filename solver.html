@@ -70,6 +70,37 @@
     .preview-flow-table td { color: var(--text2); border-bottom-color: rgba(59,130,246,0.08); }
     .badge { border-color: rgba(59,130,246,0.2); color: var(--blue); background: rgba(59,130,246,0.06); }
 
+    /* ── Scenario Controls ─────────────────────── */
+    .scenario-group { display: flex; gap: 4px; }
+    .scenario-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid rgba(59,130,246,0.2); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .scenario-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .scenario-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .scenario-btn.active.fail { background: var(--red); border-color: var(--red); }
+    .failure-banner {
+      display: none; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25); color: var(--red);
+      margin-top: 8px; align-items: center; gap: 8px;
+    }
+    .failure-banner.show { display: flex; }
+
+    /* ── Link Toggle Chips ─────────────────────── */
+    .link-toggles { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 4px; }
+    .link-chip {
+      padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;
+      border: 1px solid rgba(59,130,246,0.25); background: rgba(59,130,246,0.06);
+      color: var(--blue); cursor: pointer; transition: all 0.2s; user-select: none;
+    }
+    .link-chip:hover { border-color: var(--blue); background: rgba(59,130,246,0.12); }
+    .link-chip.disabled {
+      background: rgba(220,38,38,0.06); border-color: rgba(220,38,38,0.3);
+      color: var(--red); text-decoration: line-through;
+    }
+    .link-chip.disabled:hover { background: rgba(220,38,38,0.12); }
+
     /* ── Header ─────────────────────────────────── */
     .keti-header {
       display: flex; align-items: center; justify-content: center;
@@ -105,7 +136,16 @@
           <div class="toolbar">
             <button class="btn btn-secondary" id="sampleBtn">Load Sample</button>
             <button class="btn btn-primary" id="solveBtn" disabled>Solve ILP</button>
+            <div class="scenario-group">
+              <button class="scenario-btn active" data-scenario="normal">Normal</button>
+              <button class="scenario-btn" data-scenario="fail-s1">s1 Fail</button>
+              <button class="scenario-btn" data-scenario="fail-s2">s2 Fail</button>
+              <button class="scenario-btn" data-scenario="fail-s3">s3 Fail</button>
+            </div>
             <div id="status" style="margin-top:0; margin-left:8px;"><span class="spinner"></span>Initializing...</div>
+          </div>
+          <div class="failure-banner" id="failureBanner">
+            <span>&#9888;</span> <span id="failureText"></span>
           </div>
         </div>
         <div class="preview-panel" id="previewPanel">
@@ -123,6 +163,7 @@
       <div class="card">
         <div class="card-title">Network Topology</div>
         <div class="legend" id="topoLegend"></div>
+        <div class="link-toggles" id="linkToggles"></div>
         <div class="svg-container" id="topoContainer" style="height:380px;"></div>
       </div>
       <div class="card">
@@ -206,8 +247,17 @@
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;
+  let currentScenario = 'normal';
+  let disabledLinks = new Set();
   let currentModel = SAMPLE;
   let currentResult = null;
+
+  /* ── Build Model with Failures ── */
+  function buildModel() {
+    const m = JSON.parse(JSON.stringify(SAMPLE));
+    m.links = m.links.filter(l => !disabledLinks.has(l.id));
+    return m;
+  }
 
   /* ── Init ────────────────────────────────────── */
   initTooltip();
@@ -242,12 +292,87 @@
 
   /* ── Buttons ─────────────────────────────────── */
   sampleBtn.addEventListener("click", () => {
+    currentScenario = 'normal';
+    disabledLinks.clear();
+    updateScenarioUI();
     inputEl.value = JSON.stringify(SAMPLE, null, 2);
     statusEl.textContent = "Sample loaded"; statusEl.className = "status-ok";
     updatePreview();
   });
 
   solveBtn.addEventListener("click", runILPSolve);
+
+  /* ── Scenario Buttons ── */
+  const failureBanner = document.getElementById("failureBanner");
+  const failureText = document.getElementById("failureText");
+
+  function updateScenarioUI() {
+    document.querySelectorAll('.scenario-btn').forEach(btn => {
+      const s = btn.dataset.scenario;
+      btn.classList.toggle('active', s === currentScenario);
+      btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
+    });
+    const failNode = currentScenario.replace('fail-', '');
+    if (currentScenario !== 'normal') {
+      failureBanner.classList.add('show');
+      failureText.textContent = `${failNode} offline \u2014 ${disabledLinks.size} links removed, traffic rerouted`;
+    } else {
+      failureBanner.classList.remove('show');
+    }
+    renderLinkToggles();
+  }
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentScenario = btn.dataset.scenario;
+      disabledLinks.clear();
+      if (currentScenario !== 'normal') {
+        const failNode = currentScenario.replace('fail-', '');
+        SAMPLE.links.forEach(l => {
+          if (l.from === failNode || l.to === failNode) disabledLinks.add(l.id);
+        });
+      }
+      updateScenarioUI();
+      const model = buildModel();
+      inputEl.value = JSON.stringify(model, null, 2);
+      updatePreview();
+      runGreedy();
+    });
+  });
+
+  /* ── Link Toggle Chips ── */
+  function renderLinkToggles() {
+    const el = document.getElementById("linkToggles");
+    el.innerHTML = "";
+    SAMPLE.links.forEach(l => {
+      const chip = document.createElement("span");
+      chip.className = "link-chip" + (disabledLinks.has(l.id) ? " disabled" : "");
+      chip.textContent = `${l.from}\u2192${l.to}`;
+      chip.title = l.id;
+      chip.addEventListener("click", () => {
+        if (disabledLinks.has(l.id)) disabledLinks.delete(l.id);
+        else disabledLinks.add(l.id);
+        currentScenario = disabledLinks.size === 0 ? 'normal' : 'custom';
+        document.querySelectorAll('.scenario-btn').forEach(b => {
+          b.classList.remove('active', 'fail');
+          if (b.dataset.scenario === 'normal' && currentScenario === 'normal') b.classList.add('active');
+        });
+        if (disabledLinks.size > 0) {
+          failureBanner.classList.add('show');
+          failureText.textContent = `${disabledLinks.size} link(s) disabled \u2014 traffic rerouted`;
+        } else {
+          failureBanner.classList.remove('show');
+        }
+        renderLinkToggles();
+        const model = buildModel();
+        inputEl.value = JSON.stringify(model, null, 2);
+        updatePreview();
+        runGreedy();
+      });
+      el.appendChild(chip);
+    });
+  }
+  renderLinkToggles();
 
   function runGreedy() {
     try {
