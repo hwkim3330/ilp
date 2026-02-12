@@ -85,12 +85,20 @@ export function expandPackets(model) {
   for (const l of model.links) { if (!adj.has(l.from)) adj.set(l.from, []); adj.get(l.from).push({ to: l.to, lid: l.id }); }
   const pkts = [];
   for (const f of model.flows) {
+    if (!f.period_us || f.period_us <= 0) throw new Error(`flow ${f.id}: period_us must be > 0`);
     let cp = f.candidate_paths || (f.path ? [f.path] : null);
     if (!cp && f.src && f.dst) {
       cp = generateKPaths(adj, f.src, f.dst, Math.max(1, f.k_paths || 2), model.nodes.length + 2);
       if (!cp.length) throw new Error(`No route: ${f.src}->${f.dst}`);
     }
-    const reps = Math.round(model.cycle_time_us / f.period_us);
+    if (!cp || !Array.isArray(cp) || cp.length === 0) throw new Error(`flow ${f.id}: set candidate_paths/path OR src+dst`);
+    for (const p of cp) {
+      if (!Array.isArray(p) || p.length === 0) throw new Error(`flow ${f.id}: empty path`);
+      for (const lid of p) if (!lm.has(lid)) throw new Error(`flow ${f.id}: unknown link ${lid}`);
+    }
+    const repsRaw = model.cycle_time_us / f.period_us;
+    const reps = Math.round(repsRaw);
+    if (Math.abs(repsRaw - reps) > 1e-9) throw new Error(`flow ${f.id}: cycle_time_us must be divisible by period_us`);
     for (let k = 0; k < reps; k++) {
       const rel = k * f.period_us;
       pkts.push({
@@ -142,10 +150,20 @@ function buildResult(model, pkts, schedHops, method, stats) {
     worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
   }
 
+  // Structural validity check independent from deadline checks.
+  let overlapConflicts = 0;
+  for (const lnk of model.links) {
+    const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].start_us < rows[i - 1].end_us - 1e-9) overlapConflicts++;
+    }
+  }
+  const outStats = { ...(stats || {}), overlap_conflicts: overlapConflicts };
+
   return {
     method,
     objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
-    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl, stats
+    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl, stats: outStats
   };
 }
 
@@ -158,6 +176,7 @@ export function solveGreedy(model) {
   if (!model.guard_band_us) model.guard_band_us = 3;
   const t0 = performance.now();
   const pkts = expandPackets(model);
+  let fallbackCount = 0;
 
   // Link occupancy tracker: for each link, list of [start, end] intervals
   const linkOcc = Object.fromEntries(model.links.map(l => [l.id, []]));
@@ -166,14 +185,13 @@ export function solveGreedy(model) {
     const occ = linkOcc[lid];
     let t = earliest;
     const total = duration + guard;
-    for (let tries = 0; tries < 200; tries++) {
-      let conflict = false;
+    while (true) {
+      let moved = false;
       for (const [s, e] of occ) {
-        if (t < e && t + total > s) { t = e; conflict = true; break; }
+        if (t < e && t + total > s) { t = e; moved = true; break; }
       }
-      if (!conflict) return t;
+      if (!moved) return t;
     }
-    return t;
   }
 
   // Sort: highest priority first, then by release time, then by deadline
@@ -221,6 +239,7 @@ export function solveGreedy(model) {
       bestStarts = []; let t = pk.rel;
       for (const hp of rt.hops) { bestStarts.push(t); t += hp.tx + hp.pd + model.processing_delay_us; }
       bestRoute = 0;
+      fallbackCount++;
     }
 
     // Commit to link occupancy
@@ -239,7 +258,7 @@ export function solveGreedy(model) {
 
   const elapsed = Math.round(performance.now() - t0);
   return buildResult(model, pkts, schedHops, 'Greedy (priority-based list scheduler)', {
-    constraints: 0, variables: 0, binaries: 0, status: 'heuristic', runtime_ms: elapsed
+    constraints: 0, variables: 0, binaries: 0, status: 'heuristic', runtime_ms: elapsed, fallback_packets: fallbackCount
   });
 }
 
@@ -404,7 +423,9 @@ export function renderMetrics(model, result, containerId = "metricsArea") {
   const area = document.getElementById(containerId);
   if (!area) return;
   const tsnPkts = result.packetRows.filter(p => p.status !== "BE");
-  const allOk = tsnPkts.every(p => p.status === "OK");
+  const overlapConflicts = Number(result.stats?.overlap_conflicts || 0);
+  const fallbackPackets = Number(result.stats?.fallback_packets || 0);
+  const allOk = tsnPkts.every(p => p.status === "OK") && overlapConflicts === 0 && fallbackPackets === 0;
   const avgDelay = tsnPkts.length ? (tsnPkts.reduce((s, p) => s + p.e2e_delay_us, 0) / tsnPkts.length).toFixed(2) : "-";
 
   const items = [
@@ -415,7 +436,7 @@ export function renderMetrics(model, result, containerId = "metricsArea") {
     { val: result.objective + " us", label: "Objective", sub: "TSN delay sum", cls: "warn" },
     { val: result.worst_util_percent + "%", label: "Worst Util", sub: "link utilization", cls: result.worst_util_percent > 80 ? "warn" : "" },
     { val: avgDelay + " us", label: "Avg TSN Delay", sub: `${tsnPkts.length} TSN packets`, cls: "" },
-    { val: allOk ? "ALL OK" : "MISS", label: "Feasibility", sub: `${result.stats.constraints} constraints`, cls: allOk ? "ok" : "warn" }
+    { val: allOk ? "ALL OK" : "MISS", label: "Feasibility", sub: `${result.stats.constraints} constraints, overlaps=${overlapConflicts}`, cls: allOk ? "ok" : "warn" }
   ];
 
   area.innerHTML = items.map(m => `
@@ -542,7 +563,7 @@ export function renderTopology(model, result, opts = {}) {
   const flowPaths = [];
   if (result) {
     result.packetRows.forEach(p => {
-      if (p.selected_route === 0 && !flowPaths.some(fp => fp.flow_id === p.flow_id)) {
+      if (!flowPaths.some(fp => fp.flow_id === p.flow_id)) {
         const pathNodes = [];
         p.hops.forEach(h => {
           const link = model.links.find(l => l.id === h.link_id);
