@@ -57,24 +57,24 @@ export const ROII_REAL_STANDARD = {
   flows: [
     // LiDAR flows (P7) — G32: 128KB point cloud burst, Pandar: 32KB sub-sampled
     { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
     // Radar flows (P6) — MRR-35: 4KB detection data, 50Hz (2 pkts per 10ms cycle)
     { id: "f_radar_f",   priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 }
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
   ]
 };
 
@@ -292,36 +292,36 @@ export const ROII_REAL_RECONF = {
   flows: [
     // LiDAR FC → REP → SW_FL (copy 1)
     { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2,
       path: ["l_lidarfc_rep", "l_rep_swfl", "l_swfl_swrear", "l_swrear_acu"] },
     // LiDAR FC → REP → SW_FR (copy 2, replicated)
     { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2,
       path: ["l_lidarfc_rep", "l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other LiDAR flows (P7)
     { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
     // Radar F → REP → SW_FL (copy 1) — 50Hz (2 pkts per cycle)
     { id: "f_radar_f",  priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
+      traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 2,
       path: ["l_radarf_rep", "l_rep_swfl", "l_swfl_swrear", "l_swrear_acu"] },
     // Radar F → REP → SW_FR (copy 2, replicated)
     { id: "f_radar_f_rep",  priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
+      traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 2,
       path: ["l_radarf_rep", "l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other Radar flows (P6) — 50Hz
     { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 }
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
   ]
 };
 

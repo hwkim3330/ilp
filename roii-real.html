@@ -345,12 +345,11 @@
     ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
     ROII_REAL_STANDARD_SCENARIO, realFlowColor,
     ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS,
-    ROII_REAL_3D_LABELS, ROII_REAL_FLOW_PATHS, realGetDeviceType,
+    ROII_REAL_3D_LABELS, realGetDeviceType,
     ROII_REAL_RECONF,
     getReconfPositions, ROII_RECONF_NODE_COLORS,
     ROII_RECONF_SCENARIO,
-    ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
-    ROII_REAL_FLOW_PATHS_RECONF
+    ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF
   } from './js/roii-real-data.js?v=4';
 
   /* ── MODES Registry (Standard / Reconfigured) ── */
@@ -359,13 +358,13 @@
       model: ROII_REAL_STANDARD, scenario: ROII_REAL_STANDARD_SCENARIO,
       getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
-      flowPaths3d: ROII_REAL_FLOW_PATHS, tilts3d: ROII_REAL_3D_TILTS
+      tilts3d: ROII_REAL_3D_TILTS
     },
     reconf: {
       model: ROII_REAL_RECONF, scenario: ROII_RECONF_SCENARIO,
       getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
-      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
+      tilts3d: ROII_REAL_3D_TILTS
     }
   };
 
@@ -383,7 +382,6 @@
   let dynamicGroup = null;
   let nodeMeshes3d = {};
   let linkMeshes3d = {};  // key: sorted 'A|B' → { tube, glow, linkIds }
-  let particles3d = [];
   let clock3d = null;
   let glbModel = null;
 
@@ -803,19 +801,6 @@
         if (m && m.material) m.material.emissiveIntensity = 0.2 + pulse;
       }
 
-      // Animate particles
-      particles3d.forEach(p => {
-        p.t += dt * p.speed;
-        if (p.t > 1) p.t -= 1;
-        let dist = p.t * p.totalLen, si = 0;
-        while (si < p.segs.length - 1 && dist > p.segs[si]) { dist -= p.segs[si]; si++; }
-        const pos = new THREE.Vector3().lerpVectors(p.points[si], p.points[si + 1], dist / p.segs[si]);
-        p.mesh.position.copy(pos);
-        p.glow.position.copy(pos);
-        const fade = Math.min(p.t * 4, (1 - p.t) * 4, 1);
-        p.mesh.material.opacity = 0.9 * fade;
-        p.glow.material.opacity = 0.25 * fade;
-      });
 
       renderer3d.render(scene3d, camera3d);
     }
@@ -840,7 +825,6 @@
       });
     }
     nodeMeshes3d = {};
-    particles3d = [];
 
     const pos3d = mode.pos3d;
     const labels3d = mode.labels3d;
@@ -896,25 +880,6 @@
       linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
     }
 
-    // Animated particles
-    mode.flowPaths3d.forEach((fp, fi) => {
-      const pts = fp.path.map(id => nodePos3D[id]).filter(Boolean);
-      if (pts.length < 2) return;
-      const segs = []; let totalLen = 0;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const d = pts[i].distanceTo(pts[i + 1]); segs.push(d); totalLen += d;
-      }
-      const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8),
-        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.9 }));
-      const pgMesh = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 8),
-        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.25 }));
-      dynamicGroup.add(pMesh);
-      dynamicGroup.add(pgMesh);
-      particles3d.push({
-        mesh: pMesh, glow: pgMesh, points: pts, segs, totalLen,
-        t: fi / mode.flowPaths3d.length, speed: 0.12 + Math.random() * 0.06
-      });
-    });
   }
 
   /* ── Initialize ────────────────────────────── */
@@ -936,6 +901,7 @@
       const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
       badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
       resolveBtn.textContent = "Re-Solve (ILP)";
+      runILPSolve();  // Auto-solve with ILP once ready
     } catch (e) {
       console.warn('GLPK load failed (greedy works):', e);
       resolveBtn.textContent = "Re-Solve (Greedy)";
