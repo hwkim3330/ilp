@@ -404,20 +404,19 @@ export const ROII_RECONF_SCENARIO = {
 
 /* ── Reconf 3D Positions (14 nodes, sensors + replicator) ── */
 export const ROII_REAL_3D_POSITIONS_RECONF = {
-  // Front sensors — symmetric left/right
-  LIDAR_FC:   { x: -3,    y: 5.5,  z: 18.5 },   // left-center front
-  RADAR_F:    { x:  3,    y: 5.5,  z: 18.5 },   // right-center front
-  LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },   // far left roof
-  LIDAR_FR:   { x:  8.5,  y: 10,   z: 16.2 },   // far right roof
-  RADAR_FLC:  { x: -7,    y: 6.5,  z: 17.5 },   // left corner
-  RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 },   // right corner
-  // Rear sensors — symmetric
-  LIDAR_R:    { x:  0,    y: 5.5,  z:-18.5 },   // center rear
-  RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },   // left rear corner
-  RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },   // right rear corner
-  // 802.1CB Replicator — centered between front sensors and switches
+  // Sensors — same positions as Standard
+  LIDAR_FC:   { x:  0,    y: 5.5,  z: 18.5 },
+  LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },
+  LIDAR_FR:   { x:  8.5,  y: 10,   z: 16.2 },
+  LIDAR_R:    { x:  0,    y: 5.5,  z:-18.5 },
+  RADAR_F:    { x:  0,    y: 7,    z: 18.5 },
+  RADAR_FLC:  { x: -7,    y: 6.5,  z: 17.5 },
+  RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 },
+  RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },
+  RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },
+  // 802.1CB Replicator — between front sensors and switches
   REP:        { x:  0,    y: 4,    z: 14   },
-  // Switches — symmetric triangle
+  // Switches + ACU — same positions as Standard
   SW_FL:      { x: -4,    y: 2,    z: 10   },
   SW_FR:      { x:  4,    y: 2,    z: 10   },
   SW_REAR:    { x:  0,    y: 2,    z: -8   },
