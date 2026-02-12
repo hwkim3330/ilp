@@ -282,7 +282,7 @@ const RECONF_LINKS = [
   { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
 ];
 
-/* ── Reconfigured Model (10ms, 11 flows, 11 pkts/cycle) ── */
+/* ── Reconfigured Model (10ms, 11 flows, 17 pkts/cycle) ── */
 export const ROII_REAL_RECONF = {
   cycle_time_us: 10000,
   guard_band_us: 3,
@@ -290,12 +290,12 @@ export const ROII_REAL_RECONF = {
   nodes: JSON.parse(JSON.stringify(RECONF_NODES)),
   links: JSON.parse(JSON.stringify(RECONF_LINKS)),
   flows: [
-    // LiDAR FC → REP → SW_FL (copy 1)
-    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+    // LiDAR FC → REP → SW_FL (copy 1) — deadline relaxed: shared l_lidarfc_rep adds ~1052µs queueing
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 8000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2,
       path: ["l_lidarfc_rep", "l_rep_swfl", "l_swfl_swrear", "l_swrear_acu"] },
     // LiDAR FC → REP → SW_FR (copy 2, replicated)
-    { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 8000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2,
       path: ["l_lidarfc_rep", "l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other LiDAR flows (P7)
@@ -377,7 +377,7 @@ export const ROII_RECONF_NODE_COLORS = {
 /* ── Reconf Scenario Descriptions ── */
 export const ROII_RECONF_SCENARIO = {
   title: "ROii Reconfigured \u2014 802.1CB Replicator 10ms",
-  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicator</strong>: LIDAR_FC and RADAR_F feed into REP, which duplicates frames to both SW_FL and SW_FR. All links 1 Gbps. <strong>14 nodes, 18 links, 11 flows, 22 pkts/cycle</strong>. Radar at 50Hz (2 pkts/cycle). Bottleneck utilization \u2248 41%.",
+  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicator</strong>: LIDAR_FC and RADAR_F feed into REP, which duplicates frames to both SW_FL and SW_FR. All links 1 Gbps. <strong>14 nodes, 18 links, 11 flows, 17 pkts/cycle</strong>. Radar at 50Hz (2 pkts/cycle). Replicated G32 LiDAR deadline relaxed to 8ms (shared-link queueing). Bottleneck utilization \u2248 41%.",
   flows: [
     { name: "G32 FC \u2192 REP \u2192 SW_FL \u2192 ACU-IT", color: "#10B981", desc: "128KB, P7, via REP (copy 1, 1048.9\u00b5s tx)" },
     { name: "G32 FC \u2192 REP \u2192 SW_FR \u2192 ACU-IT", color: "#d97706", desc: "128KB, P7, via REP (copy 2, 802.1CB)" },
