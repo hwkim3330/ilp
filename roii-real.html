@@ -582,6 +582,7 @@
     lidar_g32:    { w: 1, h: 1, d: 1, color: 0x10B981 },
     lidar_pandar: { w: 1, h: 1, d: 1, color: 0x0D9488 },
     radar:        { w: 1, h: 1, d: 1, color: 0x952aff },
+    replicator:   { w: 2, h: 1.5, d: 2, color: 0xd97706 },
     switch_f:     { w: 4, h: 2, d: 4, color: 0x3B82F6 },
     switch_r:     { w: 4, h: 2, d: 4, color: 0x06B6D4 },
     ecu:          { w: 4, h: 2, d: 4, color: 0xdc2626 }
@@ -598,6 +599,8 @@
       geometry = new THREE.BoxGeometry(w, h, d);
     } else if (type === 'lidar_pandar') {
       geometry = new THREE.CylinderGeometry(w * 0.6, w * 0.6, h * 0.8, 16);
+    } else if (type === 'replicator') {
+      geometry = new THREE.OctahedronGeometry(w * 0.7);
     } else {
       geometry = new THREE.BoxGeometry(w, h, d);
     }

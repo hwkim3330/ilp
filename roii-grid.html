@@ -201,7 +201,7 @@
         <h1>ROii Balanced Grid Topology</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub">Reconfigured 15-Node Balanced Load &mdash; LIDAR_FC &amp; RADAR_F Split to Both Front Switches</div>
+      <div class="sub">IEEE 802.1CB Frame Replicators &mdash; LIDAR_FC &amp; RADAR_F Replicated to Both Front Switches</div>
 
       <!-- 2-Mode Toggle: GCD / LCM -->
       <div class="mode-group" id="modeGroup">
@@ -231,17 +231,21 @@
           <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
         </tr></thead>
         <tbody>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR (L)</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR (R)</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar (L)</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar (R)</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr style="border-top:2px solid rgba(217,119,6,0.3);">
+            <td><span class="spec-dot" style="background:#d97706"></span>REP_FC (802.1CB)</td><td colspan="2">Frame Replicator for G32 FC</td><td>1000 Mbps</td><td colspan="3">Replicates LIDAR_FC frames &rarr; SW_FR</td>
+          </tr>
+          <tr>
+            <td><span class="spec-dot" style="background:#d97706"></span>REP_F (802.1CB)</td><td colspan="2">Frame Replicator for MRR-35 F</td><td>1000 Mbps</td><td colspan="3">Replicates RADAR_F frames &rarr; SW_FR</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -566,6 +570,7 @@
     lidar_g32:    { w: 1, h: 1, d: 1, color: 0x10B981 },
     lidar_pandar: { w: 1, h: 1, d: 1, color: 0x0D9488 },
     radar:        { w: 1, h: 1, d: 1, color: 0x952aff },
+    replicator:   { w: 2, h: 1.5, d: 2, color: 0xd97706 },
     switch_f:     { w: 4, h: 2, d: 4, color: 0x3B82F6 },
     switch_r:     { w: 4, h: 2, d: 4, color: 0x06B6D4 },
     ecu:          { w: 4, h: 2, d: 4, color: 0xdc2626 }
@@ -582,6 +587,8 @@
       geometry = new THREE.BoxGeometry(w, h, d);
     } else if (type === 'lidar_pandar') {
       geometry = new THREE.CylinderGeometry(w * 0.6, w * 0.6, h * 0.8, 16);
+    } else if (type === 'replicator') {
+      geometry = new THREE.OctahedronGeometry(w * 0.7);
     } else {
       geometry = new THREE.BoxGeometry(w, h, d);
     }
