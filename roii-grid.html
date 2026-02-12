@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ROii Balanced Grid Topology &mdash; 3D Shuttle + GCD/LCM</title>
+  <title>ROii Balanced Grid Topology &mdash; 3D Shuttle + 802.1CB</title>
   <link rel="stylesheet" href="style.css" />
   <!-- Three.js r128 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -202,12 +202,6 @@
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
       <div class="sub">IEEE 802.1CB Frame Replicators &mdash; LIDAR_FC &amp; RADAR_F Replicated to Both Front Switches</div>
-
-      <!-- 2-Mode Toggle: GCD / LCM -->
-      <div class="mode-group" id="modeGroup">
-        <button class="mode-btn active" data-mode="gcd">GCD 10ms Cycle</button>
-        <button class="mode-btn" data-mode="lcm">LCM 100ms Hyperperiod</button>
-      </div>
     </div>
 
     <!-- 3D Shuttle Visualization (Hero) -->
@@ -250,10 +244,10 @@
           <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
         </tr></thead>
         <tbody>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B</td><td>50ms (20Hz)</td><td>33.1 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B</td><td>50ms (20Hz)</td><td>33.1 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
@@ -344,35 +338,26 @@
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    ROII_REAL_RECONF_GCD, ROII_REAL_RECONF_LCM,
+    ROII_REAL_RECONF,
     getReconfPositions, ROII_RECONF_NODE_COLORS,
-    ROII_RECONF_GCD_SCENARIO, ROII_RECONF_LCM_SCENARIO,
+    ROII_RECONF_SCENARIO,
     ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
     ROII_REAL_FLOW_PATHS_RECONF, ROII_REAL_3D_TILTS,
     realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
-  } from './js/roii-real-data.js?v=3';
+  } from './js/roii-real-data.js?v=4';
 
-  /* ── MODES Registry (GCD / LCM — both use reconf topology) ── */
-  const MODES = {
-    gcd: {
-      model: ROII_REAL_RECONF_GCD, scenario: ROII_RECONF_GCD_SCENARIO,
-      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
-      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
-      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
-    },
-    lcm: {
-      model: ROII_REAL_RECONF_LCM, scenario: ROII_RECONF_LCM_SCENARIO,
-      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
-      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
-      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
-    }
+  /* ── Single Mode (reconf topology with 802.1CB replicator) ── */
+  const MODE = {
+    model: ROII_REAL_RECONF, scenario: ROII_RECONF_SCENARIO,
+    getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+    pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
+    flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
   };
 
   const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;
-  let currentMode = 'gcd';
   let currentScenario = 'normal';
   let currentModel = null;
   let currentResult = null;
@@ -387,7 +372,7 @@
 
   /* ── Build Model for Scenario ── */
   function buildModel() {
-    const m = JSON.parse(JSON.stringify(MODES[currentMode].model));
+    const m = JSON.parse(JSON.stringify(MODE.model));
     if (currentScenario !== 'normal') {
       const failNode = currentScenario.replace('fail-', '');
       m.links = m.links.filter(l => l.from !== failNode && l.to !== failNode);
@@ -417,7 +402,7 @@
 
   /* ── Render Scenario Description ── */
   function renderScenarioDesc() {
-    const sc = MODES[currentMode].scenario;
+    const sc = MODE.scenario;
     const descEl = document.getElementById("scenarioDesc");
     descEl.innerHTML = `
       <h3>${sc.title}</h3>
@@ -431,19 +416,6 @@
       `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
     ).join("");
   }
-
-  /* ── Mode Switching (GCD / LCM) ── */
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentMode = btn.dataset.mode;
-      currentScenario = 'normal';
-      updateScenarioUI();
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
-      renderScenarioDesc();
-      // 3D topology is the same for both modes — no rebuild needed
-      reload();
-    });
-  });
 
   /* ── Scenario Buttons ── */
   function updateScenarioUI() {
@@ -529,15 +501,14 @@
   function renderAll() {
     if (!currentResult) return;
 
-    const mode = MODES[currentMode];
     const container = document.getElementById("topoContainer");
     const W = container.clientWidth;
-    const positions = mode.getPositions(W, 520);
+    const positions = MODE.getPositions(W, 520);
 
     renderMetrics(currentModel, currentResult);
     renderTopology(currentModel, currentResult, {
       nodePositions: positions,
-      nodeColors: mode.nodeColors,
+      nodeColors: MODE.nodeColors,
       height: 520
     });
     renderSwitchGCL(currentModel, currentResult, {
@@ -749,7 +720,7 @@
     const pos3d = ROII_REAL_3D_POSITIONS_RECONF;
     const labels3d = ROII_REAL_3D_LABELS_RECONF;
     const tilts3d = ROII_REAL_3D_TILTS;
-    const reconfModel = ROII_REAL_RECONF_GCD; // use GCD model for link list (same links as LCM)
+    const reconfModel = ROII_REAL_RECONF;
 
     // Create devices
     const nodePos3D = {};

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ROii Realistic Sensor Demo &mdash; 3D Shuttle + 4 Modes</title>
+  <title>ROii Realistic Sensor Demo &mdash; 3D Shuttle</title>
   <link rel="stylesheet" href="style.css" />
   <!-- Three.js r128 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -203,12 +203,10 @@
       </div>
       <div class="sub">Mixed Link Speeds (100/1000 Mbps) &mdash; G32, Pandar 40P, MRR-35 Sensors</div>
 
-      <!-- 4-Mode Toggle -->
+      <!-- 2-Mode Toggle -->
       <div class="mode-group" id="modeGroup">
-        <button class="mode-btn active" data-mode="gcd">GCD 10ms Cycle</button>
-        <button class="mode-btn" data-mode="lcm">LCM 100ms Hyperperiod</button>
-        <button class="mode-btn" data-mode="reconf_gcd">Reconf GCD</button>
-        <button class="mode-btn" data-mode="reconf_lcm">Reconf LCM</button>
+        <button class="mode-btn active" data-mode="standard">Standard (13 Nodes)</button>
+        <button class="mode-btn" data-mode="reconf">Reconfigured (14 Nodes + REP)</button>
       </div>
     </div>
 
@@ -233,10 +231,10 @@
           <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
         </tr></thead>
         <tbody>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B</td><td>50ms (20Hz)</td><td>33.1 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096B</td><td>50ms (20Hz)</td><td>33.1 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
@@ -343,40 +341,28 @@
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    ROII_REAL_GCD, ROII_REAL_LCM, getRealPositions,
+    ROII_REAL_STANDARD, getRealPositions,
     ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
-    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor,
+    ROII_REAL_STANDARD_SCENARIO, realFlowColor,
     ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS,
     ROII_REAL_3D_LABELS, ROII_REAL_FLOW_PATHS, realGetDeviceType,
-    ROII_REAL_RECONF_GCD, ROII_REAL_RECONF_LCM,
+    ROII_REAL_RECONF,
     getReconfPositions, ROII_RECONF_NODE_COLORS,
-    ROII_RECONF_GCD_SCENARIO, ROII_RECONF_LCM_SCENARIO,
+    ROII_RECONF_SCENARIO,
     ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
     ROII_REAL_FLOW_PATHS_RECONF
-  } from './js/roii-real-data.js?v=3';
+  } from './js/roii-real-data.js?v=4';
 
-  /* ── MODES Registry ── */
+  /* ── MODES Registry (Standard / Reconfigured) ── */
   const MODES = {
-    gcd: {
-      model: ROII_REAL_GCD, scenario: ROII_REAL_GCD_SCENARIO,
+    standard: {
+      model: ROII_REAL_STANDARD, scenario: ROII_REAL_STANDARD_SCENARIO,
       getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
       flowPaths3d: ROII_REAL_FLOW_PATHS, tilts3d: ROII_REAL_3D_TILTS
     },
-    lcm: {
-      model: ROII_REAL_LCM, scenario: ROII_REAL_LCM_SCENARIO,
-      getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
-      pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
-      flowPaths3d: ROII_REAL_FLOW_PATHS, tilts3d: ROII_REAL_3D_TILTS
-    },
-    reconf_gcd: {
-      model: ROII_REAL_RECONF_GCD, scenario: ROII_RECONF_GCD_SCENARIO,
-      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
-      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
-      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
-    },
-    reconf_lcm: {
-      model: ROII_REAL_RECONF_LCM, scenario: ROII_RECONF_LCM_SCENARIO,
+    reconf: {
+      model: ROII_REAL_RECONF, scenario: ROII_RECONF_SCENARIO,
       getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
       flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
@@ -387,7 +373,7 @@
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;
-  let currentMode = 'gcd';
+  let currentMode = 'standard';
   let currentScenario = 'normal';
   let currentModel = null;
   let currentResult = null;
@@ -447,7 +433,7 @@
     ).join("");
   }
 
-  /* ── Mode Switching (4 modes) ── */
+  /* ── Mode Switching (2 modes) ── */
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentMode = btn.dataset.mode;
