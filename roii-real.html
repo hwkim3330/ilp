@@ -304,6 +304,7 @@
           <button class="scenario-btn" data-scenario="fail-front-crosslink">FL↔FR ✕</button>
         </div>
         <div id="status" style="font-size:0.82rem;"></div>
+        <div id="compareBadge" style="display:none;font-size:0.78rem;padding:4px 10px;border-radius:999px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);color:var(--blue);"></div>
         <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
       </div>
       <div class="failure-banner" id="failureBanner">
@@ -376,6 +377,7 @@
   let currentScenario = 'normal';
   let currentModel = null;
   let currentResult = null;
+  let baselineGreedyResult = null;
 
   /* ── 3D State (module-scoped for rebuild) ── */
   let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
@@ -425,10 +427,43 @@
 
   const inputEl = document.getElementById("input");
   const statusEl = document.getElementById("status");
+  const compareBadgeEl = document.getElementById("compareBadge");
   const resolveBtn = document.getElementById("resolveBtn");
   const resetBtn = document.getElementById("resetBtn");
   const failureBanner = document.getElementById("failureBanner");
   const failureText = document.getElementById("failureText");
+
+  function effectiveMissCount(result) {
+    const deadlineMiss = result.packetRows.filter(p => p.status === "MISS").length;
+    return deadlineMiss + Number(result.stats?.overlap_conflicts || 0);
+  }
+
+  function updateCompareBadge(mode, result) {
+    if (!compareBadgeEl || !result) return;
+    if (mode === 'greedy') {
+      baselineGreedyResult = result;
+      compareBadgeEl.style.display = 'inline-block';
+      compareBadgeEl.style.borderColor = 'rgba(59,130,246,0.25)';
+      compareBadgeEl.style.background = 'rgba(59,130,246,0.08)';
+      compareBadgeEl.style.color = 'var(--blue)';
+      compareBadgeEl.textContent = `Baseline: Greedy objective ${result.objective}us`;
+      return;
+    }
+    if (!baselineGreedyResult) return;
+    const g = baselineGreedyResult;
+    const gObj = Number(g.objective || 0);
+    const iObj = Number(result.objective || 0);
+    const deltaPct = gObj > 0 ? ((gObj - iObj) / gObj) * 100 : 0;
+    const gMiss = effectiveMissCount(g);
+    const iMiss = effectiveMissCount(result);
+    const improved = deltaPct >= 0 && iMiss <= gMiss;
+
+    compareBadgeEl.style.display = 'inline-block';
+    compareBadgeEl.style.borderColor = improved ? 'rgba(5,150,105,0.25)' : 'rgba(217,119,6,0.25)';
+    compareBadgeEl.style.background = improved ? 'rgba(5,150,105,0.08)' : 'rgba(217,119,6,0.10)';
+    compareBadgeEl.style.color = improved ? 'var(--green)' : 'var(--orange)';
+    compareBadgeEl.textContent = `ILP vs Greedy: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}% objective, MISS ${gMiss}->${iMiss}`;
+  }
 
   /* ── Render Scenario Description ── */
   function renderScenarioDesc() {
@@ -535,6 +570,7 @@
       renderAll();
       statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets scheduled`;
       statusEl.className = "status-ok";
+      updateCompareBadge('greedy', result);
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
       statusEl.className = "status-err";
@@ -557,6 +593,7 @@
       renderAll();
       statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
       statusEl.className = "status-ok";
+      updateCompareBadge('ilp', result);
     } catch (e) {
       statusEl.textContent = "ILP failed: " + e.message + " \u2014 using greedy";
       statusEl.className = "status-err";
