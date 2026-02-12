@@ -150,7 +150,7 @@
         <h1>ROii GCL Schedule</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub">IEEE 802.1Qbv Gate Control List &mdash; LAN9662 x2 + LAN9692 Triangle Topology</div>
+      <div class="sub">IEEE 802.1Qbv Gate Control List &mdash; LAN9692 x3 Triangle Topology</div>
     </div>
 
     <!-- Solve Controls -->
@@ -228,7 +228,7 @@
     renderUtilization, renderTable
   } from './js/ilp-core.js';
   import {
-    ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO
+    ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO, ROII_SWITCHES
   } from './js/roii-data.js';
 
   /* ── ROii Flow Colors (green LiDAR, purple Radar) ── */
@@ -322,11 +322,7 @@
     const area = document.getElementById("switchGclArea");
     area.innerHTML = "";
 
-    const switches = [
-      { id: "SW_FL",   label: "Front-Left Zone Controller", chip: "LAN9662", color: "#3B82F6" },
-      { id: "SW_FR",   label: "Front-Right Zone Controller", chip: "LAN9662", color: "#3B82F6" },
-      { id: "SW_REAR", label: "Rear Gateway",               chip: "LAN9692", color: "#06B6D4" }
-    ];
+    const switches = ROII_SWITCHES;
 
     switches.forEach(sw => {
       // Find all links involving this switch

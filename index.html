@@ -5,12 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TSN/GCL ILP Solver</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 48px; width: auto; }
+    .keti-header h1 {
+      font-size: 2.6rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .landing-hero .sub { color: var(--text2); }
+    .badge {
+      border-color: rgba(59,130,246,0.2);
+      color: var(--blue);
+      background: rgba(59,130,246,0.06);
+    }
+    .landing-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      color: var(--text);
+    }
+    .landing-card:hover {
+      border-color: var(--blue);
+      box-shadow: 0 8px 30px rgba(59,130,246,0.12);
+    }
+    .landing-card h2 { color: var(--blue); }
+    .landing-card p { color: var(--text2); }
+    .landing-card .card-tags span {
+      border-color: rgba(59,130,246,0.15);
+      color: var(--text3);
+      background: rgba(59,130,246,0.04);
+    }
+    .landing-footer { color: var(--text3); }
+    .landing-footer a { color: var(--blue); }
+  </style>
 </head>
 <body>
   <div class="bg-grid"></div>
   <div class="wrap">
     <div class="landing-hero">
-      <h1>TSN / GCL ILP Solver</h1>
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>TSN / GCL ILP Solver</h1>
+      </div>
       <div class="sub">
         Browser-based Integer Linear Programming solver for IEEE 802.1Qbv
         Time-Aware Shaper Gate Control List scheduling.
@@ -57,28 +119,42 @@
         <h2>ROii Shuttle TSN Demo</h2>
         <p>
           ROii autonomous shuttle sensor fusion network. 4 LiDAR and 5 Radar sensors
-          connected through a triangle switch topology (Front-Left ZC, Front-Right ZC,
-          Rear Gateway) to a rear-mounted ADAS processing PC.
+          connected through LAN9692 x3 triangle switch topology (Front-Left ZC, Front-Right ZC,
+          Rear Gateway) to a rear-mounted ACU-IT processing unit.
         </p>
         <div class="card-tags">
           <span>13 Nodes</span>
           <span>9 Flows</span>
-          <span>ROii Shuttle</span>
-          <span>Auto-Solve</span>
+          <span>3D Shuttle</span>
+          <span>Per-Switch GCL</span>
         </div>
       </a>
       <a href="roii-frer.html" class="landing-card">
         <h2>ROii Multi-Path Demo</h2>
         <p>
-          Multi-path route selection with triangle switch topology.
+          Multi-path route selection with Front Hub + LAN9692 triangle topology.
           Front hub distributes sensor data to two zone controllers (SW_FL, SW_FR).
           ILP jointly optimizes route selection and GCL scheduling per egress port.
         </p>
         <div class="card-tags">
           <span>14 Nodes</span>
           <span>9 Flows</span>
-          <span>Triangle Topology</span>
           <span>Route Selection</span>
+          <span>Per-Switch GCL</span>
+        </div>
+      </a>
+      <a href="gcl.html" class="landing-card">
+        <h2>GCL Detail View</h2>
+        <p>
+          Detailed Gate Control List analysis with per-switch GCL breakdowns,
+          gate mask visualization, and link utilization. Full-width GCL Gantt timeline
+          with topology and delay charts side by side.
+        </p>
+        <div class="card-tags">
+          <span>Per-Switch GCL</span>
+          <span>Gate Masks</span>
+          <span>Gantt Timeline</span>
+          <span>Link Utilization</span>
         </div>
       </a>
     </div>

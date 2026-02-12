@@ -5,16 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Automotive TSN Demo &mdash; In-Vehicle Network</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+    textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+  </style>
 </head>
 <body>
   <div class="bg-grid"></div>
   <div class="wrap">
     <div class="header">
-      <h1>Automotive TSN Demo</h1>
-      <div class="sub">In-Vehicle Ethernet Backbone &mdash; IEEE 802.1Qbv GCL Scheduling</div>
-      <div style="margin-top:10px;">
-        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK/WASM...</span>
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>Automotive TSN Demo</h1>
+        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
+      <div class="sub">In-Vehicle Ethernet Backbone &mdash; IEEE 802.1Qbv GCL Scheduling</div>
     </div>
 
     <!-- Scenario Description -->
@@ -65,6 +141,16 @@
       </div>
     </div>
 
+    <!-- Solve Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div id="status" style="font-size:0.82rem;"></div>
+        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+      </div>
+    </div>
+
     <!-- Collapsible JSON Editor -->
     <div class="card">
       <div class="card-title collapsible" id="jsonEditorToggle">
@@ -72,11 +158,6 @@
       </div>
       <div class="collapse-body">
         <textarea id="input" style="min-height:300px;"></textarea>
-        <div class="toolbar">
-          <button class="btn btn-secondary" id="resetBtn">Reset to Default</button>
-          <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve</button>
-          <div id="status" style="margin-top:0; margin-left:8px;"></div>
-        </div>
       </div>
     </div>
 
@@ -147,7 +228,9 @@
 
   resetBtn.addEventListener("click", () => {
     inputEl.value = JSON.stringify(AUTOMOTIVE_MODEL, null, 2);
+    currentModel = JSON.parse(JSON.stringify(AUTOMOTIVE_MODEL));
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
+    runGreedy();
   });
 
   resolveBtn.addEventListener("click", runILPSolve);
@@ -200,16 +283,17 @@
     const W = container.clientWidth;
     const positions = getAutomotivePositions(W, 420);
 
+    const fcopts = { beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
     renderMetrics(currentModel, currentResult);
     renderTopology(currentModel, currentResult, {
       nodePositions: positions,
       nodeColors: AUTOMOTIVE_NODE_COLORS,
       height: 420
     });
-    renderGCL(currentModel, currentResult);
-    renderDelayChart(currentModel, currentResult);
+    renderGCL(currentModel, currentResult, fcopts);
+    renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult);
-    renderTable(currentResult);
+    renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
 
