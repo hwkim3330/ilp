@@ -375,7 +375,14 @@
     const m = JSON.parse(JSON.stringify(MODE.model));
     if (currentScenario !== 'normal') {
       const failNode = currentScenario.replace('fail-', '');
+      m.nodes = m.nodes.filter(n => n.id !== failNode);
       m.links = m.links.filter(l => l.from !== failNode && l.to !== failNode);
+      const linkIds = new Set(m.links.map(l => l.id));
+      m.flows = m.flows.filter(f => {
+        if (f.src === failNode || f.dst === failNode) return false;
+        if (f.path && !f.path.every(lid => linkIds.has(lid))) return false;
+        return true;
+      });
     }
     return m;
   }
