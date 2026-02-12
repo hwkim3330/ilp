@@ -218,9 +218,9 @@
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
         <div class="scenario-group" id="scenarioGroup">
           <button class="scenario-btn active" data-scenario="normal">Normal</button>
-          <button class="scenario-btn" data-scenario="fail-SW_FL">SW_FL Fail</button>
-          <button class="scenario-btn" data-scenario="fail-SW_FR">SW_FR Fail</button>
-          <button class="scenario-btn" data-scenario="fail-SW_REAR">SW_REAR Fail</button>
+          <button class="scenario-btn" data-scenario="fail-rep-left">REP→SW_FL ✕</button>
+          <button class="scenario-btn" data-scenario="fail-rep-right">REP→SW_FR ✕</button>
+          <button class="scenario-btn" data-scenario="fail-left-backbone">SW_FL→REAR ✕</button>
         </div>
         <div id="status" style="font-size:0.82rem;"></div>
         <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
@@ -370,40 +370,27 @@
   let clock3d = null;
   let glbModel = null;
 
+  /* ── Link Failure Scenarios ── */
+  const LINK_FAIL = {
+    'fail-rep-left':       { links: ['l_rep_swfl'], desc: 'REP\u2192SW_FL link down \u2014 replicated copies reroute via SW_FR' },
+    'fail-rep-right':      { links: ['l_rep_swfr'], desc: 'REP\u2192SW_FR link down \u2014 replicated copies reroute via SW_FL' },
+    'fail-left-backbone':  { links: ['l_swfl_swrear'], desc: 'SW_FL\u2192SW_REAR link down \u2014 traffic reroutes via SW_FR' }
+  };
+
   /* ── Build Model for Scenario ── */
   function buildModel() {
     const m = JSON.parse(JSON.stringify(MODE.model));
     if (currentScenario !== 'normal') {
-      const failNode = currentScenario.replace('fail-', '');
-      m.nodes = m.nodes.filter(n => n.id !== failNode);
-      m.links = m.links.filter(l => l.from !== failNode && l.to !== failNode);
-      const linkIds = new Set(m.links.map(l => l.id));
-      // Clear broken hardcoded paths — let BFS re-route
-      m.flows.forEach(f => {
-        if (f.path && !f.path.every(lid => linkIds.has(lid))) delete f.path;
-      });
-      // BFS reachability — remove genuinely stranded flows
-      const adj = new Map();
-      for (const l of m.links) {
-        if (!adj.has(l.from)) adj.set(l.from, []);
-        adj.get(l.from).push(l.to);
+      const fail = LINK_FAIL[currentScenario];
+      if (fail) {
+        const failSet = new Set(fail.links);
+        m.links = m.links.filter(l => !failSet.has(l.id));
+        // Clear broken hardcoded paths — let BFS re-route
+        const linkIds = new Set(m.links.map(l => l.id));
+        m.flows.forEach(f => {
+          if (f.path && !f.path.every(lid => linkIds.has(lid))) delete f.path;
+        });
       }
-      function canReach(src, dst) {
-        const visited = new Set([src]);
-        const queue = [src];
-        while (queue.length) {
-          const node = queue.shift();
-          if (node === dst) return true;
-          for (const next of (adj.get(node) || [])) {
-            if (!visited.has(next)) { visited.add(next); queue.push(next); }
-          }
-        }
-        return false;
-      }
-      m.flows = m.flows.filter(f => {
-        if (f.src === failNode || f.dst === failNode) return false;
-        return canReach(f.src, f.dst);
-      });
     }
     return m;
   }
@@ -452,10 +439,10 @@
       btn.classList.toggle('active', s === currentScenario);
       btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
     });
-    if (currentScenario !== 'normal') {
-      const failNode = currentScenario.replace('fail-', '');
+    const fail = LINK_FAIL[currentScenario];
+    if (fail) {
       failureBanner.classList.add('show');
-      failureText.textContent = `${failNode} offline \u2014 links removed, traffic rerouted`;
+      failureText.textContent = fail.desc;
     } else {
       failureBanner.classList.remove('show');
     }
