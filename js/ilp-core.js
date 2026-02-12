@@ -927,7 +927,10 @@ export function renderDelayChart(model, result, optsOrId = "delayContainer") {
 /* ═══════════════════════════════════════════════
    RENDER: LINK UTILIZATION (Donuts)
    ═══════════════════════════════════════════════ */
-export function renderUtilization(model, result, containerId = "utilContainer") {
+export function renderUtilization(model, result, optsOrId = "utilContainer") {
+  const _opts = typeof optsOrId === 'string' ? { containerId: optsOrId } : (optsOrId || {});
+  const containerId = _opts.containerId || "utilContainer";
+  const beColor = _opts.beColor || "#0d1a30";
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";
@@ -970,7 +973,7 @@ export function renderUtilization(model, result, containerId = "utilContainer") 
     const data = [
       { label: "Flow", value: link.flow, color: "#4895ef" },
       { label: "Guard", value: link.guard, color: "#f9a825" },
-      { label: "BE", value: link.be, color: "#0d1a30" }
+      { label: "BE", value: link.be, color: beColor }
     ];
 
     g.selectAll(".util-arc")

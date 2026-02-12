@@ -296,7 +296,7 @@
     renderTopology(currentModel, currentResult);
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
-    renderUtilization(currentModel, currentResult);
+    renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }

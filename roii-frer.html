@@ -221,6 +221,24 @@
     .route-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
     .route-path { font-weight: 600; color: var(--blue); }
     .route-path.alt { color: var(--green); }
+
+    /* ── Scenario Controls ────────────── */
+    .scenario-group { display: flex; gap: 4px; }
+    .scenario-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid var(--border); background: var(--card); color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .scenario-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .scenario-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .scenario-btn.active.fail { background: var(--red); border-color: var(--red); }
+    .failure-banner {
+      display: none; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25); color: var(--red);
+      margin-top: 8px; align-items: center; gap: 8px;
+    }
+    .failure-banner.show { display: flex; }
+    .failure-banner .fail-icon { font-size: 1.1rem; }
   </style>
 </head>
 <body>
@@ -250,8 +268,17 @@
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve</button>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
+        <div class="scenario-group">
+          <button class="scenario-btn active" data-scenario="normal">Normal</button>
+          <button class="scenario-btn" data-scenario="fail-fl">SW_FL Failure</button>
+          <button class="scenario-btn" data-scenario="fail-fr">SW_FR Failure</button>
+        </div>
         <div id="status" style="font-size:0.82rem;"></div>
         <a href="gcl.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">GCL Detail View</a>
+      </div>
+      <div class="failure-banner" id="failureBanner">
+        <span class="fail-icon">&#9888;</span>
+        <span id="failureText"></span>
       </div>
     </div>
 
@@ -346,6 +373,9 @@
     FRER_MODEL, getFrerPositions, FRER_NODE_COLORS, FRER_SCENARIO,
     FRER_SWITCHES, FRER_3D_POSITIONS, FRER_3D_TILTS
   } from './js/roii-frer-data.js?v=2';
+
+  /* ── Module-level 3D references ── */
+  let nodeMeshes3D = {};
 
   /* ── 3D Shuttle + Network Topology ────────────── */
   try { (function init3D() {
@@ -499,6 +529,7 @@
     // Place devices using FRER positions (includes HUB_F)
     const nodePos3D = {};
     const nodeMeshes = {};
+    const originalColors3D = {};
     const LABELS = {
       LIDAR_FL:'LiDAR-Front-Left', LIDAR_FR:'LiDAR-Front-Right',
       LIDAR_FC:'LiDAR-Front-Center', LIDAR_RC:'LiDAR-Rear-Center',
@@ -515,7 +546,9 @@
       const dev = createDevice(id, v, LABELS[id] || id, tilt);
       nodePos3D[id] = v;
       nodeMeshes[id] = dev.mesh;
+      originalColors3D[id] = dev.mesh.material.color.getHex();
     }
+    nodeMeshes3D = nodeMeshes;
 
     // Connection Lines (FRER_MODEL.links)
     const drawnLinks = new Set();
@@ -651,8 +684,45 @@
 
   /* ── State ── */
   let glpk = null;
+  let currentScenario = 'normal';
   let currentModel = JSON.parse(JSON.stringify(FRER_MODEL));
   let currentResult = null;
+
+  /* ── Build Model for Scenario ── */
+  function buildModel(scenario) {
+    const m = JSON.parse(JSON.stringify(FRER_MODEL));
+    if (scenario === 'fail-fl') {
+      m.links = m.links.filter(l => l.from !== 'SW_FL' && l.to !== 'SW_FL');
+    } else if (scenario === 'fail-fr') {
+      m.links = m.links.filter(l => l.from !== 'SW_FR' && l.to !== 'SW_FR');
+    }
+    return m;
+  }
+
+  /* ── 3D Failure Visualization ── */
+  function update3DFailure(scenario) {
+    if (!nodeMeshes3D.SW_FL) return;
+    const TMPL_COLORS = { SW_FL: 0x3B82F6, SW_FR: 0x3B82F6 };
+    ['SW_FL', 'SW_FR'].forEach(sw => {
+      const mesh = nodeMeshes3D[sw];
+      if (!mesh) return;
+      const isFailed = (scenario === 'fail-fl' && sw === 'SW_FL') || (scenario === 'fail-fr' && sw === 'SW_FR');
+      if (isFailed) {
+        mesh.material.color.setHex(0xff3333);
+        mesh.material.emissive.setHex(0xff3333);
+        mesh.material.emissiveIntensity = 0.15;
+        mesh.material.opacity = 0.5;
+        mesh.material.transparent = true;
+      } else {
+        const orig = TMPL_COLORS[sw] || 0x3B82F6;
+        mesh.material.color.setHex(orig);
+        mesh.material.emissive.setHex(orig);
+        mesh.material.emissiveIntensity = 0.5;
+        mesh.material.opacity = 1;
+        mesh.material.transparent = false;
+      }
+    });
+  }
 
   /* ── Init ── */
   initTooltip();
@@ -683,10 +753,44 @@
   inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
 
   resetBtn.addEventListener("click", () => {
+    currentScenario = 'normal';
+    updateScenarioUI();
     inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
   resolveBtn.addEventListener("click", runILPSolve);
+
+  /* ── Scenario Buttons ── */
+  const failureBanner = document.getElementById("failureBanner");
+  const failureText = document.getElementById("failureText");
+
+  function updateScenarioUI() {
+    document.querySelectorAll('.scenario-btn').forEach(btn => {
+      const s = btn.dataset.scenario;
+      btn.classList.toggle('active', s === currentScenario);
+      btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
+    });
+    if (currentScenario === 'fail-fl') {
+      failureBanner.classList.add('show');
+      failureText.textContent = 'SW_FL offline \u2014 traffic rerouted via SW_FR';
+    } else if (currentScenario === 'fail-fr') {
+      failureBanner.classList.add('show');
+      failureText.textContent = 'SW_FR offline \u2014 traffic rerouted via SW_FL';
+    } else {
+      failureBanner.classList.remove('show');
+    }
+    update3DFailure(currentScenario);
+  }
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentScenario = btn.dataset.scenario;
+      updateScenarioUI();
+      const model = buildModel(currentScenario);
+      inputEl.value = JSON.stringify(model, null, 2);
+      runGreedy();
+    });
+  });
 
   /* ── Greedy Solver ── */
   function runGreedy() {
@@ -739,10 +843,11 @@
     });
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
-    renderUtilization(currentModel, currentResult, fcopts);
+    renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
     renderSwitchGCL(currentModel, currentResult);
     renderRouteSelection();
+    update3DFailure(currentScenario);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
 
