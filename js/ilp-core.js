@@ -1176,6 +1176,91 @@ export function renderInputPreview(model, containerId) {
   container.appendChild(summaryDiv);
 }
 
+/* ═══════════════════════════════════════════════
+   RENDER: PER-SWITCH GCL DETAIL CARDS
+   Shows GCL entries per egress port of each switch
+   ═══════════════════════════════════════════════ */
+export function renderSwitchGCL(model, result, opts = {}) {
+  const containerId = opts.containerId || "switchGclArea";
+  const switches = opts.switches || [];
+  const colorFn = opts.flowColorFn || flowColor;
+
+  const area = document.getElementById(containerId);
+  if (!area || !switches.length) return;
+  area.innerHTML = "";
+
+  switches.forEach(sw => {
+    const egressLinks = model.links.filter(l => l.from === sw.id);
+    const activeEgress = egressLinks.filter(l => {
+      const entries = result.gcl.links[l.id]?.entries || [];
+      return entries.some(e => !e.note.includes("best-effort"));
+    });
+    if (activeEgress.length === 0) return;
+
+    let totalFlow = 0, totalGuard = 0, tsnCount = 0;
+    activeEgress.forEach(l => {
+      const entries = result.gcl.links[l.id]?.entries || [];
+      entries.forEach(e => {
+        if (e.note.includes("guard")) totalGuard += e.duration_us;
+        else if (!e.note.includes("best-effort")) { totalFlow += e.duration_us; tsnCount++; }
+      });
+    });
+    const utilPct = ((totalFlow + totalGuard) / model.cycle_time_us / activeEgress.length * 100).toFixed(1);
+
+    const card = document.createElement("div");
+    card.className = "gcl-switch-card";
+
+    card.innerHTML = `
+      <div class="sw-header">
+        <div class="sw-dot" style="background:${sw.color};"></div>
+        <span class="sw-name">${sw.label}</span>
+        <span class="sw-chip">${sw.chip}</span>
+        <span class="sw-stats">${activeEgress.length} port${activeEgress.length > 1 ? 's' : ''} &middot; ${tsnCount} entries &middot; ${utilPct}% util</span>
+      </div>
+    `;
+
+    activeEgress.forEach(link => {
+      const entries = result.gcl.links[link.id]?.entries || [];
+      const linkDiv = document.createElement("div");
+      linkDiv.style.marginBottom = "14px";
+
+      let html = `<div class="link-label-dir">${link.from} &rarr; ${link.to}</div>`;
+      html += `<table class="gcl-entry-table">
+        <thead><tr><th>#</th><th>Gate Mask</th><th>TC</th><th>Start (µs)</th><th>End (µs)</th><th>Duration</th><th>Type</th></tr></thead><tbody>`;
+
+      entries.forEach(e => {
+        const isBE = e.note.includes("best-effort");
+        const isGuard = e.note.includes("guard");
+        const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
+        let tcLabel = "-";
+        if (!isBE && !isGuard) {
+          const oneIdx = e.gate_mask.indexOf('1');
+          if (oneIdx >= 0) tcLabel = "TC" + (7 - oneIdx);
+        } else if (isGuard) { tcLabel = "guard"; }
+        const typeLabel = isGuard ? "Guard Band" : isBE ? "BE Window" : e.note.split("#")[0].replace("f_","");
+        const barColor = isGuard ? "#f59e0b" : isBE ? "rgba(0,0,0,0.08)" : colorFn(e.note);
+        const barW = Math.max((e.duration_us / model.cycle_time_us * 100), 1.5).toFixed(1);
+
+        html += `<tr>
+          <td>${e.index}</td>
+          <td class="gate-mask ${cls}">${e.gate_mask}</td>
+          <td style="font-weight:600;${isGuard ? 'color:#f59e0b' : isBE ? 'opacity:0.4' : 'color:' + barColor}">${tcLabel}</td>
+          <td>${e.start_us}</td><td>${e.end_us}</td>
+          <td>${e.duration_us} µs</td>
+          <td><span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
+            <div class="entry-bar" style="background:${barColor};width:${barW}%;opacity:${isBE ? 0.15 : 0.7};"></div>
+          </td></tr>`;
+      });
+
+      html += `</tbody></table>`;
+      linkDiv.innerHTML = html;
+      card.appendChild(linkDiv);
+    });
+
+    area.appendChild(card);
+  });
+}
+
 /* BFS shortest path (returns link IDs) */
 function bfsPath(adj, src, dst) {
   const visited = new Set([src]);

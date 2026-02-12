@@ -106,6 +106,25 @@ export const AUTOMOTIVE_NODE_COLORS = {
   BODY_CTRL:    { fill: "#059669", stroke: "#6ee7b7", label: "Body",  shortLabel: "ECU" }
 };
 
+/* ── Switch Definitions (for per-switch GCL view) ── */
+export const AUTOMOTIVE_SWITCHES = [
+  { id: "SW1", label: "Sensor Switch", chip: "TSN Switch", color: "#7c3aed" },
+  { id: "GATEWAY", label: "Central Gateway", chip: "Gateway", color: "#7c3aed" },
+  { id: "SW2", label: "Actuator Switch", chip: "TSN Switch", color: "#7c3aed" }
+];
+
+/* ── Automotive Flow Colors ──────────────────────── */
+export function automotiveFlowColor(fid) {
+  const id = (fid || '').toLowerCase();
+  if (id.includes('cam')) return '#3B82F6';
+  if (id.includes('lidar')) return '#0891b2';
+  if (id.includes('radar')) return '#d97706';
+  if (id.includes('brake')) return '#dc2626';
+  if (id.includes('pwr')) return '#7c3aed';
+  if (id.includes('infotain')) return '#db2777';
+  return '#7b61ff';
+}
+
 /* ── Scenario Description ──────────────────────── */
 export const SCENARIO_DESC = {
   title: "Automotive In-Vehicle TSN Network",

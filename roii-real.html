@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Automotive TSN Demo &mdash; ROii FRER Multi-Path</title>
+  <title>ROii Realistic Sensor Demo &mdash; GCD / LCM Cycle Strategies</title>
   <link rel="stylesheet" href="style.css" />
   <style>
     /* ═══════════════════════════════════════════════
@@ -68,7 +68,30 @@
     pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
     textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
 
-    /* ── Scenario Controls ─────────────────────── */
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── Mode & Scenario Controls ─────────────── */
+    .mode-group { display: flex; gap: 6px; justify-content: center; margin: 10px 0 6px; }
+    .mode-btn {
+      padding: 6px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 700;
+      border: 1px solid rgba(59,130,246,0.25); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .mode-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .mode-btn.active {
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      color: #fff; border-color: transparent;
+    }
     .scenario-group { display: flex; gap: 4px; }
     .scenario-btn {
       padding: 5px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
@@ -85,17 +108,12 @@
     }
     .failure-banner.show { display: flex; }
 
-    /* ── Header ─────────────────────────────────── */
-    .keti-header {
-      display: flex; align-items: center; justify-content: center;
-      gap: 16px; margin-bottom: 8px;
-    }
-    .keti-header img { height: 40px; width: auto; }
-    .keti-header h1 {
-      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
+    /* ── Sensor Spec Table ────────────────────── */
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 10px; }
+    .spec-table th { text-align: left; padding: 5px 8px; color: var(--text3); font-weight: 600; border-bottom: 1px solid rgba(59,130,246,0.2); }
+    .spec-table td { padding: 5px 8px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .spec-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .spec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
     /* ── Per-Switch GCL Cards ──────────────────── */
     .gcl-switch-grid {
@@ -136,15 +154,6 @@
     .gate-closed { color: var(--text3); opacity: 0.5; }
     .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
     .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
-
-    /* ── Route table ─────────────────────────────── */
-    .route-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .route-tbl th { text-align: left; padding: 6px 10px; color: var(--text3); font-weight: 600; border-bottom: 1px solid rgba(59,130,246,0.15); }
-    .route-tbl td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .route-tbl tr:hover td { background: rgba(0,0,0,0.03); }
-    .route-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-    .route-path { font-weight: 600; color: var(--blue); }
-    .route-path.alt { color: var(--green); }
   </style>
 </head>
 <body>
@@ -153,10 +162,16 @@
     <div class="header">
       <div class="keti-header">
         <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
-        <h1>Automotive TSN Demo</h1>
+        <h1>ROii Realistic Sensor Demo</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub">ROii Shuttle FRER Multi-Path &mdash; IEEE 802.1Qbv GCL Scheduling</div>
+      <div class="sub">Mixed Link Speeds (100/1000 Mbps) &mdash; G32, Pandar 40P, MRR-35 Sensors</div>
+
+      <!-- GCD / LCM Mode Toggle -->
+      <div class="mode-group" id="modeGroup">
+        <button class="mode-btn active" data-mode="gcd">GCD 10ms Cycle</button>
+        <button class="mode-btn" data-mode="lcm">LCM 100ms Hyperperiod</button>
+      </div>
     </div>
 
     <!-- Scenario Description -->
@@ -165,9 +180,30 @@
     <!-- Domain Legend -->
     <div class="auto-domain-legend" id="domainLegend"></div>
 
+    <!-- Sensor Hardware Spec -->
+    <div class="card">
+      <div class="card-title">Sensor Hardware Specifications</div>
+      <table class="spec-table">
+        <thead><tr>
+          <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>100BASE-T1</td><td>100 Mbps</td><td>1200B</td><td>50ms (20Hz)</td><td>99.0 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>Robosense G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>2048B</td><td>50ms (20Hz)</td><td>16.7 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>CAN-FD &rarr; ETH GW</td><td>100 Mbps</td><td>256B</td><td>20ms (50Hz)</td><td>23.5 &micro;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- Network Topology -->
     <div class="card">
-      <div class="card-title">Network Topology &mdash; Triangle + Hub</div>
+      <div class="card-title">Network Topology &mdash; Mixed Speed Links</div>
       <div class="legend" id="topoLegend"></div>
       <div class="svg-container" id="topoContainer" style="height:520px;"></div>
     </div>
@@ -200,12 +236,6 @@
       </div>
     </div>
 
-    <!-- Route Selection Summary -->
-    <div class="card">
-      <div class="card-title">Route Selection Summary</div>
-      <div id="routeSelection" style="padding:10px 16px;"></div>
-    </div>
-
     <!-- Table -->
     <div class="card">
       <div class="card-title">Packet Schedule Table</div>
@@ -224,10 +254,11 @@
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
-        <div class="scenario-group">
+        <div class="scenario-group" id="scenarioGroup">
           <button class="scenario-btn active" data-scenario="normal">Normal</button>
-          <button class="scenario-btn" data-scenario="fail-fl">SW_FL Failure</button>
-          <button class="scenario-btn" data-scenario="fail-fr">SW_FR Failure</button>
+          <button class="scenario-btn" data-scenario="fail-SW_FL">SW_FL Fail</button>
+          <button class="scenario-btn" data-scenario="fail-SW_FR">SW_FR Fail</button>
+          <button class="scenario-btn" data-scenario="fail-SW_REAR">SW_REAR Fail</button>
         </div>
         <div id="status" style="font-size:0.82rem;"></div>
         <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
@@ -267,50 +298,37 @@
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    FRER_MODEL, getFrerPositions, FRER_NODE_COLORS, FRER_SCENARIO, FRER_SWITCHES
-  } from './js/roii-frer-data.js?v=2';
+    ROII_REAL_GCD, ROII_REAL_LCM, getRealPositions,
+    ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
+    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor
+  } from './js/roii-real-data.js';
 
-  /* ── Flow Colors ── */
-  function frerFlowColor(fid) {
-    return (fid || '').toLowerCase().includes('lidar') ? '#10B981' : '#952aff';
-  }
-  const fcopts = { flowColorFn: frerFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+  const MODES = {
+    gcd: { model: ROII_REAL_GCD, scenario: ROII_REAL_GCD_SCENARIO },
+    lcm: { model: ROII_REAL_LCM, scenario: ROII_REAL_LCM_SCENARIO }
+  };
+
+  const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
   /* ── State ───────────────────────────────────── */
   let glpk = null;
+  let currentMode = 'gcd';
   let currentScenario = 'normal';
-  let currentModel = JSON.parse(JSON.stringify(FRER_MODEL));
+  let currentModel = null;
   let currentResult = null;
 
   /* ── Build Model for Scenario ── */
-  function buildModel(scenario) {
-    const m = JSON.parse(JSON.stringify(FRER_MODEL));
-    if (scenario === 'fail-fl') {
-      m.links = m.links.filter(l => l.from !== 'SW_FL' && l.to !== 'SW_FL');
-    } else if (scenario === 'fail-fr') {
-      m.links = m.links.filter(l => l.from !== 'SW_FR' && l.to !== 'SW_FR');
+  function buildModel() {
+    const m = JSON.parse(JSON.stringify(MODES[currentMode].model));
+    if (currentScenario !== 'normal') {
+      const failNode = currentScenario.replace('fail-', '');
+      m.links = m.links.filter(l => l.from !== failNode && l.to !== failNode);
     }
     return m;
   }
 
   /* ── Init ────────────────────────────────────── */
   initTooltip();
-
-  // Render scenario description
-  const descEl = document.getElementById("scenarioDesc");
-  descEl.innerHTML = `
-    <h3>${FRER_SCENARIO.title}</h3>
-    <p>${FRER_SCENARIO.description}</p>
-    <ul class="auto-flow-list">
-      ${FRER_SCENARIO.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
-    </ul>
-  `;
-
-  // Render domain legend
-  const legendEl = document.getElementById("domainLegend");
-  legendEl.innerHTML = FRER_SCENARIO.domains.map(d =>
-    `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
-  ).join("");
 
   // Collapsibles
   document.getElementById("jsonEditorToggle").addEventListener("click", function() {
@@ -326,36 +344,49 @@
   const statusEl = document.getElementById("status");
   const resolveBtn = document.getElementById("resolveBtn");
   const resetBtn = document.getElementById("resetBtn");
-
-  inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
-
-  resetBtn.addEventListener("click", () => {
-    currentScenario = 'normal';
-    updateScenarioUI();
-    inputEl.value = JSON.stringify(FRER_MODEL, null, 2);
-    currentModel = JSON.parse(JSON.stringify(FRER_MODEL));
-    statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
-    runGreedy();
-  });
-
-  resolveBtn.addEventListener("click", runILPSolve);
-
-  /* ── Scenario Buttons ── */
   const failureBanner = document.getElementById("failureBanner");
   const failureText = document.getElementById("failureText");
 
+  /* ── Render Scenario Description ── */
+  function renderScenarioDesc() {
+    const sc = MODES[currentMode].scenario;
+    const descEl = document.getElementById("scenarioDesc");
+    descEl.innerHTML = `
+      <h3>${sc.title}</h3>
+      <p>${sc.description}</p>
+      <ul class="auto-flow-list">
+        ${sc.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+      </ul>
+    `;
+    const legendEl = document.getElementById("domainLegend");
+    legendEl.innerHTML = sc.domains.map(d =>
+      `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+    ).join("");
+  }
+
+  /* ── Mode Switching (GCD / LCM) ── */
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentMode = btn.dataset.mode;
+      currentScenario = 'normal';
+      updateScenarioUI();
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+      renderScenarioDesc();
+      reload();
+    });
+  });
+
+  /* ── Scenario Buttons ── */
   function updateScenarioUI() {
     document.querySelectorAll('.scenario-btn').forEach(btn => {
       const s = btn.dataset.scenario;
       btn.classList.toggle('active', s === currentScenario);
       btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
     });
-    if (currentScenario === 'fail-fl') {
+    if (currentScenario !== 'normal') {
+      const failNode = currentScenario.replace('fail-', '');
       failureBanner.classList.add('show');
-      failureText.textContent = 'SW_FL offline \u2014 traffic rerouted via SW_FR';
-    } else if (currentScenario === 'fail-fr') {
-      failureBanner.classList.add('show');
-      failureText.textContent = 'SW_FR offline \u2014 traffic rerouted via SW_FL';
+      failureText.textContent = `${failNode} offline \u2014 links removed, traffic rerouted`;
     } else {
       failureBanner.classList.remove('show');
     }
@@ -365,12 +396,26 @@
     btn.addEventListener('click', () => {
       currentScenario = btn.dataset.scenario;
       updateScenarioUI();
-      const model = buildModel(currentScenario);
-      inputEl.value = JSON.stringify(model, null, 2);
-      runGreedy();
+      reload();
     });
   });
 
+  resetBtn.addEventListener("click", () => {
+    currentScenario = 'normal';
+    updateScenarioUI();
+    reload();
+    statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
+  });
+
+  resolveBtn.addEventListener("click", runILPSolve);
+
+  function reload() {
+    const model = buildModel();
+    inputEl.value = JSON.stringify(model, null, 2);
+    runGreedy();
+  }
+
+  /* ── Greedy Solver ── */
   function runGreedy() {
     try {
       const model = JSON.parse(inputEl.value);
@@ -380,7 +425,7 @@
       currentModel = model;
       currentResult = result;
       renderAll();
-      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong>`;
+      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets scheduled`;
       statusEl.className = "status-ok";
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
@@ -388,6 +433,7 @@
     }
   }
 
+  /* ── ILP Solver ── */
   async function runILPSolve() {
     if (!glpk) { runGreedy(); return; }
     try {
@@ -401,10 +447,10 @@
       currentModel = model;
       currentResult = result;
       renderAll();
-      statusEl.textContent = `ILP solved in ${result.stats.runtime_ms}ms | ${result.stats.variables} vars, ${result.stats.binaries} bins`;
+      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
       statusEl.className = "status-ok";
     } catch (e) {
-      statusEl.textContent = "ILP failed: " + e.message + " — using greedy";
+      statusEl.textContent = "ILP failed: " + e.message + " \u2014 using greedy";
       statusEl.className = "status-err";
       runGreedy();
     }
@@ -416,71 +462,23 @@
 
     const container = document.getElementById("topoContainer");
     const W = container.clientWidth;
-    const positions = getFrerPositions(W, 520);
+    const positions = getRealPositions(W, 520);
 
     renderMetrics(currentModel, currentResult);
     renderTopology(currentModel, currentResult, {
       nodePositions: positions,
-      nodeColors: FRER_NODE_COLORS,
+      nodeColors: ROII_REAL_NODE_COLORS,
       height: 520
     });
     renderSwitchGCL(currentModel, currentResult, {
-      switches: FRER_SWITCHES,
-      flowColorFn: frerFlowColor
+      switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor
     });
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
-    renderRouteSelection();
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
-  }
-
-  /* ── Route Selection Summary ── */
-  function renderRouteSelection() {
-    const el = document.getElementById("routeSelection");
-    if (!el || !currentResult) return;
-
-    const flowMap = {};
-    for (const r of currentResult.packetRows) {
-      if (!flowMap[r.flow_id]) flowMap[r.flow_id] = [];
-      flowMap[r.flow_id].push(r);
-    }
-
-    let html = `<table class="route-tbl">
-      <thead><tr><th>Flow</th><th>TC</th><th>Selected Path</th><th>Hops</th><th>Avg E2E</th><th>Status</th></tr></thead><tbody>`;
-
-    for (const [fid, pkts] of Object.entries(flowMap)) {
-      const color = frerFlowColor(fid);
-      const tc = fid.includes('lidar') ? 'TC7' : 'TC6';
-      const routes = [...new Set(pkts.map(p => p.selected_route))];
-      const avgE2e = (pkts.reduce((s, p) => s + p.e2e_delay_us, 0) / pkts.length).toFixed(1);
-      const allOk = pkts.every(p => p.status === 'OK' || p.status === 'BE');
-
-      const samplePkt = pkts[0];
-      const hopLinks = samplePkt.hops.map(h => h.link_id);
-      let pathDesc = "direct";
-      if (hopLinks.some(l => l.includes("swfl") || l.includes("hub_swfl"))) {
-        if (hopLinks.some(l => l.includes("swfr"))) pathDesc = "SW_FL + SW_FR";
-        else pathDesc = "via SW_FL";
-      } else if (hopLinks.some(l => l.includes("swfr") || l.includes("hub_swfr"))) {
-        pathDesc = "via SW_FR";
-      }
-
-      const pathClass = routes[0] === 0 ? "route-path" : "route-path alt";
-
-      html += `<tr>
-        <td><span class="route-dot" style="background:${color}"></span>${fid}</td>
-        <td style="font-weight:600;color:${color}">${tc}</td>
-        <td><span class="${pathClass}">${pathDesc}</span>${routes.length > 1 ? ' (mixed)' : ''}</td>
-        <td>${samplePkt.hops.length} hops</td>
-        <td>${avgE2e} µs</td>
-        <td style="color:${allOk ? 'var(--green)' : 'var(--red)'}; font-weight:700;">${allOk ? 'OK' : 'MISS'}</td>
-      </tr>`;
-    }
-
-    html += `</tbody></table>`;
-    el.innerHTML = html;
   }
 
   // Responsive
@@ -490,14 +488,15 @@
     resizeTimer = setTimeout(renderAll, 300);
   });
 
-  /* ── Auto-Solve with Greedy ──────────────────── */
+  /* ── Initialize ────────────────────────────── */
+  renderScenarioDesc();
   const badge = document.getElementById("engineBadge");
   badge.className = "engine-badge ready";
   badge.innerHTML = "&#9679; Greedy Ready";
   resolveBtn.disabled = false;
-  runGreedy();
+  reload();
 
-  /* ── Load GLPK/WASM in background ─────────────── */
+  /* ── Load GLPK/WASM in background ─────────── */
   (async () => {
     try {
       const GLPK = (await import('./vendor/glpk.js')).default;

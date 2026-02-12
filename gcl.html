@@ -225,7 +225,7 @@
   import {
     initTooltip, solveGreedy, solveILP, flowColor, flowType, getFlowColorsHex,
     renderMetrics, renderTopology, renderGCL, renderDelayChart,
-    renderUtilization, renderTable
+    renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
     ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO, ROII_SWITCHES
@@ -313,97 +313,8 @@
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
-    renderSwitchGCL(currentModel, currentResult);
+    renderSwitchGCL(currentModel, currentResult, { switches: ROII_SWITCHES, flowColorFn: roiiFlowColor });
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
-  }
-
-  /* ── Per-Switch GCL Detail Cards ─────────────── */
-  function renderSwitchGCL(model, result) {
-    const area = document.getElementById("switchGclArea");
-    area.innerHTML = "";
-
-    const switches = ROII_SWITCHES;
-
-    switches.forEach(sw => {
-      // Find all links involving this switch
-      const swLinks = model.links.filter(l => l.from === sw.id || l.to === sw.id);
-      const activeLinks = swLinks.filter(l => {
-        const entries = result.gcl.links[l.id]?.entries || [];
-        return entries.some(e => !e.note.includes("best-effort"));
-      });
-
-      if (activeLinks.length === 0) return;
-
-      // Calculate total utilization for this switch
-      let totalFlow = 0, totalGuard = 0;
-      activeLinks.forEach(l => {
-        const entries = result.gcl.links[l.id]?.entries || [];
-        entries.forEach(e => {
-          if (e.note.includes("guard")) totalGuard += e.duration_us;
-          else if (!e.note.includes("best-effort")) totalFlow += e.duration_us;
-        });
-      });
-
-      const card = document.createElement("div");
-      card.className = "gcl-switch-card";
-
-      // Header
-      card.innerHTML = `
-        <div class="sw-header">
-          <div class="sw-dot" style="background:${sw.color};"></div>
-          <span class="sw-name">${sw.label}</span>
-          <span class="sw-chip">${sw.chip}</span>
-          <span class="sw-stats">${activeLinks.length} active links &middot; flow ${totalFlow.toFixed(1)}us &middot; guard ${totalGuard.toFixed(1)}us</span>
-        </div>
-      `;
-
-      // Per-link GCL entries
-      activeLinks.forEach(link => {
-        const entries = result.gcl.links[link.id]?.entries || [];
-        const tsnEntries = entries.filter(e => !e.note.includes("best-effort"));
-        if (tsnEntries.length === 0) return;
-
-        const linkLabel = `${link.from} → ${link.to}`;
-        const linkDiv = document.createElement("div");
-        linkDiv.style.marginBottom = "12px";
-
-        let tableHTML = `
-          <div style="font-size:0.8rem;font-weight:600;color:var(--text2);margin-bottom:4px;">
-            ${linkLabel}
-          </div>
-          <table class="gcl-entry-table">
-            <thead><tr><th>#</th><th>Gate Mask</th><th>Start</th><th>End</th><th>Duration</th><th>Type</th></tr></thead>
-            <tbody>
-        `;
-
-        entries.forEach((e, i) => {
-          const isBE = e.note.includes("best-effort");
-          const isGuard = e.note.includes("guard");
-          const cls = isGuard ? "gate-guard" : isBE ? "gate-closed" : "gate-open";
-          const typeLabel = isGuard ? "Guard" : isBE ? "BE" : e.note.split("#")[0].replace("f_","");
-          const barColor = isGuard ? "var(--orange)" : isBE ? "var(--be)" : roiiFlowColor(e.note);
-          const barWidth = (e.duration_us / model.cycle_time_us * 100).toFixed(1);
-
-          tableHTML += `<tr>
-            <td>${e.index}</td>
-            <td class="gate-mask ${cls}">${e.gate_mask}</td>
-            <td>${e.start_us}</td>
-            <td>${e.end_us}</td>
-            <td>${e.duration_us} us</td>
-            <td>
-              <span style="color:${isBE ? 'var(--text3)' : barColor};font-weight:600;">${typeLabel}</span>
-              <div class="entry-bar" style="background:${barColor};width:${Math.max(barWidth, 2)}%;opacity:${isBE ? 0.3 : 0.7};"></div>
-            </td>
-          </tr>`;
-        });
-
-        tableHTML += `</tbody></table>`;
-        linkDiv.innerHTML = tableHTML;
-        card.appendChild(linkDiv);
-      });
-
-      area.appendChild(card);
-    });
   }
 
   /* ── Responsive ──────────────────────────────── */

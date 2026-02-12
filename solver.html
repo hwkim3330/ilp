@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TSN/GCL ILP Solver</title>
+  <title>TSN/GCL Universal Solver</title>
   <link rel="stylesheet" href="style.css" />
   <style>
     /* ═══════════════════════════════════════════════
@@ -112,6 +112,69 @@
       background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
+
+    /* ── Preset Buttons ────────────────────────── */
+    .preset-group { display: flex; gap: 6px; justify-content: center; margin: 10px 0 6px; flex-wrap: wrap; }
+    .preset-btn {
+      padding: 6px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 700;
+      border: 1px solid rgba(59,130,246,0.25); background: #fff; color: var(--text2);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .preset-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .preset-btn.active {
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      color: #fff; border-color: transparent;
+    }
+
+    /* ── Scenario Desc & Domain Legend ──────────── */
+    .auto-desc {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag {
+      border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2);
+    }
+
+    /* ── Per-Switch GCL Cards ──────────────────── */
+    .gcl-switch-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600;
+    }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
+    }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
+    .gate-mask {
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+      letter-spacing: 1px; font-weight: 700;
+    }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -120,12 +183,26 @@
     <div class="header">
       <div class="keti-header">
         <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
-        <h1>TSN / GCL ILP Solver</h1>
+        <h1>TSN / GCL Universal Solver</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
       <div class="sub">IEEE 802.1Qbv Time-Aware Shaper &mdash; Integer Linear Programming Optimization</div>
-      <div class="badge" id="badgeInfo">Generic Topology &bull; Multi-Flow Scheduling &bull; k-Path Routing</div>
+      <div class="badge" id="badgeInfo">6 Presets &bull; Multi-Flow Scheduling &bull; Per-Switch GCL &bull; k-Path Routing</div>
+
+      <!-- Preset Buttons -->
+      <div class="preset-group" id="presetGroup">
+        <button class="preset-btn active" data-preset="roii">ROii Shuttle</button>
+        <button class="preset-btn" data-preset="frer">FRER Multi-Path</button>
+        <button class="preset-btn" data-preset="automotive">Automotive</button>
+        <button class="preset-btn" data-preset="real_gcd">Real GCD 10ms</button>
+        <button class="preset-btn" data-preset="real_lcm">Real LCM 100ms</button>
+        <button class="preset-btn" data-preset="sample">Sample</button>
+      </div>
     </div>
+
+    <!-- Scenario Description (hidden for Sample) -->
+    <div class="auto-desc" id="scenarioDesc" style="display:none;"></div>
+    <div class="auto-domain-legend" id="domainLegend" style="display:none;"></div>
 
     <!-- Input: two-column (textarea + preview) -->
     <div class="card">
@@ -134,14 +211,8 @@
         <div>
           <textarea id="input" style="min-height:400px;"></textarea>
           <div class="toolbar">
-            <button class="btn btn-secondary" id="sampleBtn">Load Sample</button>
             <button class="btn btn-primary" id="solveBtn" disabled>Solve ILP</button>
-            <div class="scenario-group">
-              <button class="scenario-btn active" data-scenario="normal">Normal</button>
-              <button class="scenario-btn" data-scenario="fail-s1">s1 Fail</button>
-              <button class="scenario-btn" data-scenario="fail-s2">s2 Fail</button>
-              <button class="scenario-btn" data-scenario="fail-s3">s3 Fail</button>
-            </div>
+            <div class="scenario-group" id="scenarioGroup"></div>
             <div id="status" style="margin-top:0; margin-left:8px;"><span class="spinner"></span>Initializing...</div>
           </div>
           <div class="failure-banner" id="failureBanner">
@@ -164,13 +235,19 @@
         <div class="card-title">Network Topology</div>
         <div class="legend" id="topoLegend"></div>
         <div class="link-toggles" id="linkToggles"></div>
-        <div class="svg-container" id="topoContainer" style="height:380px;"></div>
+        <div class="svg-container" id="topoContainer" style="height:520px;"></div>
       </div>
       <div class="card">
         <div class="card-title">Packet E2E Delay</div>
         <div class="svg-container" id="delayContainer" style="height:380px;"></div>
       </div>
     </div>
+
+    <!-- Per-Switch GCL Detail -->
+    <div class="card" id="switchGclCard" style="display:none;">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
 
     <!-- GCL Gantt -->
     <div class="card">
@@ -214,10 +291,26 @@
   <script src="vendor/d3.min.js"></script>
   <script type="module">
   import {
-    initTooltip, solveGreedy, solveILP, renderMetrics, renderTopology,
+    initTooltip, solveGreedy, solveILP, flowColor, renderMetrics, renderTopology,
     renderGCL, renderDelayChart, renderUtilization, renderTable,
-    renderInputPreview
+    renderInputPreview, renderSwitchGCL
   } from './js/ilp-core.js';
+  import { ROII_MODEL, getRoiiPositions, ROII_NODE_COLORS, ROII_SCENARIO, ROII_SWITCHES } from './js/roii-data.js';
+  import { FRER_MODEL, getFrerPositions, FRER_NODE_COLORS, FRER_SCENARIO, FRER_SWITCHES } from './js/roii-frer-data.js?v=2';
+  import { AUTOMOTIVE_MODEL, getAutomotivePositions, AUTOMOTIVE_NODE_COLORS, SCENARIO_DESC, AUTOMOTIVE_SWITCHES, automotiveFlowColor } from './js/automotive-data.js';
+  import {
+    ROII_REAL_GCD, ROII_REAL_LCM, getRealPositions,
+    ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
+    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor
+  } from './js/roii-real-data.js';
+
+  /* ── ROii Flow Colors ── */
+  function roiiFlowColor(fid) {
+    const id = (fid || '').toLowerCase();
+    if (id.includes('lidar')) return '#10B981';
+    if (id.includes('radar')) return '#952aff';
+    return '#3B82F6';
+  }
 
   /* ── Sample Data ─────────────────────────────── */
   const SAMPLE = {
@@ -245,16 +338,64 @@
     ]
   };
 
+  /* ── Preset Registry ─────────────────────────── */
+  const PRESETS = {
+    roii: {
+      label: "ROii Shuttle", model: ROII_MODEL,
+      getPositions: getRoiiPositions, nodeColors: ROII_NODE_COLORS,
+      scenario: ROII_SCENARIO, switches: ROII_SWITCHES,
+      flowColorFn: roiiFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
+    },
+    frer: {
+      label: "FRER Multi-Path", model: FRER_MODEL,
+      getPositions: getFrerPositions, nodeColors: FRER_NODE_COLORS,
+      scenario: FRER_SCENARIO, switches: FRER_SWITCHES,
+      flowColorFn: roiiFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR"]
+    },
+    automotive: {
+      label: "Automotive", model: AUTOMOTIVE_MODEL,
+      getPositions: getAutomotivePositions, nodeColors: AUTOMOTIVE_NODE_COLORS,
+      scenario: SCENARIO_DESC, switches: AUTOMOTIVE_SWITCHES,
+      flowColorFn: automotiveFlowColor, topoHeight: 420,
+      failNodes: ["GATEWAY", "SW1"]
+    },
+    real_gcd: {
+      label: "Real GCD 10ms", model: ROII_REAL_GCD,
+      getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
+      scenario: ROII_REAL_GCD_SCENARIO, switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
+    },
+    real_lcm: {
+      label: "Real LCM 100ms", model: ROII_REAL_LCM,
+      getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
+      scenario: ROII_REAL_LCM_SCENARIO, switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
+    },
+    sample: {
+      label: "Sample", model: SAMPLE,
+      getPositions: null, nodeColors: null,
+      scenario: null, switches: [],
+      flowColorFn: null, topoHeight: 380,
+      failNodes: ["s1", "s2", "s3"]
+    }
+  };
+
   /* ── State ───────────────────────────────────── */
   let glpk = null;
+  let currentPresetKey = 'roii';
+  let currentPreset = PRESETS.roii;
   let currentScenario = 'normal';
   let disabledLinks = new Set();
-  let currentModel = SAMPLE;
+  let currentModel = null;
   let currentResult = null;
 
   /* ── Build Model with Failures ── */
   function buildModel() {
-    const m = JSON.parse(JSON.stringify(SAMPLE));
+    const m = JSON.parse(JSON.stringify(currentPreset.model));
     m.links = m.links.filter(l => !disabledLinks.has(l.id));
     return m;
   }
@@ -271,7 +412,6 @@
   const inputEl = document.getElementById("input");
   const statusEl = document.getElementById("status");
   const solveBtn = document.getElementById("solveBtn");
-  const sampleBtn = document.getElementById("sampleBtn");
 
   /* ── Input Preview (debounced) ───────────────── */
   let previewTimer;
@@ -290,61 +430,134 @@
     }
   }
 
-  /* ── Buttons ─────────────────────────────────── */
-  sampleBtn.addEventListener("click", () => {
+  /* ── Preset Switching ────────────────────────── */
+  function switchPreset(key) {
+    currentPresetKey = key;
+    currentPreset = PRESETS[key];
     currentScenario = 'normal';
     disabledLinks.clear();
-    updateScenarioUI();
-    inputEl.value = JSON.stringify(SAMPLE, null, 2);
-    statusEl.textContent = "Sample loaded"; statusEl.className = "status-ok";
+
+    // Update preset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.preset === key);
+    });
+
+    // Rebuild scenario buttons
+    rebuildScenarioButtons();
+
+    // Render scenario description
+    renderScenarioDesc();
+
+    // Set topo height
+    document.getElementById("topoContainer").style.height = currentPreset.topoHeight + "px";
+
+    // Show/hide switch GCL card
+    document.getElementById("switchGclCard").style.display = currentPreset.switches.length ? '' : 'none';
+
+    // Load model
+    const model = buildModel();
+    inputEl.value = JSON.stringify(model, null, 2);
     updatePreview();
+    renderLinkToggles();
+    runGreedy();
+  }
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchPreset(btn.dataset.preset));
   });
 
-  solveBtn.addEventListener("click", runILPSolve);
+  /* ── Scenario Description ────────────────────── */
+  function renderScenarioDesc() {
+    const descEl = document.getElementById("scenarioDesc");
+    const legendEl = document.getElementById("domainLegend");
+    const sc = currentPreset.scenario;
 
-  /* ── Scenario Buttons ── */
+    if (!sc) {
+      descEl.style.display = 'none';
+      legendEl.style.display = 'none';
+      return;
+    }
+
+    descEl.style.display = '';
+    legendEl.style.display = '';
+    descEl.innerHTML = `
+      <h3>${sc.title}</h3>
+      <p>${sc.description}</p>
+      <ul class="auto-flow-list">
+        ${sc.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+      </ul>
+    `;
+    legendEl.innerHTML = sc.domains.map(d =>
+      `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+    ).join("");
+  }
+
+  /* ── Dynamic Scenario/Failure Buttons ────────── */
+  function rebuildScenarioButtons() {
+    const group = document.getElementById("scenarioGroup");
+    group.innerHTML = '';
+
+    // Normal button
+    const normalBtn = document.createElement("button");
+    normalBtn.className = "scenario-btn active";
+    normalBtn.dataset.scenario = "normal";
+    normalBtn.textContent = "Normal";
+    group.appendChild(normalBtn);
+
+    // Failure buttons
+    currentPreset.failNodes.forEach(node => {
+      const btn = document.createElement("button");
+      btn.className = "scenario-btn";
+      btn.dataset.scenario = `fail-${node}`;
+      btn.textContent = `${node} Fail`;
+      group.appendChild(btn);
+    });
+
+    // Attach handlers
+    group.querySelectorAll('.scenario-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentScenario = btn.dataset.scenario;
+        disabledLinks.clear();
+        if (currentScenario !== 'normal') {
+          const failNode = currentScenario.replace('fail-', '');
+          currentPreset.model.links.forEach(l => {
+            if (l.from === failNode || l.to === failNode) disabledLinks.add(l.id);
+          });
+        }
+        updateScenarioUI();
+        const model = buildModel();
+        inputEl.value = JSON.stringify(model, null, 2);
+        updatePreview();
+        renderLinkToggles();
+        runGreedy();
+      });
+    });
+  }
+
+  /* ── Scenario UI ── */
   const failureBanner = document.getElementById("failureBanner");
   const failureText = document.getElementById("failureText");
 
   function updateScenarioUI() {
-    document.querySelectorAll('.scenario-btn').forEach(btn => {
+    document.querySelectorAll('#scenarioGroup .scenario-btn').forEach(btn => {
       const s = btn.dataset.scenario;
       btn.classList.toggle('active', s === currentScenario);
       btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
     });
-    const failNode = currentScenario.replace('fail-', '');
     if (currentScenario !== 'normal') {
+      const failNode = currentScenario.replace('fail-', '');
       failureBanner.classList.add('show');
       failureText.textContent = `${failNode} offline \u2014 ${disabledLinks.size} links removed, traffic rerouted`;
     } else {
       failureBanner.classList.remove('show');
     }
-    renderLinkToggles();
   }
-
-  document.querySelectorAll('.scenario-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentScenario = btn.dataset.scenario;
-      disabledLinks.clear();
-      if (currentScenario !== 'normal') {
-        const failNode = currentScenario.replace('fail-', '');
-        SAMPLE.links.forEach(l => {
-          if (l.from === failNode || l.to === failNode) disabledLinks.add(l.id);
-        });
-      }
-      updateScenarioUI();
-      const model = buildModel();
-      inputEl.value = JSON.stringify(model, null, 2);
-      updatePreview();
-      runGreedy();
-    });
-  });
 
   /* ── Link Toggle Chips ── */
   function renderLinkToggles() {
     const el = document.getElementById("linkToggles");
     el.innerHTML = "";
-    SAMPLE.links.forEach(l => {
+    currentPreset.model.links.forEach(l => {
       const chip = document.createElement("span");
       chip.className = "link-chip" + (disabledLinks.has(l.id) ? " disabled" : "");
       chip.textContent = `${l.from}\u2192${l.to}`;
@@ -353,7 +566,7 @@
         if (disabledLinks.has(l.id)) disabledLinks.delete(l.id);
         else disabledLinks.add(l.id);
         currentScenario = disabledLinks.size === 0 ? 'normal' : 'custom';
-        document.querySelectorAll('.scenario-btn').forEach(b => {
+        document.querySelectorAll('#scenarioGroup .scenario-btn').forEach(b => {
           b.classList.remove('active', 'fail');
           if (b.dataset.scenario === 'normal' && currentScenario === 'normal') b.classList.add('active');
         });
@@ -372,7 +585,9 @@
       el.appendChild(chip);
     });
   }
-  renderLinkToggles();
+
+  /* ── Solve Button ── */
+  solveBtn.addEventListener("click", runILPSolve);
 
   function runGreedy() {
     try {
@@ -416,19 +631,37 @@
 
   function renderAll() {
     if (!currentResult) return;
-    const fcopts = { beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+
+    const container = document.getElementById("topoContainer");
+    const W = container.clientWidth;
+    const H = currentPreset.topoHeight;
+    const positions = currentPreset.getPositions ? currentPreset.getPositions(W, H) : null;
+
+    const colorFn = currentPreset.flowColorFn || flowColor;
+    const fcopts = { flowColorFn: colorFn, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+
     renderMetrics(currentModel, currentResult);
-    renderTopology(currentModel, currentResult);
+    renderTopology(currentModel, currentResult, {
+      nodePositions: positions,
+      nodeColors: currentPreset.nodeColors,
+      height: H
+    });
+    if (currentPreset.switches.length) {
+      document.getElementById("switchGclCard").style.display = '';
+      renderSwitchGCL(currentModel, currentResult, {
+        switches: currentPreset.switches,
+        flowColorFn: colorFn
+      });
+    } else {
+      document.getElementById("switchGclCard").style.display = 'none';
+      document.getElementById("switchGclArea").innerHTML = '';
+    }
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
-
-  // Init display
-  inputEl.value = JSON.stringify(SAMPLE, null, 2);
-  updatePreview();
 
   // Responsive
   let resizeTimer;
@@ -437,7 +670,16 @@
     resizeTimer = setTimeout(() => { renderAll(); updatePreview(); }, 300);
   });
 
-  /* ── Auto-Solve with Greedy ──────────────────── */
+  /* ── Initialize with ROii preset ─────────────── */
+  rebuildScenarioButtons();
+  renderScenarioDesc();
+  document.getElementById("topoContainer").style.height = currentPreset.topoHeight + "px";
+  document.getElementById("switchGclCard").style.display = currentPreset.switches.length ? '' : 'none';
+  const model = buildModel();
+  inputEl.value = JSON.stringify(model, null, 2);
+  updatePreview();
+  renderLinkToggles();
+
   const badge = document.getElementById("engineBadge");
   badge.className = "engine-badge ready";
   badge.innerHTML = "&#9679; Greedy Ready";
