@@ -276,7 +276,7 @@ export function realGetDeviceType(nodeId) {
   if (nodeId === 'LIDAR_FC' || nodeId === 'LIDAR_R') return 'lidar_g32';
   if (nodeId === 'LIDAR_FL' || nodeId === 'LIDAR_FR') return 'lidar_pandar';
   if (nodeId.startsWith('RADAR')) return 'radar';
-  if (nodeId.startsWith('REP_')) return 'replicator';
+  if (nodeId === 'REP') return 'replicator';
   if (nodeId === 'SW_REAR') return 'switch_r';
   if (nodeId.startsWith('SW')) return 'switch_f';
   return 'ecu';
@@ -284,26 +284,24 @@ export function realGetDeviceType(nodeId) {
 
 /* ═══════════════════════════════════════════════════
    Reconfigured Topology — 802.1CB Replicator-Based
-   LIDAR_FC → REP_FC → [SW_FL, SW_FR]  (frame replication)
-   RADAR_F  → REP_F  → [SW_FL, SW_FR]  (frame replication)
-   15 nodes, 20 links, 11 flows
+   LIDAR_FC + RADAR_F → REP → SW_FR  (single replicator)
+   14 nodes, 19 links, 11 flows
    ═══════════════════════════════════════════════════ */
 
 const RECONF_NODES = [
-  // LiDAR sensors (4) — original sensors unchanged
+  // LiDAR sensors (4)
   { id: "LIDAR_FC", type: "endstation" },  // Robosense G32, 1000BASE-T1
   { id: "LIDAR_FL", type: "endstation" },  // Hesai Pandar 40P, 100BASE-T1
   { id: "LIDAR_FR", type: "endstation" },  // Hesai Pandar 40P, 100BASE-T1
   { id: "LIDAR_R",  type: "endstation" },  // Robosense G32, 1000BASE-T1
-  // Radar sensors (5) — original sensors unchanged
+  // Radar sensors (5)
   { id: "RADAR_F",   type: "endstation" }, // Continental MRR-35
   { id: "RADAR_FLC", type: "endstation" },
   { id: "RADAR_FRC", type: "endstation" },
   { id: "RADAR_RLC", type: "endstation" },
   { id: "RADAR_RRC", type: "endstation" },
-  // 802.1CB Frame Replicators (2)
-  { id: "REP_FC", type: "endstation" },    // Replicator for LIDAR_FC
-  { id: "REP_F",  type: "endstation" },    // Replicator for RADAR_F
+  // 802.1CB Frame Replicator (1) — replicates LIDAR_FC + RADAR_F to SW_FR
+  { id: "REP", type: "endstation" },
   // Switches — LAN9692 triangle topology
   { id: "SW_FL",   type: "switch" },
   { id: "SW_FR",   type: "switch" },
@@ -313,23 +311,23 @@ const RECONF_NODES = [
 ];
 
 const RECONF_LINKS = [
-  // LIDAR_FC: direct → SW_FL (main) + via REP_FC → SW_FR (replicated)
-  { id: "l_lidarfc_swfl",   from: "LIDAR_FC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-  { id: "l_lidarfc_repfc",  from: "LIDAR_FC", to: "REP_FC",  rate_mbps: 1000, prop_delay_us: 0.2 },
-  { id: "l_repfc_swfr",     from: "REP_FC",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  // LIDAR_FC: direct → SW_FL (main) + to REP (for replication)
+  { id: "l_lidarfc_swfl",  from: "LIDAR_FC", to: "SW_FL", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfc_rep",   from: "LIDAR_FC", to: "REP",   rate_mbps: 1000, prop_delay_us: 0.2 },
+  // RADAR_F: direct → SW_FL (main) + to REP (for replication)
+  { id: "l_radarf_swfl",   from: "RADAR_F",  to: "SW_FL", rate_mbps: 100,  prop_delay_us: 1.0 },
+  { id: "l_radarf_rep",    from: "RADAR_F",  to: "REP",   rate_mbps: 1000, prop_delay_us: 0.2 },
+  // REP → SW_FR (replicated copies out)
+  { id: "l_rep_swfr",      from: "REP",      to: "SW_FR", rate_mbps: 1000, prop_delay_us: 0.5 },
   // Other LiDAR → switches
-  { id: "l_lidarfl_swfl",   from: "LIDAR_FL", to: "SW_FL",   rate_mbps: 100,  prop_delay_us: 0.5 },
-  { id: "l_lidarfr_swfr",   from: "LIDAR_FR", to: "SW_FR",   rate_mbps: 100,  prop_delay_us: 0.5 },
-  { id: "l_lidarr_swrear",  from: "LIDAR_R",  to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-  // RADAR_F: direct → SW_FL (main) + via REP_F → SW_FR (replicated)
-  { id: "l_radarf_swfl",    from: "RADAR_F",  to: "SW_FL",   rate_mbps: 100,  prop_delay_us: 1.0 },
-  { id: "l_radarf_repf",    from: "RADAR_F",  to: "REP_F",   rate_mbps: 1000, prop_delay_us: 0.2 },
-  { id: "l_repf_swfr",      from: "REP_F",    to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfl_swfl",  from: "LIDAR_FL", to: "SW_FL",   rate_mbps: 100,  prop_delay_us: 0.5 },
+  { id: "l_lidarfr_swfr",  from: "LIDAR_FR", to: "SW_FR",   rate_mbps: 100,  prop_delay_us: 0.5 },
+  { id: "l_lidarr_swrear", from: "LIDAR_R",  to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
   // Other Radar → switches
-  { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 100,  prop_delay_us: 1.0 },
-  { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 100,  prop_delay_us: 1.0 },
-  { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 100,  prop_delay_us: 1.0 },
-  { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 100,  prop_delay_us: 1.0 },
+  { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 100, prop_delay_us: 1.0 },
+  { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 100, prop_delay_us: 1.0 },
+  { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 100, prop_delay_us: 1.0 },
+  { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 100, prop_delay_us: 1.0 },
   // Triangle switch backbone (1000 Mbps bidirectional)
   { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
   { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
@@ -353,10 +351,10 @@ export const ROII_REAL_RECONF_GCD = {
     { id: "f_lidar_fc", priority: 7, payload_bytes: 2048, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
       path: ["l_lidarfc_swfl", "l_swfl_swrear", "l_swrear_acu"] },
-    // LiDAR FC — replicated copy via REP_FC → SW_FR
+    // LiDAR FC — replicated copy via REP → SW_FR
     { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 2048, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "REP_FC", dst: "ACU_IT", k_paths: 1,
-      path: ["l_repfc_swfr", "l_swfr_swrear", "l_swrear_acu"] },
+      traffic_type: "lidar", src: "REP", dst: "ACU_IT", k_paths: 1,
+      path: ["l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other LiDAR flows (P7)
     { id: "f_lidar_fl", priority: 7, payload_bytes: 1200, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
@@ -368,10 +366,10 @@ export const ROII_REAL_RECONF_GCD = {
     { id: "f_radar_f",  priority: 6, payload_bytes: 256, period_us: 10000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
       path: ["l_radarf_swfl", "l_swfl_swrear", "l_swrear_acu"] },
-    // Radar F — replicated copy via REP_F → SW_FR
+    // Radar F — replicated copy via REP → SW_FR
     { id: "f_radar_f_rep",  priority: 6, payload_bytes: 256, period_us: 10000, deadline_us: 2000,
-      traffic_type: "radar", src: "REP_F",  dst: "ACU_IT", k_paths: 1,
-      path: ["l_repf_swfr", "l_swfr_swrear", "l_swrear_acu"] },
+      traffic_type: "radar", src: "REP",  dst: "ACU_IT", k_paths: 1,
+      path: ["l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other Radar flows (P6)
     { id: "f_radar_flc", priority: 6, payload_bytes: 256, period_us: 10000, deadline_us: 2000,
       traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
@@ -396,10 +394,10 @@ export const ROII_REAL_RECONF_LCM = {
     { id: "f_lidar_fc", priority: 7, payload_bytes: 2048, period_us: 50000, deadline_us: 10000,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 1,
       path: ["l_lidarfc_swfl", "l_swfl_swrear", "l_swrear_acu"] },
-    // LiDAR FC — replicated copy via REP_FC → SW_FR
+    // LiDAR FC — replicated copy via REP → SW_FR
     { id: "f_lidar_fc_rep", priority: 7, payload_bytes: 2048, period_us: 50000, deadline_us: 10000,
-      traffic_type: "lidar", src: "REP_FC", dst: "ACU_IT", k_paths: 1,
-      path: ["l_repfc_swfr", "l_swfr_swrear", "l_swrear_acu"] },
+      traffic_type: "lidar", src: "REP", dst: "ACU_IT", k_paths: 1,
+      path: ["l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other LiDAR flows (P7, 50ms period → 2 pkts/cycle)
     { id: "f_lidar_fl", priority: 7, payload_bytes: 1200, period_us: 50000, deadline_us: 10000,
       traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 1 },
@@ -411,10 +409,10 @@ export const ROII_REAL_RECONF_LCM = {
     { id: "f_radar_f",  priority: 6, payload_bytes: 256, period_us: 20000, deadline_us: 5000,
       traffic_type: "radar", src: "RADAR_F",  dst: "ACU_IT", k_paths: 1,
       path: ["l_radarf_swfl", "l_swfl_swrear", "l_swrear_acu"] },
-    // Radar F — replicated copy via REP_F → SW_FR
+    // Radar F — replicated copy via REP → SW_FR
     { id: "f_radar_f_rep",  priority: 6, payload_bytes: 256, period_us: 20000, deadline_us: 5000,
-      traffic_type: "radar", src: "REP_F",  dst: "ACU_IT", k_paths: 1,
-      path: ["l_repf_swfr", "l_swfr_swrear", "l_swrear_acu"] },
+      traffic_type: "radar", src: "REP",  dst: "ACU_IT", k_paths: 1,
+      path: ["l_rep_swfr", "l_swfr_swrear", "l_swrear_acu"] },
     // Other Radar flows (P6, 20ms period → 5 pkts/cycle)
     { id: "f_radar_flc", priority: 6, payload_bytes: 256, period_us: 20000, deadline_us: 5000,
       traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
@@ -427,7 +425,7 @@ export const ROII_REAL_RECONF_LCM = {
   ]
 };
 
-/* ── Reconf 2D Positions (15-node layout, sensors + replicators) ── */
+/* ── Reconf 2D Positions (14-node layout, sensors + replicator) ── */
 export function getReconfPositions(W, H) {
   return {
     // Top row — 6 front sensors
@@ -437,9 +435,8 @@ export function getReconfPositions(W, H) {
     RADAR_F:    { x: W * 0.62, y: H * 0.06 },
     LIDAR_FR:   { x: W * 0.76, y: H * 0.06 },
     RADAR_FRC:  { x: W * 0.88, y: H * 0.06 },
-    // Second row — 802.1CB Replicators (between sensors and switches)
-    REP_FC:     { x: W * 0.50, y: H * 0.18 },
-    REP_F:      { x: W * 0.62, y: H * 0.18 },
+    // Second row — 802.1CB Replicator (between sensors and switches)
+    REP:        { x: W * 0.56, y: H * 0.18 },
     // Upper-middle — front zone controllers
     SW_FL:      { x: W * 0.28, y: H * 0.36 },
     SW_FR:      { x: W * 0.72, y: H * 0.36 },
@@ -467,9 +464,8 @@ export const ROII_RECONF_NODE_COLORS = {
   RADAR_FRC:  { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 FRC",   shortLabel: "MRR" },
   RADAR_RLC:  { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 RLC",   shortLabel: "MRR" },
   RADAR_RRC:  { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 RRC",   shortLabel: "MRR" },
-  // 802.1CB Replicators — amber/orange
-  REP_FC:     { fill: "#fef3c7", stroke: "#d97706", label: "REP FC",       shortLabel: "802.1CB" },
-  REP_F:      { fill: "#fef3c7", stroke: "#d97706", label: "REP F",        shortLabel: "802.1CB" },
+  // 802.1CB Replicator — amber/orange
+  REP:        { fill: "#fef3c7", stroke: "#d97706", label: "REP (802.1CB)", shortLabel: "802.1CB" },
   // Switches
   SW_FL:      { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC",   shortLabel: "LAN9692" },
   SW_FR:      { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC",   shortLabel: "LAN9692" },
@@ -481,15 +477,15 @@ export const ROII_RECONF_NODE_COLORS = {
 /* ── Reconf Scenario Descriptions ── */
 export const ROII_RECONF_GCD_SCENARIO = {
   title: "ROii Reconfigured \u2014 802.1CB Replicator GCD 10ms",
-  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicators</strong>: LIDAR_FC and RADAR_F each connect to a dedicated replicator device (REP_FC, REP_F) that duplicates frames to SW_FR for balanced load distribution. Main path goes direct to SW_FL, replicated copy goes via replicator to SW_FR. <strong>15 nodes, 20 links, 11 flows</strong>, GCD 10ms cycle \u2014 11 pkts/cycle.",
+  description: "Reconfigured topology with <strong>IEEE 802.1CB frame replicator</strong>: a single REP device receives frames from LIDAR_FC and RADAR_F, then duplicates them to SW_FR for balanced load distribution. Main path goes direct to SW_FL, replicated copy goes via REP to SW_FR. <strong>14 nodes, 19 links, 11 flows</strong>, GCD 10ms cycle \u2014 11 pkts/cycle.",
   flows: [
     { name: "G32 FC \u2192 ACU-IT (direct)",     color: "#10B981", desc: "2048B, P7, via SW_FL (main path)" },
-    { name: "G32 FC \u2192 ACU-IT (replicated)",  color: "#d97706", desc: "2048B, P7, via REP_FC \u2192 SW_FR (802.1CB)" },
+    { name: "G32 FC \u2192 ACU-IT (replicated)",  color: "#d97706", desc: "2048B, P7, via REP \u2192 SW_FR (802.1CB)" },
     { name: "Pandar FL \u2192 ACU-IT",           color: "#0D9488", desc: "1200B, P7, 100BASE-T1 \u2192 SW_FL" },
     { name: "Pandar FR \u2192 ACU-IT",           color: "#0D9488", desc: "1200B, P7, 100BASE-T1 \u2192 SW_FR" },
     { name: "G32 Rear \u2192 ACU-IT",            color: "#10B981", desc: "2048B, P7, 1000BASE-T1 \u2192 SW_REAR" },
     { name: "MRR-35 F \u2192 ACU-IT (direct)",    color: "#952aff", desc: "256B, P6, via SW_FL (main path)" },
-    { name: "MRR-35 F \u2192 ACU-IT (replicated)", color: "#d97706", desc: "256B, P6, via REP_F \u2192 SW_FR (802.1CB)" },
+    { name: "MRR-35 F \u2192 ACU-IT (replicated)", color: "#d97706", desc: "256B, P6, via REP \u2192 SW_FR (802.1CB)" },
     { name: "MRR-35 FLC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, CAN-FD\u2192ETH \u2192 SW_FL" },
     { name: "MRR-35 FRC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, CAN-FD\u2192ETH \u2192 SW_FR" },
     { name: "MRR-35 RLC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, CAN-FD\u2192ETH \u2192 SW_REAR" },
@@ -507,15 +503,15 @@ export const ROII_RECONF_GCD_SCENARIO = {
 
 export const ROII_RECONF_LCM_SCENARIO = {
   title: "ROii Reconfigured \u2014 802.1CB Replicator LCM 100ms",
-  description: "Reconfigured topology with IEEE 802.1CB frame replicators and LCM hyperperiod. 5 LiDAR flows at 50ms period (2 pkts each = 10 pkts) + 6 Radar flows at 20ms period (5 pkts each = 30 pkts) = <strong>40 packets total</strong>. Replicators balance load across SW_FL and SW_FR for better backbone utilization.",
+  description: "Reconfigured topology with IEEE 802.1CB frame replicator (single REP device) and LCM hyperperiod. 5 LiDAR flows at 50ms period (2 pkts each = 10 pkts) + 6 Radar flows at 20ms period (5 pkts each = 30 pkts) = <strong>40 packets total</strong>. Replicator balances load across SW_FL and SW_FR for better backbone utilization.",
   flows: [
     { name: "G32 FC \u2192 ACU-IT (direct)",     color: "#10B981", desc: "2048B, P7, 50ms, 2 pkts/cycle, via SW_FL" },
-    { name: "G32 FC \u2192 ACU-IT (replicated)",  color: "#d97706", desc: "2048B, P7, 50ms, 2 pkts/cycle, via REP_FC" },
+    { name: "G32 FC \u2192 ACU-IT (replicated)",  color: "#d97706", desc: "2048B, P7, 50ms, 2 pkts/cycle, via REP" },
     { name: "Pandar FL \u2192 ACU-IT",           color: "#0D9488", desc: "1200B, P7, 50ms, 2 pkts/cycle" },
     { name: "Pandar FR \u2192 ACU-IT",           color: "#0D9488", desc: "1200B, P7, 50ms, 2 pkts/cycle" },
     { name: "G32 Rear \u2192 ACU-IT",            color: "#10B981", desc: "2048B, P7, 50ms, 2 pkts/cycle" },
     { name: "MRR-35 F \u2192 ACU-IT (direct)",    color: "#952aff", desc: "256B, P6, 20ms, 5 pkts/cycle, via SW_FL" },
-    { name: "MRR-35 F \u2192 ACU-IT (replicated)", color: "#d97706", desc: "256B, P6, 20ms, 5 pkts/cycle, via REP_F" },
+    { name: "MRR-35 F \u2192 ACU-IT (replicated)", color: "#d97706", desc: "256B, P6, 20ms, 5 pkts/cycle, via REP" },
     { name: "MRR-35 FLC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, 20ms, 5 pkts/cycle" },
     { name: "MRR-35 FRC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, 20ms, 5 pkts/cycle" },
     { name: "MRR-35 RLC \u2192 ACU-IT",          color: "#952aff", desc: "256B, P6, 20ms, 5 pkts/cycle" },
@@ -531,7 +527,7 @@ export const ROII_RECONF_LCM_SCENARIO = {
   ]
 };
 
-/* ── Reconf 3D Positions (15 nodes, sensors + replicators) ── */
+/* ── Reconf 3D Positions (14 nodes, sensors + replicator) ── */
 export const ROII_REAL_3D_POSITIONS_RECONF = {
   LIDAR_FC:   { x:  0,    y: 5.5,  z: 18.5 },
   LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },
@@ -542,9 +538,8 @@ export const ROII_REAL_3D_POSITIONS_RECONF = {
   RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 },
   RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },
   RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },
-  // 802.1CB Replicators — between sensors and switches
-  REP_FC:     { x:  3,    y: 4,    z: 14.5 },
-  REP_F:      { x: -2,    y: 5,    z: 14.5 },
+  // 802.1CB Replicator — between sensors and switches
+  REP:        { x:  1,    y: 4.5,  z: 14.5 },
   // Switches
   SW_FL:      { x: -4,    y: 2,    z: 10   },
   SW_FR:      { x:  4,    y: 2,    z: 10   },
@@ -559,7 +554,7 @@ export const ROII_REAL_3D_LABELS_RECONF = {
   RADAR_F:    'MRR35-Front', RADAR_FLC:  'MRR35-FLC',
   RADAR_FRC:  'MRR35-FRC',  RADAR_RLC:  'MRR35-RLC',
   RADAR_RRC:  'MRR35-RRC',
-  REP_FC:     'REP-FC',     REP_F:      'REP-F',
+  REP:        'REP (802.1CB)',
   SW_FL:      'Front-L ZC', SW_FR:      'Front-R ZC',
   SW_REAR:    'Rear-GW',    ACU_IT:     'ACU-IT'
 };
@@ -567,18 +562,18 @@ export const ROII_REAL_3D_LABELS_RECONF = {
 /* ── Reconf 3D Flow Paths (11 animated particles) ── */
 export const ROII_REAL_FLOW_PATHS_RECONF = [
   // LIDAR_FC direct → SW_FL
-  { path: ['LIDAR_FC','SW_FL','SW_REAR','ACU_IT'],          color: 0x10B981 },
-  // LIDAR_FC replicated → REP_FC → SW_FR
-  { path: ['LIDAR_FC','REP_FC','SW_FR','SW_REAR','ACU_IT'], color: 0xd97706 },
-  { path: ['LIDAR_FL','SW_FL','SW_REAR','ACU_IT'],          color: 0x0D9488 },
-  { path: ['LIDAR_FR','SW_FR','SW_REAR','ACU_IT'],          color: 0x0D9488 },
-  { path: ['LIDAR_R','SW_REAR','ACU_IT'],                   color: 0x10B981 },
+  { path: ['LIDAR_FC','SW_FL','SW_REAR','ACU_IT'],        color: 0x10B981 },
+  // LIDAR_FC replicated → REP → SW_FR
+  { path: ['LIDAR_FC','REP','SW_FR','SW_REAR','ACU_IT'],  color: 0xd97706 },
+  { path: ['LIDAR_FL','SW_FL','SW_REAR','ACU_IT'],        color: 0x0D9488 },
+  { path: ['LIDAR_FR','SW_FR','SW_REAR','ACU_IT'],        color: 0x0D9488 },
+  { path: ['LIDAR_R','SW_REAR','ACU_IT'],                 color: 0x10B981 },
   // RADAR_F direct → SW_FL
-  { path: ['RADAR_F','SW_FL','SW_REAR','ACU_IT'],           color: 0x952aff },
-  // RADAR_F replicated → REP_F → SW_FR
-  { path: ['RADAR_F','REP_F','SW_FR','SW_REAR','ACU_IT'],   color: 0xd97706 },
-  { path: ['RADAR_FLC','SW_FL','SW_REAR','ACU_IT'],         color: 0x952aff },
-  { path: ['RADAR_FRC','SW_FR','SW_REAR','ACU_IT'],         color: 0x952aff },
-  { path: ['RADAR_RLC','SW_REAR','ACU_IT'],                 color: 0x952aff },
-  { path: ['RADAR_RRC','SW_REAR','ACU_IT'],                 color: 0x952aff }
+  { path: ['RADAR_F','SW_FL','SW_REAR','ACU_IT'],         color: 0x952aff },
+  // RADAR_F replicated → REP → SW_FR
+  { path: ['RADAR_F','REP','SW_FR','SW_REAR','ACU_IT'],   color: 0xd97706 },
+  { path: ['RADAR_FLC','SW_FL','SW_REAR','ACU_IT'],       color: 0x952aff },
+  { path: ['RADAR_FRC','SW_FR','SW_REAR','ACU_IT'],       color: 0x952aff },
+  { path: ['RADAR_RLC','SW_REAR','ACU_IT'],               color: 0x952aff },
+  { path: ['RADAR_RRC','SW_REAR','ACU_IT'],               color: 0x952aff }
 ];
