@@ -3,8 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ROii Realistic Sensor Demo &mdash; GCD / LCM Cycle Strategies</title>
+  <title>ROii Realistic Sensor Demo &mdash; 3D Shuttle + 4 Modes</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     /* ═══════════════════════════════════════════════
        Light Theme Override
@@ -80,8 +84,40 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
 
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative;
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      backdrop-filter: blur(20px);
+    }
+    #canvas3d {
+      width: 100%;
+      height: 500px;
+      display: block;
+      cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute;
+      bottom: 12px;
+      left: 16px;
+      font-size: 0.72rem;
+      color: var(--text3);
+      background: rgba(255,255,255,0.85);
+      padding: 4px 10px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
     /* ── Mode & Scenario Controls ─────────────── */
-    .mode-group { display: flex; gap: 6px; justify-content: center; margin: 10px 0 6px; }
+    .mode-group { display: flex; gap: 6px; justify-content: center; margin: 10px 0 6px; flex-wrap: wrap; }
     .mode-btn {
       padding: 6px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 700;
       border: 1px solid rgba(59,130,246,0.25); background: #fff; color: var(--text2);
@@ -167,11 +203,20 @@
       </div>
       <div class="sub">Mixed Link Speeds (100/1000 Mbps) &mdash; G32, Pandar 40P, MRR-35 Sensors</div>
 
-      <!-- GCD / LCM Mode Toggle -->
+      <!-- 4-Mode Toggle -->
       <div class="mode-group" id="modeGroup">
         <button class="mode-btn active" data-mode="gcd">GCD 10ms Cycle</button>
         <button class="mode-btn" data-mode="lcm">LCM 100ms Hyperperiod</button>
+        <button class="mode-btn" data-mode="reconf_gcd">Reconf GCD</button>
+        <button class="mode-btn" data-mode="reconf_lcm">Reconf LCM</button>
       </div>
+    </div>
+
+    <!-- 3D Shuttle Visualization -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
     </div>
 
     <!-- Scenario Description -->
@@ -300,12 +345,42 @@
   import {
     ROII_REAL_GCD, ROII_REAL_LCM, getRealPositions,
     ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
-    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor
+    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor,
+    ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS,
+    ROII_REAL_3D_LABELS, ROII_REAL_FLOW_PATHS, realGetDeviceType,
+    ROII_REAL_RECONF_GCD, ROII_REAL_RECONF_LCM,
+    getReconfPositions, ROII_RECONF_NODE_COLORS,
+    ROII_RECONF_GCD_SCENARIO, ROII_RECONF_LCM_SCENARIO,
+    ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
+    ROII_REAL_FLOW_PATHS_RECONF
   } from './js/roii-real-data.js';
 
+  /* ── MODES Registry ── */
   const MODES = {
-    gcd: { model: ROII_REAL_GCD, scenario: ROII_REAL_GCD_SCENARIO },
-    lcm: { model: ROII_REAL_LCM, scenario: ROII_REAL_LCM_SCENARIO }
+    gcd: {
+      model: ROII_REAL_GCD, scenario: ROII_REAL_GCD_SCENARIO,
+      getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
+      flowPaths3d: ROII_REAL_FLOW_PATHS, tilts3d: ROII_REAL_3D_TILTS
+    },
+    lcm: {
+      model: ROII_REAL_LCM, scenario: ROII_REAL_LCM_SCENARIO,
+      getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
+      flowPaths3d: ROII_REAL_FLOW_PATHS, tilts3d: ROII_REAL_3D_TILTS
+    },
+    reconf_gcd: {
+      model: ROII_REAL_RECONF_GCD, scenario: ROII_RECONF_GCD_SCENARIO,
+      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
+      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
+    },
+    reconf_lcm: {
+      model: ROII_REAL_RECONF_LCM, scenario: ROII_RECONF_LCM_SCENARIO,
+      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
+      flowPaths3d: ROII_REAL_FLOW_PATHS_RECONF, tilts3d: ROII_REAL_3D_TILTS
+    }
   };
 
   const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
@@ -316,6 +391,14 @@
   let currentScenario = 'normal';
   let currentModel = null;
   let currentResult = null;
+
+  /* ── 3D State (module-scoped for rebuild) ── */
+  let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
+  let dynamicGroup = null;
+  let nodeMeshes3d = {};
+  let particles3d = [];
+  let clock3d = null;
+  let glbModel = null;
 
   /* ── Build Model for Scenario ── */
   function buildModel() {
@@ -364,7 +447,7 @@
     ).join("");
   }
 
-  /* ── Mode Switching (GCD / LCM) ── */
+  /* ── Mode Switching (4 modes) ── */
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentMode = btn.dataset.mode;
@@ -372,6 +455,7 @@
       updateScenarioUI();
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
       renderScenarioDesc();
+      rebuild3D(MODES[currentMode]);
       reload();
     });
   });
@@ -460,14 +544,15 @@
   function renderAll() {
     if (!currentResult) return;
 
+    const mode = MODES[currentMode];
     const container = document.getElementById("topoContainer");
     const W = container.clientWidth;
-    const positions = getRealPositions(W, 520);
+    const positions = mode.getPositions(W, 520);
 
     renderMetrics(currentModel, currentResult);
     renderTopology(currentModel, currentResult, {
       nodePositions: positions,
-      nodeColors: ROII_REAL_NODE_COLORS,
+      nodeColors: mode.nodeColors,
       height: 520
     });
     renderSwitchGCL(currentModel, currentResult, {
@@ -488,6 +573,312 @@
     resizeTimer = setTimeout(renderAll, 300);
   });
 
+  /* ═══════════════════════════════════════════════
+     3D Shuttle Visualization — init3D + rebuild3D
+     ═══════════════════════════════════════════════ */
+
+  /* Device Templates */
+  const TMPL = {
+    lidar_g32:    { w: 1, h: 1, d: 1, color: 0x10B981 },
+    lidar_pandar: { w: 1, h: 1, d: 1, color: 0x0D9488 },
+    radar:        { w: 1, h: 1, d: 1, color: 0x952aff },
+    switch_f:     { w: 4, h: 2, d: 4, color: 0x3B82F6 },
+    switch_r:     { w: 4, h: 2, d: 4, color: 0x06B6D4 },
+    ecu:          { w: 4, h: 2, d: 4, color: 0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId);
+    const t = TMPL[type];
+    const group = new THREE.Group();
+    const { w, h, d } = t;
+
+    let geometry;
+    if (type === 'lidar_g32') {
+      geometry = new THREE.BoxGeometry(w, h, d);
+    } else if (type === 'lidar_pandar') {
+      geometry = new THREE.CylinderGeometry(w * 0.6, w * 0.6, h * 0.8, 16);
+    } else {
+      geometry = new THREE.BoxGeometry(w, h, d);
+    }
+
+    const mat = new THREE.MeshPhongMaterial({
+      color: t.color, emissive: t.color, emissiveIntensity: 0.5,
+      specular: 0x888888, shininess: 30
+    });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+
+    // Edge wireframe
+    group.add(new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry),
+      new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 })
+    ));
+
+    // Label sprite
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.9)';
+    ctx.fillRect(0, 0, 512, 128);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 256, 75);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) })
+    );
+    const ls = Math.max(w, d) * 1.2;
+    sprite.scale.set(ls, ls * 0.25, 1);
+    sprite.position.y = h + 1;
+    group.add(sprite);
+
+    group.position.copy(position);
+    if (tilt) {
+      if (tilt.x !== undefined) group.rotation.x = tilt.x;
+      if (tilt.y !== undefined) group.rotation.y = tilt.y;
+      if (tilt.z !== undefined) group.rotation.z = tilt.z;
+    }
+    return { mesh, group };
+  }
+
+  /* init3D — called once */
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+
+    scene3d = new THREE.Scene();
+    scene3d.background = new THREE.Color(0xf0f0f0);
+    scene3d.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+
+    camera3d = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera3d.position.set(50, 35, 70);
+
+    renderer3d = new THREE.WebGLRenderer({ antialias: true });
+    renderer3d.shadowMap.enabled = true;
+    renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    function updateSize() {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera3d.aspect = w / h;
+      camera3d.updateProjectionMatrix();
+      renderer3d.setSize(w, h);
+    }
+    updateSize();
+    container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+
+    controls3d = new THREE.OrbitControls(camera3d, renderer3d.domElement);
+    controls3d.enableDamping = true;
+    controls3d.dampingFactor = 0.05;
+    controls3d.autoRotate = true;
+    controls3d.autoRotateSpeed = 1.2;
+    controls3d.minDistance = 20;
+    controls3d.maxDistance = 120;
+    controls3d.target.set(0, 0, 0);
+
+    // Lighting
+    scene3d.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(30, 50, 30);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.set(2048, 2048);
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 200;
+    mainLight.shadow.camera.left = -60;
+    mainLight.shadow.camera.right = 60;
+    mainLight.shadow.camera.top = 60;
+    mainLight.shadow.camera.bottom = -60;
+    scene3d.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    fillLight.position.set(0, 50, 0);
+    scene3d.add(fillLight);
+    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100);
+    pl1.position.set(20, 15, 20);
+    scene3d.add(pl1);
+    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80);
+    pl2.position.set(-20, 15, -20);
+    scene3d.add(pl2);
+
+    // Grid + Ground
+    const grid = new THREE.GridHelper(100, 50, 0x3B82F6, 0xCCCCCC);
+    grid.material.opacity = 0.4;
+    grid.material.transparent = true;
+    grid.position.y = -0.5;
+    scene3d.add(grid);
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.ShadowMaterial({ opacity: 0.3 })
+    );
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -0.5;
+    plane.receiveShadow = true;
+    scene3d.add(plane);
+
+    // Load GLB (persists across rebuilds)
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb',
+      (gltf) => {
+        glbModel = gltf.scene;
+        const box = new THREE.Box3().setFromObject(glbModel);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const targetSize = 40;
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = targetSize / maxDim;
+        glbModel.scale.set(scale, scale, scale);
+        const scaledHeight = size.y * scale;
+        glbModel.position.x = -center.x;
+        glbModel.position.y = -center.y + (scaledHeight * 0.5) + 0.5;
+        glbModel.position.z = -center.z;
+        glbModel.traverse((child) => {
+          if (!child.isMesh) return;
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(mat => {
+            mat.transparent = true;
+            mat.opacity = 0.3;
+            mat.side = THREE.DoubleSide;
+            mat.depthWrite = true;
+            if (mat.color) mat.color.multiplyScalar(1.5);
+            mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.3) : new THREE.Color(0xffffff);
+            mat.emissiveIntensity = 0.4;
+          });
+          child.castShadow = true;
+          child.receiveShadow = true;
+        });
+        scene3d.add(glbModel);
+      },
+      undefined,
+      (err) => { console.warn('GLB load failed:', err); }
+    );
+
+    // Create dynamic group
+    dynamicGroup = new THREE.Group();
+    scene3d.add(dynamicGroup);
+
+    // Build initial content
+    rebuild3D(MODES[currentMode]);
+
+    // Animation loop
+    clock3d = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock3d.getDelta();
+      controls3d.update();
+
+      // Pulse on device emissive
+      const pulse = Math.sin(clock3d.elapsedTime * 2.5) * 0.06;
+      for (const m of Object.values(nodeMeshes3d)) {
+        if (m && m.material) m.material.emissiveIntensity = 0.2 + pulse;
+      }
+
+      // Animate particles
+      particles3d.forEach(p => {
+        p.t += dt * p.speed;
+        if (p.t > 1) p.t -= 1;
+        let dist = p.t * p.totalLen, si = 0;
+        while (si < p.segs.length - 1 && dist > p.segs[si]) { dist -= p.segs[si]; si++; }
+        const pos = new THREE.Vector3().lerpVectors(p.points[si], p.points[si + 1], dist / p.segs[si]);
+        p.mesh.position.copy(pos);
+        p.glow.position.copy(pos);
+        const fade = Math.min(p.t * 4, (1 - p.t) * 4, 1);
+        p.mesh.material.opacity = 0.9 * fade;
+        p.glow.material.opacity = 0.25 * fade;
+      });
+
+      renderer3d.render(scene3d, camera3d);
+    }
+    animate();
+  }
+
+  /* rebuild3D — called on mode switch */
+  function rebuild3D(mode) {
+    if (!dynamicGroup) return;
+
+    // Dispose old children
+    while (dynamicGroup.children.length > 0) {
+      const child = dynamicGroup.children[0];
+      dynamicGroup.remove(child);
+      child.traverse((c) => {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+          else c.material.dispose();
+        }
+        if (c.material && c.material.map) c.material.map.dispose();
+      });
+    }
+    nodeMeshes3d = {};
+    particles3d = [];
+
+    const pos3d = mode.pos3d;
+    const labels3d = mode.labels3d;
+    const tilts3d = mode.tilts3d || {};
+
+    // Create devices
+    const nodePos3D = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const tilt = tilts3d[id] || null;
+      const dev = createDevice(id, v, labels3d[id] || id, tilt);
+      dynamicGroup.add(dev.group);
+      nodePos3D[id] = v;
+      nodeMeshes3d[id] = dev.mesh;
+    }
+
+    // Draw deduplicated connection tubes
+    const drawnLinks = new Set();
+    for (const link of mode.model.links) {
+      const key = [link.from, link.to].sort().join('|');
+      if (drawnLinks.has(key)) continue;
+      drawnLinks.add(key);
+      const p1 = nodePos3D[link.from], p2 = nodePos3D[link.to];
+      if (!p1 || !p2) continue;
+
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.3
+      });
+      dynamicGroup.add(new THREE.Line(lineGeo, lineMat));
+
+      const curve = new THREE.CatmullRomCurve3([p1.clone(), p2.clone()]);
+      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9,
+        transparent: true, opacity: 0.95
+      });
+      dynamicGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+
+      const glowGeo = new THREE.TubeGeometry(curve, 20, 0.2, 8, false);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x3B82F6, transparent: true, opacity: 0.35
+      });
+      dynamicGroup.add(new THREE.Mesh(glowGeo, glowMat));
+    }
+
+    // Animated particles
+    mode.flowPaths3d.forEach((fp, fi) => {
+      const pts = fp.path.map(id => nodePos3D[id]).filter(Boolean);
+      if (pts.length < 2) return;
+      const segs = []; let totalLen = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const d = pts[i].distanceTo(pts[i + 1]); segs.push(d); totalLen += d;
+      }
+      const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8),
+        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.9 }));
+      const pgMesh = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 8),
+        new THREE.MeshBasicMaterial({ color: fp.color, transparent: true, opacity: 0.25 }));
+      dynamicGroup.add(pMesh);
+      dynamicGroup.add(pgMesh);
+      particles3d.push({
+        mesh: pMesh, glow: pgMesh, points: pts, segs, totalLen,
+        t: fi / mode.flowPaths3d.length, speed: 0.12 + Math.random() * 0.06
+      });
+    });
+  }
+
   /* ── Initialize ────────────────────────────── */
   renderScenarioDesc();
   const badge = document.getElementById("engineBadge");
@@ -495,6 +886,9 @@
   badge.innerHTML = "&#9679; Greedy Ready";
   resolveBtn.disabled = false;
   reload();
+
+  // Init 3D
+  try { init3D(); } catch(e) { console.warn('3D init error:', e); }
 
   /* ── Load GLPK/WASM in background ─────────── */
   (async () => {

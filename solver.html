@@ -187,7 +187,7 @@
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
       <div class="sub">IEEE 802.1Qbv Time-Aware Shaper &mdash; Integer Linear Programming Optimization</div>
-      <div class="badge" id="badgeInfo">6 Presets &bull; Multi-Flow Scheduling &bull; Per-Switch GCL &bull; k-Path Routing</div>
+      <div class="badge" id="badgeInfo">8 Presets &bull; Multi-Flow Scheduling &bull; Per-Switch GCL &bull; k-Path Routing</div>
 
       <!-- Preset Buttons -->
       <div class="preset-group" id="presetGroup">
@@ -196,6 +196,8 @@
         <button class="preset-btn" data-preset="automotive">Automotive</button>
         <button class="preset-btn" data-preset="real_gcd">Real GCD 10ms</button>
         <button class="preset-btn" data-preset="real_lcm">Real LCM 100ms</button>
+        <button class="preset-btn" data-preset="reconf_gcd">Reconf GCD</button>
+        <button class="preset-btn" data-preset="reconf_lcm">Reconf LCM</button>
         <button class="preset-btn" data-preset="sample">Sample</button>
       </div>
     </div>
@@ -301,7 +303,10 @@
   import {
     ROII_REAL_GCD, ROII_REAL_LCM, getRealPositions,
     ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
-    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor
+    ROII_REAL_GCD_SCENARIO, ROII_REAL_LCM_SCENARIO, realFlowColor,
+    ROII_REAL_RECONF_GCD, ROII_REAL_RECONF_LCM,
+    getReconfPositions, ROII_RECONF_NODE_COLORS,
+    ROII_RECONF_GCD_SCENARIO, ROII_RECONF_LCM_SCENARIO
   } from './js/roii-real-data.js';
 
   /* ── ROii Flow Colors ── */
@@ -372,6 +377,20 @@
       label: "Real LCM 100ms", model: ROII_REAL_LCM,
       getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
       scenario: ROII_REAL_LCM_SCENARIO, switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
+    },
+    reconf_gcd: {
+      label: "Reconf GCD", model: ROII_REAL_RECONF_GCD,
+      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+      scenario: ROII_RECONF_GCD_SCENARIO, switches: ROII_REAL_SWITCHES,
+      flowColorFn: realFlowColor, topoHeight: 520,
+      failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
+    },
+    reconf_lcm: {
+      label: "Reconf LCM", model: ROII_REAL_RECONF_LCM,
+      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+      scenario: ROII_RECONF_LCM_SCENARIO, switches: ROII_REAL_SWITCHES,
       flowColorFn: realFlowColor, topoHeight: 520,
       failNodes: ["SW_FL", "SW_FR", "SW_REAR"]
     },
