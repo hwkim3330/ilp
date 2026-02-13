@@ -585,3 +585,276 @@ export const ROII_OPTIMAL_3D_LABELS = {
   SW_FL:     'Front-L ZC',        SW_FR:     'Front-R ZC',
   SW_REAR:   'Rear ZC',           ACU_IT:    'ACU-IT'
 };
+
+/* ═══════════════════════════════════════════════════
+   HARDWARE-ACCURATE TOPOLOGY
+   Based on actual ROii sensor H/W specifications.
+   LiDAR: Ethernet (1000BASE-T / T1)
+   Radar: CAN-FD (NOT Ethernet)
+   Camera: V-by-One@HS (excluded)
+   ═══════════════════════════════════════════════════ */
+
+/* ── HW Direct: 4 LiDARs → ACU_IT (no switches) ── */
+export const ROII_HW_DIRECT = {
+  cycle_time_us: 10000,
+  guard_band_us: 3,
+  processing_delay_us: 3,
+  nodes: [
+    { id: "LIDAR_F",  type: "endstation" },  // Solid-state 135° FOV, 1000BASE-T1
+    { id: "LIDAR_SL", type: "endstation" },  // Rotating 360° FOV, 1000BASE-T
+    { id: "LIDAR_SR", type: "endstation" },  // Rotating 360° FOV, 1000BASE-T
+    { id: "LIDAR_R",  type: "endstation" },  // Solid-state 135° FOV, 1000BASE-T1
+    { id: "ACU_IT",   type: "endstation" }
+  ],
+  links: [
+    { id: "l_lidarf_acu",   from: "LIDAR_F",  to: "ACU_IT", rate_mbps: 1000, prop_delay_us: 0.3 },
+    { id: "l_lidarsl_acu",  from: "LIDAR_SL", to: "ACU_IT", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarsr_acu",  from: "LIDAR_SR", to: "ACU_IT", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarr_acu",   from: "LIDAR_R",  to: "ACU_IT", rate_mbps: 1000, prop_delay_us: 0.3 }
+  ],
+  flows: [
+    { id: "f_lidar_f",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_F",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_sl", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SL", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_sr", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SR", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 1 }
+  ]
+};
+
+/* ── HW Switched: 3 zone switches + CAN2ETH radar ── */
+const HW_SW_NODES = [
+  { id: "LIDAR_F",    type: "endstation" },
+  { id: "LIDAR_SL",   type: "endstation" },
+  { id: "LIDAR_SR",   type: "endstation" },
+  { id: "LIDAR_R",    type: "endstation" },
+  { id: "RADAR_F",    type: "endstation" },
+  { id: "RADAR_FLC",  type: "endstation" },
+  { id: "RADAR_FRC",  type: "endstation" },
+  { id: "RADAR_RLC",  type: "endstation" },
+  { id: "RADAR_RRC",  type: "endstation" },
+  { id: "SW_FL",      type: "switch" },
+  { id: "SW_FR",      type: "switch" },
+  { id: "SW_REAR",    type: "switch" },
+  { id: "ACU_IT",     type: "endstation" }
+];
+
+const HW_SW_LINKS = [
+  // Sensor → Switch (9 links)
+  { id: "l_lidarf_swfl",     from: "LIDAR_F",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarsl_swfl",    from: "LIDAR_SL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarflc_swfl",   from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.2 },
+  { id: "l_lidarsr_swfr",    from: "LIDAR_SR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarf_swfr",     from: "RADAR_F",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.2 },
+  { id: "l_radarfrc_swfr",   from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.2 },
+  { id: "l_lidarr_swrear",   from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_radarrlc_swrear", from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.2 },
+  { id: "l_radarrrc_swrear", from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.2 },
+  // Triangle backbone (6 bidirectional)
+  { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  // Gateway
+  { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
+];
+
+export const ROII_HW_SWITCHED = {
+  cycle_time_us: 10000,
+  guard_band_us: 3,
+  processing_delay_us: 3,
+  nodes: JSON.parse(JSON.stringify(HW_SW_NODES)),
+  links: JSON.parse(JSON.stringify(HW_SW_LINKS)),
+  flows: [
+    // LiDAR flows (P7)
+    { id: "f_lidar_f",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_F",  dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_sl", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SL", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_sr", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SR", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
+    // Radar via CAN2ETH (P6)
+    { id: "f_radar_f",   priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_flc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_frc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
+  ]
+};
+
+/* ── HW Direct 2D Positions ── */
+export function getHWDirectPositions(W, H) {
+  return {
+    LIDAR_F:  { x: W * 0.50, y: H * 0.08 },
+    LIDAR_SL: { x: W * 0.10, y: H * 0.40 },
+    LIDAR_SR: { x: W * 0.90, y: H * 0.40 },
+    LIDAR_R:  { x: W * 0.50, y: H * 0.70 },
+    ACU_IT:   { x: W * 0.50, y: H * 0.92 }
+  };
+}
+
+/* ── HW Switched 2D Positions ── */
+export function getHWSwitchedPositions(W, H) {
+  return {
+    RADAR_FLC: { x: W * 0.04, y: H * 0.06 },
+    LIDAR_SL:  { x: W * 0.18, y: H * 0.06 },
+    LIDAR_F:   { x: W * 0.38, y: H * 0.06 },
+    RADAR_F:   { x: W * 0.50, y: H * 0.06 },
+    LIDAR_SR:  { x: W * 0.68, y: H * 0.06 },
+    RADAR_FRC: { x: W * 0.82, y: H * 0.06 },
+    SW_FL:     { x: W * 0.25, y: H * 0.34 },
+    SW_FR:     { x: W * 0.75, y: H * 0.34 },
+    RADAR_RLC: { x: W * 0.08, y: H * 0.60 },
+    SW_REAR:   { x: W * 0.50, y: H * 0.58 },
+    RADAR_RRC: { x: W * 0.92, y: H * 0.60 },
+    LIDAR_R:   { x: W * 0.50, y: H * 0.78 },
+    ACU_IT:    { x: W * 0.50, y: H * 0.92 }
+  };
+}
+
+/* ── HW Direct Node Colors ── */
+export const ROII_HW_DIRECT_NODE_COLORS = {
+  LIDAR_F:  { fill: "#d1fae5", stroke: "#10B981", label: "Front LiDAR",   shortLabel: "135\u00b0" },
+  LIDAR_SL: { fill: "#ccfbf1", stroke: "#0D9488", label: "Side-L LiDAR",  shortLabel: "360\u00b0" },
+  LIDAR_SR: { fill: "#ccfbf1", stroke: "#0D9488", label: "Side-R LiDAR",  shortLabel: "360\u00b0" },
+  LIDAR_R:  { fill: "#d1fae5", stroke: "#10B981", label: "Rear LiDAR",    shortLabel: "135\u00b0" },
+  ACU_IT:   { fill: "#fee2e2", stroke: "#dc2626", label: "ACU-IT",        shortLabel: "ECU" }
+};
+
+/* ── HW Switched Node Colors ── */
+export const ROII_HW_SWITCHED_NODE_COLORS = {
+  LIDAR_F:   { fill: "#d1fae5", stroke: "#10B981", label: "Front LiDAR",   shortLabel: "135\u00b0" },
+  LIDAR_SL:  { fill: "#ccfbf1", stroke: "#0D9488", label: "Side-L LiDAR",  shortLabel: "360\u00b0" },
+  LIDAR_SR:  { fill: "#ccfbf1", stroke: "#0D9488", label: "Side-R LiDAR",  shortLabel: "360\u00b0" },
+  LIDAR_R:   { fill: "#d1fae5", stroke: "#10B981", label: "Rear LiDAR",    shortLabel: "135\u00b0" },
+  RADAR_F:   { fill: "#ede9fe", stroke: "#952aff", label: "Radar F",       shortLabel: "CAN2ETH" },
+  RADAR_FLC: { fill: "#ede9fe", stroke: "#952aff", label: "Radar FLC",     shortLabel: "CAN2ETH" },
+  RADAR_FRC: { fill: "#ede9fe", stroke: "#952aff", label: "Radar FRC",     shortLabel: "CAN2ETH" },
+  RADAR_RLC: { fill: "#ede9fe", stroke: "#952aff", label: "Radar RLC",     shortLabel: "CAN2ETH" },
+  RADAR_RRC: { fill: "#ede9fe", stroke: "#952aff", label: "Radar RRC",     shortLabel: "CAN2ETH" },
+  SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC",    shortLabel: "LAN9692" },
+  SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC",    shortLabel: "LAN9692" },
+  SW_REAR:   { fill: "#cffafe", stroke: "#06B6D4", label: "Rear GW",       shortLabel: "LAN9692" },
+  ACU_IT:    { fill: "#fee2e2", stroke: "#dc2626", label: "ACU-IT",        shortLabel: "ECU" }
+};
+
+/* ── HW Switch Definitions ── */
+export const ROII_HW_SWITCHES = [
+  { id: "SW_FL",   label: "Front-Left ZC (LAN9692)",  chip: "LAN9692", color: "#3B82F6" },
+  { id: "SW_FR",   label: "Front-Right ZC (LAN9692)", chip: "LAN9692", color: "#3B82F6" },
+  { id: "SW_REAR", label: "Rear Gateway (LAN9692)",   chip: "LAN9692", color: "#06B6D4" }
+];
+
+/* ── HW Flow Color Function ── */
+export function hwFlowColor(fid) {
+  const id = (fid || '').toLowerCase();
+  if (id.includes('lidar')) return '#10B981';
+  if (id.includes('radar')) return '#952aff';
+  return '#3B82F6';
+}
+
+/* ── HW Device Type Classifier ── */
+export function hwGetDeviceType(nodeId) {
+  if (nodeId === 'LIDAR_F' || nodeId === 'LIDAR_R') return 'lidar_g32';
+  if (nodeId === 'LIDAR_SL' || nodeId === 'LIDAR_SR') return 'lidar_pandar';
+  if (nodeId.startsWith('RADAR')) return 'radar';
+  if (nodeId === 'SW_REAR') return 'switch_r';
+  if (nodeId.startsWith('SW')) return 'switch_f';
+  return 'ecu';
+}
+
+/* ── HW Scenario Descriptions ── */
+export const ROII_HW_DIRECT_SCENARIO = {
+  title: "ROii Hardware-Accurate \u2014 Direct (No Switches)",
+  description: "Direct point-to-point: <strong>4 LiDARs connected directly to ACU-IT</strong> via dedicated 1 Gbps Ethernet links. Zero contention \u2014 each sensor has exclusive bandwidth. Front/Rear LiDAR: solid-state 135\u00b0 FOV (1000BASE-T1, 128KB). Side LiDAR: rotating 360\u00b0 (1000BASE-T, 64KB). Radars use CAN-FD directly to ACU (not on Ethernet). <strong>5 nodes, 4 links, 4 flows, 4 pkts/cycle</strong>.",
+  flows: [
+    { name: "Front LiDAR \u2192 ACU-IT",    color: "#10B981", desc: "128KB, P7, 1 hop, 1000BASE-T1 (1048.9\u00b5s tx)" },
+    { name: "Side-L LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 1 hop, 1000BASE-T (524.6\u00b5s tx)" },
+    { name: "Side-R LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 1 hop, 1000BASE-T (524.6\u00b5s tx)" },
+    { name: "Rear LiDAR \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 1 hop, 1000BASE-T1 (1048.9\u00b5s tx)" }
+  ],
+  domains: [
+    { name: "Solid-state LiDAR (1000BASE-T1)", color: "#10B981" },
+    { name: "Rotating LiDAR (1000BASE-T)",     color: "#0D9488" },
+    { name: "ACU-IT Processing",               color: "#dc2626" }
+  ]
+};
+
+export const ROII_HW_SWITCHED_SCENARIO = {
+  title: "ROii Hardware-Accurate \u2014 Switched (Zone Switches + CAN2ETH)",
+  description: "Zone-switched topology: 4 LiDARs + 5 radars (CAN-FD \u2192 CAN2ETH bridge) via 3 zone switches with triangle backbone. Single gateway bottleneck: all 9 flows through SW_REAR\u2192ACU_IT. LiDAR payloads dominate (128/64KB), radar tiny (512B). <strong>13 nodes, 16 links, 9 flows, 9 pkts/cycle</strong>. Gateway utilization \u2248 31.7%.",
+  flows: [
+    { name: "Front LiDAR \u2192 ACU-IT",    color: "#10B981", desc: "128KB, P7, 3 hops via SW_FL (1048.9\u00b5s tx)" },
+    { name: "Side-L LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FL (524.6\u00b5s tx)" },
+    { name: "Side-R LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FR (524.6\u00b5s tx)" },
+    { name: "Rear LiDAR \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 2 hops via SW_REAR (1048.9\u00b5s tx)" },
+    { name: "Front Radar \u2192 ACU-IT",     color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FR (4.4\u00b5s tx)" },
+    { name: "Corner FLC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FL (4.4\u00b5s tx)" },
+    { name: "Corner FRC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FR (4.4\u00b5s tx)" },
+    { name: "Corner RLC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_REAR (4.4\u00b5s tx)" },
+    { name: "Corner RRC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_REAR (4.4\u00b5s tx)" }
+  ],
+  domains: [
+    { name: "Solid-state LiDAR (1000BASE-T1)", color: "#10B981" },
+    { name: "Rotating LiDAR (1000BASE-T)",     color: "#0D9488" },
+    { name: "CAN2ETH Radar (bridged)",         color: "#952aff" },
+    { name: "LAN9692 Backbone",                color: "#3B82F6" },
+    { name: "ACU-IT Processing",               color: "#dc2626" }
+  ]
+};
+
+/* ── HW 3D Positions (Direct: 5 nodes) ── */
+export const ROII_HW_DIRECT_3D_POSITIONS = {
+  LIDAR_F:  { x:  0,   y: 5.5, z: 18.5 },
+  LIDAR_SL: { x: -8.5, y: 10,  z: 0    },
+  LIDAR_SR: { x:  8.5, y: 10,  z: 0    },
+  LIDAR_R:  { x:  0,   y: 5.5, z:-18.5 },
+  ACU_IT:   { x:  0,   y: 2,   z:-15   }
+};
+
+/* ── HW 3D Positions (Switched: 13 nodes) ── */
+export const ROII_HW_SWITCHED_3D_POSITIONS = {
+  LIDAR_F:   { x:  0,    y: 5.5,  z: 18.5 },
+  LIDAR_SL:  { x: -8.5,  y: 10,   z: 0    },
+  LIDAR_SR:  { x:  8.5,  y: 10,   z: 0    },
+  LIDAR_R:   { x:  0,    y: 5.5,  z:-18.5 },
+  RADAR_F:   { x:  0,    y: 7,    z: 18.5 },
+  RADAR_FLC: { x: -7,    y: 6.5,  z: 17.5 },
+  RADAR_FRC: { x:  7,    y: 6.5,  z: 17.5 },
+  RADAR_RLC: { x: -7,    y: 6.5,  z:-18   },
+  RADAR_RRC: { x:  7,    y: 6.5,  z:-18   },
+  SW_FL:     { x: -4,    y: 2,    z: 10   },
+  SW_FR:     { x:  4,    y: 2,    z: 10   },
+  SW_REAR:   { x:  0,    y: 2,    z: -8   },
+  ACU_IT:    { x:  0,    y: 2,    z:-15   }
+};
+
+/* ── HW 3D Labels ── */
+export const ROII_HW_3D_LABELS = {
+  LIDAR_F:   'Front-LiDAR',   LIDAR_SL:  'Side-L-LiDAR',
+  LIDAR_SR:  'Side-R-LiDAR',  LIDAR_R:   'Rear-LiDAR',
+  RADAR_F:   'Radar-Front',   RADAR_FLC: 'Radar-FLC',
+  RADAR_FRC: 'Radar-FRC',     RADAR_RLC: 'Radar-RLC',
+  RADAR_RRC: 'Radar-RRC',
+  SW_FL:     'Front-L ZC',    SW_FR:     'Front-R ZC',
+  SW_REAR:   'Rear-GW',       ACU_IT:    'ACU-IT'
+};
+
+/* ── HW 3D Tilts ── */
+export const ROII_HW_3D_TILTS = {
+  RADAR_FLC: { y: -Math.PI / 6 },
+  RADAR_FRC: { y:  Math.PI / 6 },
+  RADAR_RLC: { y:  Math.PI / 6 },
+  RADAR_RRC: { y: -Math.PI / 6 }
+};
