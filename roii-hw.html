@@ -236,10 +236,11 @@
       </div>
       <div class="sub">Based on Actual Sensor H/W Specifications &mdash; LiDAR: Ethernet, Radar: CAN-FD, Camera: V-by-One@HS</div>
 
-      <!-- 2-Mode Toggle -->
+      <!-- 3-Mode Toggle -->
       <div class="mode-group" id="modeGroup">
-        <button class="mode-btn active" data-mode="direct">Direct (4 LiDARs &rarr; ACU)</button>
-        <button class="mode-btn" data-mode="switched">Switched (Zone SW + CAN2ETH)</button>
+        <button class="mode-btn active" data-mode="direct">Direct (No Switch)</button>
+        <button class="mode-btn" data-mode="sw1g">1G Gateway</button>
+        <button class="mode-btn" data-mode="sw10g">10G-T1 Gateway</button>
       </div>
     </div>
 
@@ -352,7 +353,8 @@
 
     <!-- Network Topology -->
     <div class="card">
-      <div class="card-title">Network Topology &mdash; All 1 Gbps Links</div>
+      <div class="card-title">Network Topology</div>
+      <div id="gatewaySpeed" style="display:none;padding:6px 20px;font-size:0.82rem;font-weight:700;color:var(--red);"></div>
       <div class="legend" id="topoLegend"></div>
       <div class="svg-container" id="topoContainer" style="height:520px;"></div>
     </div>
@@ -448,17 +450,17 @@
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    ROII_HW_DIRECT, ROII_HW_SWITCHED,
+    ROII_HW_DIRECT, ROII_HW_1G, ROII_HW_10G,
     getHWDirectPositions, getHWSwitchedPositions,
     ROII_HW_DIRECT_NODE_COLORS, ROII_HW_SWITCHED_NODE_COLORS,
     ROII_HW_SWITCHES,
-    ROII_HW_DIRECT_SCENARIO, ROII_HW_SWITCHED_SCENARIO,
+    ROII_HW_DIRECT_SCENARIO, ROII_HW_1G_SCENARIO, ROII_HW_10G_SCENARIO,
     hwFlowColor, hwGetDeviceType,
     ROII_HW_DIRECT_3D_POSITIONS, ROII_HW_SWITCHED_3D_POSITIONS,
     ROII_HW_3D_LABELS, ROII_HW_3D_TILTS
-  } from './js/roii-real-data.js?v=5';
+  } from './js/roii-real-data.js?v=6';
 
-  /* ── MODES Registry (Direct / Switched) ── */
+  /* ── MODES Registry (Direct / 1G / 10G) ── */
   const MODES = {
     direct: {
       model: ROII_HW_DIRECT, scenario: ROII_HW_DIRECT_SCENARIO,
@@ -466,8 +468,14 @@
       pos3d: ROII_HW_DIRECT_3D_POSITIONS, labels3d: ROII_HW_3D_LABELS,
       tilts3d: ROII_HW_3D_TILTS
     },
-    switched: {
-      model: ROII_HW_SWITCHED, scenario: ROII_HW_SWITCHED_SCENARIO,
+    sw1g: {
+      model: ROII_HW_1G, scenario: ROII_HW_1G_SCENARIO,
+      getPositions: getHWSwitchedPositions, nodeColors: ROII_HW_SWITCHED_NODE_COLORS,
+      pos3d: ROII_HW_SWITCHED_3D_POSITIONS, labels3d: ROII_HW_3D_LABELS,
+      tilts3d: ROII_HW_3D_TILTS
+    },
+    sw10g: {
+      model: ROII_HW_10G, scenario: ROII_HW_10G_SCENARIO,
       getPositions: getHWSwitchedPositions, nodeColors: ROII_HW_SWITCHED_NODE_COLORS,
       pos3d: ROII_HW_SWITCHED_3D_POSITIONS, labels3d: ROII_HW_3D_LABELS,
       tilts3d: ROII_HW_3D_TILTS
@@ -502,6 +510,7 @@
   /* ── Update UI for mode ── */
   function updateModeUI() {
     const isDirect = currentMode === 'direct';
+    const isSwitched = currentMode === 'sw1g' || currentMode === 'sw10g';
     // Show/hide scenario buttons (no failure scenarios in Direct)
     document.getElementById('scenarioGroup').style.display = isDirect ? 'none' : 'flex';
     // Show/hide switch GCL card
@@ -520,12 +529,25 @@
       txF.textContent = '4.4 \u00b5s';
       txC.textContent = '4.4 \u00b5s';
     }
+    // Update gateway speed indicator
+    const gwEl = document.getElementById('gatewaySpeed');
+    if (gwEl) {
+      if (currentMode === 'sw10g') {
+        gwEl.style.display = '';
+        gwEl.textContent = 'Gateway: SW_REAR \u2192 ACU_IT = 10G-T1 (10 Gbps)';
+      } else if (currentMode === 'sw1g') {
+        gwEl.style.display = '';
+        gwEl.textContent = 'Gateway: SW_REAR \u2192 ACU_IT = 1G (1 Gbps)';
+      } else {
+        gwEl.style.display = 'none';
+      }
+    }
   }
 
   /* ── Build Model for Scenario ── */
   function buildModel() {
     const m = JSON.parse(JSON.stringify(MODES[currentMode].model));
-    if (currentMode === 'switched' && currentScenario !== 'normal') {
+    if (currentMode !== 'direct' && currentScenario !== 'normal') {
       const fail = LINK_FAIL[currentScenario];
       if (fail) {
         const failSet = new Set(fail.links);
@@ -653,7 +675,7 @@
       btn.classList.toggle('fail', s === currentScenario && currentScenario !== 'normal');
     });
     const fail = LINK_FAIL[currentScenario];
-    if (fail && currentMode === 'switched') {
+    if (fail && currentMode !== 'direct') {
       failureBanner.classList.add('show');
       failureText.textContent = fail.desc;
     } else {
@@ -745,7 +767,7 @@
       nodeColors: mode.nodeColors,
       height: 520
     });
-    if (currentMode === 'switched') {
+    if (currentMode !== 'direct') {
       renderSwitchGCL(currentModel, currentResult, {
         switches: ROII_HW_SWITCHES,
         flowColorFn: hwFlowColor
@@ -756,6 +778,27 @@
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
     renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
+
+    // Add 10G-T1 annotation on topology SVG for sw10g mode
+    if (currentMode === 'sw10g') {
+      const svg = d3.select('#topoContainer svg');
+      const pos = MODES[currentMode].getPositions(W, 520);
+      if (svg.node() && pos.SW_REAR && pos.ACU_IT) {
+        const mx = (pos.SW_REAR.x + pos.ACU_IT.x) / 2 + 18;
+        const my = (pos.SW_REAR.y + pos.ACU_IT.y) / 2;
+        svg.append('text')
+          .attr('x', mx).attr('y', my)
+          .attr('font-size', '13px').attr('font-weight', '800')
+          .attr('fill', '#dc2626')
+          .text('10G-T1');
+        // Draw thick red line over the gateway link
+        svg.insert('line', ':first-child')
+          .attr('x1', pos.SW_REAR.x).attr('y1', pos.SW_REAR.y)
+          .attr('x2', pos.ACU_IT.x).attr('y2', pos.ACU_IT.y)
+          .attr('stroke', '#dc2626').attr('stroke-width', 4)
+          .attr('stroke-dasharray', '8,4').attr('opacity', 0.6);
+      }
+    }
   }
 
   // Responsive
@@ -1069,6 +1112,19 @@
           m.material.emissiveIntensity = 0.15;
         }
       });
+    }
+
+    // 10G mode: highlight gateway link in red/thicker
+    if (currentMode === 'sw10g') {
+      const key = ['ACU_IT', 'SW_REAR'].sort().join('|');
+      const m = linkMeshes3d[key];
+      if (m) {
+        m.tube.material.color.setHex(0xdc2626);
+        m.tube.material.emissive.setHex(0xdc2626);
+        m.tube.material.emissiveIntensity = 1.2;
+        m.glow.material.color.setHex(0xdc2626);
+        m.glow.material.opacity = 0.5;
+      }
     }
   }
 

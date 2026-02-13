@@ -592,6 +592,8 @@ export const ROII_OPTIMAL_3D_LABELS = {
    LiDAR: Ethernet (1000BASE-T / T1)
    Radar: CAN-FD (NOT Ethernet)
    Camera: V-by-One@HS (excluded)
+   ACU_IT: Tiger Lake H — CAN-FD ×4, 1G-T, 1G-T1, 10G-T1
+   Three modes: Direct / 1G Gateway / 10G-T1 Gateway
    ═══════════════════════════════════════════════════ */
 
 /* ── HW Direct: 4 LiDARs (Ethernet) + 5 Radars (CAN-FD) → ACU_IT ── */
@@ -668,7 +670,8 @@ const HW_SW_LINKS = [
   { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
 ];
 
-export const ROII_HW_SWITCHED = {
+/* ── 1G Gateway Mode (all links 1 Gbps) ── */
+export const ROII_HW_1G = {
   cycle_time_us: 10000,
   guard_band_us: 3,
   processing_delay_us: 3,
@@ -685,6 +688,38 @@ export const ROII_HW_SWITCHED = {
     { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
       traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
     // Radar via CAN2ETH (P6)
+    { id: "f_radar_f",   priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_flc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_frc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
+  ]
+};
+
+/* ── 10G-T1 Gateway Mode (10G uplink on SW_REAR→ACU) ── */
+const HW_10G_LINKS = JSON.parse(JSON.stringify(HW_SW_LINKS));
+HW_10G_LINKS.find(l => l.id === 'l_swrear_acu').rate_mbps = 10000;
+
+export const ROII_HW_10G = {
+  cycle_time_us: 10000,
+  guard_band_us: 3,
+  processing_delay_us: 3,
+  nodes: JSON.parse(JSON.stringify(HW_SW_NODES)),
+  links: JSON.parse(JSON.stringify(HW_10G_LINKS)),
+  flows: [
+    { id: "f_lidar_f",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_F",  dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_sl", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SL", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_sr", priority: 7, payload_bytes: 65536,  period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_SR", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_f",   priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
       traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
     { id: "f_radar_flc", priority: 6, payload_bytes: 512, period_us: 10000, deadline_us: 5000,
@@ -813,14 +848,14 @@ export const ROII_HW_DIRECT_SCENARIO = {
   ]
 };
 
-export const ROII_HW_SWITCHED_SCENARIO = {
-  title: "ROii Hardware-Accurate \u2014 Switched (Zone Switches + CAN2ETH)",
-  description: "Zone-switched topology: 4 LiDARs + 5 radars (CAN-FD \u2192 CAN2ETH bridge) via 3 zone switches with triangle backbone. Single gateway bottleneck: all 9 flows through SW_REAR\u2192ACU_IT. LiDAR payloads dominate (128/64KB), radar tiny (512B). <strong>13 nodes, 16 links, 9 flows, 9 pkts/cycle</strong>. Gateway utilization \u2248 31.7%.",
+export const ROII_HW_1G_SCENARIO = {
+  title: "ROii Hardware-Accurate \u2014 1G Gateway (All 1 Gbps)",
+  description: "Zone-switched topology: 4 LiDARs + 5 radars (CAN2ETH) via 3 zone switches. <strong>All links 1 Gbps</strong>. Single gateway bottleneck: SW_REAR\u2192ACU_IT carries all 9 flows. Gateway utilization \u2248 <strong>31.7%</strong>. Front LiDAR worst-case E2E \u2248 3,150\u00b5s (3 hops \u00d7 1G). <strong>13 nodes, 16 links, 9 flows</strong>.",
   flows: [
-    { name: "Front LiDAR \u2192 ACU-IT",    color: "#10B981", desc: "128KB, P7, 3 hops via SW_FL (1048.9\u00b5s tx)" },
-    { name: "Side-L LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FL (524.6\u00b5s tx)" },
-    { name: "Side-R LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FR (524.6\u00b5s tx)" },
-    { name: "Rear LiDAR \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 2 hops via SW_REAR (1048.9\u00b5s tx)" },
+    { name: "Front LiDAR \u2192 ACU-IT",    color: "#10B981", desc: "128KB, P7, 3 hops via SW_FL (1048.9\u00b5s tx/hop)" },
+    { name: "Side-L LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FL (524.6\u00b5s tx/hop)" },
+    { name: "Side-R LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 3 hops via SW_FR (524.6\u00b5s tx/hop)" },
+    { name: "Rear LiDAR \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 2 hops via SW_REAR (1048.9\u00b5s tx/hop)" },
     { name: "Front Radar \u2192 ACU-IT",     color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FR (4.4\u00b5s tx)" },
     { name: "Corner FLC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FL (4.4\u00b5s tx)" },
     { name: "Corner FRC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH \u2192 SW_FR (4.4\u00b5s tx)" },
@@ -831,7 +866,31 @@ export const ROII_HW_SWITCHED_SCENARIO = {
     { name: "Solid-state LiDAR (1000BASE-T1)", color: "#10B981" },
     { name: "Rotating LiDAR (1000BASE-T)",     color: "#0D9488" },
     { name: "CAN2ETH Radar (bridged)",         color: "#952aff" },
-    { name: "LAN9692 Backbone",                color: "#3B82F6" },
+    { name: "LAN9692 Backbone (1G)",           color: "#3B82F6" },
+    { name: "ACU-IT Processing",               color: "#dc2626" }
+  ]
+};
+
+export const ROII_HW_10G_SCENARIO = {
+  title: "ROii Hardware-Accurate \u2014 10G-T1 Gateway",
+  description: "Same zone-switch topology but <strong>SW_REAR\u2192ACU_IT upgraded to 10GBASE-T1</strong> (ACU_IT\u2019s native 10G port). Gateway bottleneck eliminated: utilization drops from 31.7% to <strong>3.2%</strong> (10\u00d7 reduction). Front LiDAR E2E \u2248 2,200\u00b5s (\u221230% vs 1G). Mixed-speed: sensor links 1G, gateway 10G. <strong>13 nodes, 16 links (1G+10G), 9 flows</strong>.",
+  flows: [
+    { name: "Front LiDAR \u2192 ACU-IT",    color: "#10B981", desc: "128KB, P7, 2\u00d71G + 1\u00d710G (1049+1049+105\u00b5s)" },
+    { name: "Side-L LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 2\u00d71G + 1\u00d710G (525+525+52\u00b5s)" },
+    { name: "Side-R LiDAR \u2192 ACU-IT",   color: "#0D9488", desc: "64KB, P7, 2\u00d71G + 1\u00d710G (525+525+52\u00b5s)" },
+    { name: "Rear LiDAR \u2192 ACU-IT",     color: "#10B981", desc: "128KB, P7, 1\u00d71G + 1\u00d710G (1049+105\u00b5s)" },
+    { name: "Front Radar \u2192 ACU-IT",     color: "#952aff", desc: "512B, P6, CAN2ETH 2\u00d71G + 1\u00d710G" },
+    { name: "Corner FLC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH 2\u00d71G + 1\u00d710G" },
+    { name: "Corner FRC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH 2\u00d71G + 1\u00d710G" },
+    { name: "Corner RLC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH 1\u00d71G + 1\u00d710G" },
+    { name: "Corner RRC \u2192 ACU-IT",      color: "#952aff", desc: "512B, P6, CAN2ETH 1\u00d71G + 1\u00d710G" }
+  ],
+  domains: [
+    { name: "Solid-state LiDAR (1000BASE-T1)", color: "#10B981" },
+    { name: "Rotating LiDAR (1000BASE-T)",     color: "#0D9488" },
+    { name: "CAN2ETH Radar (bridged)",         color: "#952aff" },
+    { name: "LAN9692 Backbone (1G)",           color: "#3B82F6" },
+    { name: "10G-T1 Gateway",                  color: "#dc2626" },
     { name: "ACU-IT Processing",               color: "#dc2626" }
   ]
 };
