@@ -315,6 +315,15 @@
             <td id="radarTxF">N/A</td>
           </tr>
           <tr>
+            <td><span class="spec-dot" style="background:#952aff"></span>Rear Radar</td>
+            <td>MRR-35 class</td>
+            <td><span class="iface-badge iface-can">CAN-FD</span></td>
+            <td>&plusmn;10&deg; / &plusmn;45&deg;</td>
+            <td>220 m</td>
+            <td>512 B</td>
+            <td id="radarTxR">N/A</td>
+          </tr>
+          <tr>
             <td><span class="spec-dot" style="background:#952aff"></span>Corner Radar &times;4</td>
             <td>MRR-35 class</td>
             <td><span class="iface-badge iface-can">CAN-FD</span></td>
@@ -458,7 +467,7 @@
     hwFlowColor, hwGetDeviceType,
     ROII_HW_DIRECT_3D_POSITIONS, ROII_HW_SWITCHED_3D_POSITIONS,
     ROII_HW_3D_LABELS, ROII_HW_3D_TILTS
-  } from './js/roii-real-data.js?v=6';
+  } from './js/roii-real-data.js?v=7';
 
   /* ── MODES Registry (Direct / 1G / 10G) ── */
   const MODES = {
@@ -519,14 +528,17 @@
     // Update radar spec table
     const hdr = document.getElementById('radarSectionHeader');
     const txF = document.getElementById('radarTxF');
+    const txR = document.getElementById('radarTxR');
     const txC = document.getElementById('radarTxC');
     if (isDirect) {
       hdr.textContent = 'CAN-FD Radar (Direct to ACU \u2014 Not on Ethernet TSN)';
       txF.textContent = 'N/A (CAN-FD)';
+      txR.textContent = 'N/A (CAN-FD)';
       txC.textContent = 'N/A (CAN-FD)';
     } else {
       hdr.textContent = 'CAN-FD Radar (CAN2ETH Bridged to Zone Switches)';
       txF.textContent = '4.4 \u00b5s';
+      txR.textContent = '4.4 \u00b5s';
       txC.textContent = '4.4 \u00b5s';
     }
     // Update gateway speed indicator
@@ -1087,7 +1099,7 @@
 
     // Direct mode: draw CAN-FD dashed lines from radars to ACU
     if (currentMode === 'direct') {
-      const radarIds = ['RADAR_F','RADAR_FLC','RADAR_FRC','RADAR_RLC','RADAR_RRC'];
+      const radarIds = ['RADAR_F','RADAR_FLC','RADAR_FRC','RADAR_RLC','RADAR_RRC','RADAR_R'];
       const acuPos = nodePos3D['ACU_IT'];
       if (acuPos) {
         radarIds.forEach(rid => {
