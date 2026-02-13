@@ -464,7 +464,7 @@
       model: ROII_HW_DIRECT, scenario: ROII_HW_DIRECT_SCENARIO,
       getPositions: getHWDirectPositions, nodeColors: ROII_HW_DIRECT_NODE_COLORS,
       pos3d: ROII_HW_DIRECT_3D_POSITIONS, labels3d: ROII_HW_3D_LABELS,
-      tilts3d: {}
+      tilts3d: ROII_HW_3D_TILTS
     },
     switched: {
       model: ROII_HW_SWITCHED, scenario: ROII_HW_SWITCHED_SCENARIO,
@@ -1040,6 +1040,35 @@
         [l.from, l.to].sort().join('|') === key
       ).map(l => l.id);
       linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
+    }
+
+    // Direct mode: draw CAN-FD dashed lines from radars to ACU
+    if (currentMode === 'direct') {
+      const radarIds = ['RADAR_F','RADAR_FLC','RADAR_FRC','RADAR_RLC','RADAR_RRC'];
+      const acuPos = nodePos3D['ACU_IT'];
+      if (acuPos) {
+        radarIds.forEach(rid => {
+          const rPos = nodePos3D[rid];
+          if (!rPos) return;
+          const geo = new THREE.BufferGeometry().setFromPoints([rPos, acuPos]);
+          const mat = new THREE.LineDashedMaterial({
+            color: 0x952aff, dashSize: 0.8, gapSize: 0.4,
+            transparent: true, opacity: 0.4
+          });
+          const line = new THREE.Line(geo, mat);
+          line.computeLineDistances();
+          dynamicGroup.add(line);
+        });
+      }
+      // Dim radar devices (not on Ethernet TSN)
+      radarIds.forEach(rid => {
+        const m = nodeMeshes3d[rid];
+        if (m && m.material) {
+          m.material.opacity = 0.5;
+          m.material.transparent = true;
+          m.material.emissiveIntensity = 0.15;
+        }
+      });
     }
   }
 
