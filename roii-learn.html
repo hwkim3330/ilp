@@ -903,7 +903,7 @@
       resolveBtn.disabled = true;
       statusEl.innerHTML = '<span class="spinner"></span> Solving ILP...';
       await new Promise(r => setTimeout(r, 50));
-      const result = await solveILP(model, glpk, { tmlim: 15 });
+      const result = await solveILP(model, glpk, { tmlim: 60 });
       currentModel = model; currentResult = result; ilpResult = result;
       renderAll(); renderFormulation(model, result);
       statusEl.innerHTML = `<span style="color:var(--green)">ILP ${result.stats.runtime_ms}ms</span> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
