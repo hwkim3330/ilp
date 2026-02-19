@@ -894,6 +894,7 @@
       statusEl.innerHTML = `<span style="color:var(--green)">Greedy ${ms}ms</span> &mdash; ${result.packetRows.length} pkts`;
       updateCompareBadge();
     } catch (e) { statusEl.textContent = "Error: " + e.message; }
+    if (glpk) resolveBtn.disabled = false;
   }
 
   async function runILPSolve() {
