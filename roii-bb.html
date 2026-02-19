@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branch &amp; Bound Visualization &mdash; TSN/GCL Solver</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px; background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
+    }
+    #canvas3d {
+      width: 100%; height: 420px; display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 0.72rem; color: var(--text3);
+      background: rgba(255,255,255,0.85); padding: 4px 10px;
+      border-radius: 8px; backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
+    /* ── Animation Controls ────────────────────── */
+    .anim-controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .anim-controls .btn {
+      font-size: 0.92rem; padding: 8px 18px; font-weight: 700;
+    }
+    .anim-controls .btn.active {
+      background: linear-gradient(135deg, #3B82F6, #06B6D4); color: #fff;
+      border: none;
+    }
+    .ctrl-group {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.85rem; color: var(--text2); font-weight: 600;
+    }
+    .ctrl-group input[type="range"] { width: 80px; accent-color: var(--blue); }
+    .ctrl-group span.val { font-family: 'Courier New', monospace; min-width: 28px; }
+
+    /* ── 3-Column Layout ──────────────────────── */
+    .bb-main {
+      display: grid; grid-template-columns: 280px 1fr 260px; gap: 14px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .bb-main { grid-template-columns: 1fr; } }
+
+    /* ── Step Info Panel ──────────────────────── */
+    .step-info { font-size: 0.88rem; line-height: 1.7; min-height: 200px; }
+    .step-info .pname { font-size: 1.1rem; font-weight: 800; color: var(--blue); }
+    .step-info .detail { color: var(--text2); font-size: 0.85rem; }
+    .step-info .cst { font-family: 'Courier New', monospace; font-size: 0.78rem; }
+    .step-info .cst.pass { color: var(--green); }
+    .step-info .cst.fail { color: var(--red); }
+    .step-info .cst.prune { color: var(--orange); }
+
+    /* ── Stats Panel ──────────────────────────── */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-item {
+      text-align: center; padding: 10px 8px; border-radius: 10px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .stat-item .label { font-size: 0.72rem; color: var(--text3); text-transform: uppercase; font-weight: 600; }
+    .stat-item .value { font-size: 1.2rem; font-weight: 900; color: var(--blue); font-family: 'Courier New', monospace; }
+    .stat-item .value.miss { color: var(--red); }
+    .stat-item .value.ok { color: var(--green); }
+    .progress-bar { height: 5px; background: rgba(59,130,246,0.08); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+    .progress-bar .fill { height: 100%; background: linear-gradient(90deg, #3B82F6, #06B6D4); border-radius: 3px; transition: width 0.3s; }
+
+    /* ── B&B Tree SVG ─────────────────────────── */
+    .bb-tree-container {
+      min-height: 400px; border-radius: var(--radius); overflow: hidden;
+      background: rgba(248,250,252,0.8);
+    }
+    .bb-tree-container svg { width: 100%; height: 100%; }
+    .bb-node circle { stroke-width: 2.5; cursor: pointer; transition: opacity 0.2s; }
+    .bb-node circle:hover { stroke-width: 3.5; }
+    .bb-node text { font-size: 9px; fill: var(--text2); font-weight: 600; pointer-events: none; }
+    .bb-link { fill: none; stroke: rgba(59,130,246,0.25); stroke-width: 1.5; }
+    .bb-link-label { font-size: 7px; fill: var(--text3); font-family: 'Courier New', monospace; }
+
+    /* ── Node States ──────────────────────────── */
+    .bb-node.exploring circle { fill: #3B82F6; stroke: #1d4ed8; }
+    .bb-node.solution circle { fill: #059669; stroke: #047857; }
+    .bb-node.pruned circle { fill: #dc2626; stroke: #b91c1c; }
+    .bb-node.branched circle { fill: #94a3b8; stroke: #64748b; }
+    .bb-node.pending circle { fill: #e2e8f0; stroke: #94a3b8; }
+
+    /* ── Per-Switch GCL Cards ────────────────── */
+    .gcl-switch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600; }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Gantt (GCL) ─────────────────────────── */
+    .gcl-grid line { stroke: rgba(59,130,246,0.06); stroke-width: 1; }
+    .gcl-axis text { fill: var(--text3) !important; font-size: 10px; }
+    .gcl-axis path, .gcl-axis line { stroke: rgba(59,130,246,0.15); }
+    .gcl-label { fill: rgba(0,0,0,0.55); font-size: 8px; font-weight: 600; pointer-events: none; }
+
+    /* ── Done Animation ─────────────────────── */
+    @keyframes statPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+    .stat-item.done { animation: statPulse 0.5s ease-in-out 2; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>Branch &amp; Bound Visualization</h1>
+      </div>
+      <div class="sub">Custom B&amp;B ILP solver with D3 tree visualization &mdash; TSN/GCL IEEE 802.1Qbv</div>
+    </div>
+
+    <!-- 3D Shuttle -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
+    </div>
+
+    <!-- Animation Controls -->
+    <div class="card" style="padding:14px 20px;">
+      <div class="anim-controls">
+        <button class="btn btn-primary" id="btnPlay">&#9654; Play</button>
+        <button class="btn btn-secondary" id="btnStep">&#9193; Step</button>
+        <button class="btn btn-secondary" id="btnReset">&#10226; Reset</button>
+        <div class="ctrl-group">
+          <label>Speed</label>
+          <input type="range" id="speedSlider" min="0.25" max="4" step="0.25" value="1">
+          <span class="val" id="speedLabel">1&times;</span>
+        </div>
+        <div class="ctrl-group">
+          <label>&#128266;</label>
+          <input type="range" id="volSlider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+        <select id="modelSelect" class="btn btn-secondary" style="font-weight:600;font-size:0.85rem;">
+          <option value="standard">Standard (13N, 9F)</option>
+          <option value="reconf" selected>Reconf (14N, 11F)</option>
+          <option value="optimal">Optimal Tri-Star</option>
+        </select>
+        <select id="nodeLimit" class="btn btn-secondary" style="font-weight:600;font-size:0.85rem;">
+          <option value="100">100 nodes</option>
+          <option value="300" selected>300 nodes</option>
+          <option value="500">500 nodes</option>
+        </select>
+        <div id="status" style="font-size:0.88rem;font-weight:600;color:var(--text3);margin-left:auto;"></div>
+        <a href="index.html" class="btn btn-secondary" style="font-size:0.82rem;">Home</a>
+      </div>
+    </div>
+
+    <!-- 3-Column: Step Info | B&B Tree | Stats -->
+    <div class="bb-main">
+      <div class="card">
+        <div class="card-title">Current Step</div>
+        <div class="step-info" id="stepInfo">
+          <div class="detail">Press &#9654; Play or &#9193; Step to start&ensp;|&ensp;Space: play/pause &middot; &rarr;: step &middot; R: reset</div>
+        </div>
+        <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Branch &amp; Bound Tree</div>
+        <div class="bb-tree-container" id="bbTreeContainer"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Statistics</div>
+        <div class="stat-grid">
+          <div class="stat-item"><div class="label">Nodes</div><div class="value" id="statNodes">0</div></div>
+          <div class="stat-item"><div class="label">Pruned</div><div class="value" id="statPruned">0</div></div>
+          <div class="stat-item"><div class="label">Best UB</div><div class="value" id="statUB">&mdash;</div></div>
+          <div class="stat-item"><div class="label">Current LB</div><div class="value" id="statLB">&mdash;</div></div>
+          <div class="stat-item"><div class="label">Gap</div><div class="value" id="statGap">&mdash;</div></div>
+          <div class="stat-item"><div class="label">Solutions</div><div class="value ok" id="statSolutions">0</div></div>
+        </div>
+        <div class="progress-bar" style="margin-top:12px;"><div class="fill" id="bbProgressFill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Best Schedule (mini Gantt) -->
+    <div class="card">
+      <div class="card-title">Best Schedule <span style="font-weight:400;color:var(--text3);font-size:0.78rem">&mdash; updates when new incumbent found</span></div>
+      <div class="svg-container" id="bestGanttContainer" style="min-height:200px;"></div>
+    </div>
+
+    <!-- Standard Charts -->
+    <div class="card">
+      <div class="card-title">Network Topology</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:520px;"></div>
+    </div>
+
+    <div class="metrics" id="metricsArea"></div>
+
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import {
+    initTooltip, solveGreedy, expandPackets,
+    renderMetrics, renderTopology, renderGCL, renderDelayChart,
+    renderUtilization, renderTable, renderSwitchGCL
+  } from './js/ilp-core.js';
+  import {
+    ROII_REAL_STANDARD, ROII_REAL_RECONF, ROII_OPTIMAL,
+    getRealPositions, getReconfPositions, getOptimalPositions,
+    ROII_REAL_NODE_COLORS, ROII_RECONF_NODE_COLORS, ROII_OPTIMAL_NODE_COLORS,
+    ROII_REAL_3D_POSITIONS, ROII_REAL_3D_POSITIONS_RECONF, ROII_OPTIMAL_3D_POSITIONS,
+    ROII_REAL_3D_LABELS, ROII_REAL_3D_LABELS_RECONF, ROII_OPTIMAL_3D_LABELS,
+    ROII_REAL_3D_TILTS,
+    realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
+  } from './js/roii-real-data.js';
+
+  initTooltip();
+  const round3 = v => Math.round(v * 1000) / 1000;
+  const deep = o => JSON.parse(JSON.stringify(o));
+  const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+
+  const CONFIGS = {
+    standard: { data: ROII_REAL_STANDARD, pos: getRealPositions, colors: ROII_REAL_NODE_COLORS,
+                pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
+    reconf:   { data: ROII_REAL_RECONF, pos: getReconfPositions, colors: ROII_RECONF_NODE_COLORS,
+                pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF, tilts3d: ROII_REAL_3D_TILTS },
+    optimal:  { data: ROII_OPTIMAL, pos: getOptimalPositions, colors: ROII_OPTIMAL_NODE_COLORS,
+                pos3d: ROII_OPTIMAL_3D_POSITIONS, labels3d: ROII_OPTIMAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
+  };
+
+  /* ═══════════════════════════════════════
+     WEB AUDIO ENGINE (B&B-specific sounds)
+     ═══════════════════════════════════════ */
+  const PENTA = [220,262,294,330,392,440,523,587,659,784,880];
+  class AudioEngine {
+    constructor() { this.ctx = null; this.vol = 0.3; }
+    init() {
+      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+    _tone(freq, dur, type) {
+      if (!this.ctx || this.vol <= 0) return;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(this.vol * 0.18, this.ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime + dur);
+    }
+    createNode(depth) {
+      this._tone(PENTA[depth % PENTA.length], 0.12, 'triangle');
+    }
+    prune() {
+      this._tone(110, 0.15, 'sawtooth');
+      setTimeout(() => this._tone(80, 0.1, 'sawtooth'), 50);
+    }
+    branch() {
+      this._tone(523, 0.06, 'sine');
+      setTimeout(() => this._tone(659, 0.06, 'sine'), 60);
+    }
+    newSolution() {
+      [0,2,4,7].forEach((n, i) => setTimeout(() => this._tone(PENTA[n + 4], 0.15, 'sine'), i * 80));
+    }
+    complete() {
+      // C-E-G chord
+      [4,6,8].forEach((n, i) => setTimeout(() => this._tone(PENTA[n], 0.2, 'sine'), i * 70));
+      setTimeout(() => { [5,7,9].forEach((n, i) => setTimeout(() => this._tone(PENTA[n], 0.25, 'sine'), i * 70)); }, 350);
+    }
+  }
+  const audio = new AudioEngine();
+
+  /* ═══════════════════════════════════════
+     B&B SOLVER — Custom Branch and Bound
+     ═══════════════════════════════════════ */
+  function txTimeUs(bytes, mbps) { return ((bytes + 38) * 8) / mbps; }
+
+  function solveBB(model, nodeLimit) {
+    if (!model.processing_delay_us) model.processing_delay_us = 3;
+    if (!model.guard_band_us) model.guard_band_us = 3;
+    const pkts = expandPackets(model);
+    const steps = [];
+
+    // Build operations list — per packet, per hop (use first route only for B&B)
+    const ops = [];
+    for (let p = 0; p < pkts.length; p++) {
+      const pk = pkts[p], rt = pk.routes[0];
+      let earliest = pk.rel;
+      for (let h = 0; h < rt.hops.length; h++) {
+        const hp = rt.hops[h];
+        const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
+        ops.push({
+          oi: ops.length, p, h, lid: hp.lid, tx: hp.tx, blk,
+          pd: hp.pd, earliest, latest: model.cycle_time_us - hp.tx,
+          pid: pk.pid, fid: pk.fid
+        });
+        earliest += hp.tx + hp.pd + model.processing_delay_us;
+      }
+    }
+
+    // Build binary variables — pairwise ordering on shared links (with window pruning)
+    const byLink = new Map();
+    for (const o of ops) {
+      if (!byLink.has(o.lid)) byLink.set(o.lid, []);
+      byLink.get(o.lid).push(o);
+    }
+    const binVars = [];
+    for (const [lid, lo] of byLink) {
+      for (let a = 0; a < lo.length; a++) {
+        for (let b = a + 1; b < lo.length; b++) {
+          // Window pruning: skip if execution windows can't overlap
+          if (lo[a].latest + lo[a].blk <= lo[b].earliest || lo[b].latest + lo[b].blk <= lo[a].earliest) continue;
+          binVars.push({
+            idx: binVars.length, lid, oa: lo[a], ob: lo[b],
+            label: `y(${lo[a].pid.replace('f_','')},${lo[b].pid.replace('f_','')})@${lid.replace('l_','')}`
+          });
+        }
+      }
+    }
+
+    // Initial UB from greedy
+    const greedyResult = solveGreedy(deep(model));
+    let bestUB = greedyResult.objective;
+    let bestSchedule = greedyResult;
+
+    steps.push({
+      type: 'create_node', nodeId: 0, parentId: null,
+      depth: 0, lb: 0, desc: 'Root node (no orderings fixed)',
+      branchVar: null, branchVal: null
+    });
+
+    // Bellman-Ford LB computation
+    function computeLB(fixed) {
+      // Build precedence DAG and compute longest paths
+      // Nodes: one per operation
+      const n = ops.length;
+      const dist = new Float64Array(n);
+      // Initialize with earliest arrival
+      for (let i = 0; i < n; i++) dist[i] = ops[i].earliest;
+
+      // Chain edges: hop h -> hop h+1 within same packet
+      const edges = [];
+      for (let i = 0; i < n; i++) {
+        const o = ops[i];
+        // Find next hop of same packet
+        if (i + 1 < n && ops[i+1].p === o.p && ops[i+1].h === o.h + 1) {
+          edges.push([i, i+1, o.tx + o.pd + model.processing_delay_us]);
+        }
+      }
+      // Fixed ordering edges
+      for (const [varIdx, val] of fixed) {
+        const bv = binVars[varIdx];
+        if (val === 0) {
+          // a before b: s_b >= s_a + blk_a
+          edges.push([bv.oa.oi, bv.ob.oi, bv.oa.blk]);
+        } else {
+          // b before a: s_a >= s_b + blk_b
+          edges.push([bv.ob.oi, bv.oa.oi, bv.ob.blk]);
+        }
+      }
+
+      // Bellman-Ford (longest path — negate for shortest, or just relax with >=)
+      let changed = true;
+      for (let iter = 0; iter < n + 2 && changed; iter++) {
+        changed = false;
+        for (const [u, v, w] of edges) {
+          if (dist[u] + w > dist[v]) {
+            dist[v] = dist[u] + w;
+            changed = true;
+          }
+        }
+      }
+      // Negative cycle check (infeasible)
+      for (const [u, v, w] of edges) {
+        if (dist[u] + w > dist[v] + 1e-6) return Infinity; // infeasible
+      }
+
+      // Check cycle time bounds
+      for (let i = 0; i < n; i++) {
+        if (dist[i] + ops[i].tx > model.cycle_time_us + 1e-6) return Infinity;
+      }
+
+      // LB = sum of earliest last-hop start times for TSN packets
+      let lb = 0;
+      for (let p = 0; p < pkts.length; p++) {
+        if (!pkts[p].tsn) continue;
+        const rt = pkts[p].routes[0];
+        const lastOpIdx = ops.findIndex(o => o.p === p && o.h === rt.hops.length - 1);
+        if (lastOpIdx >= 0) {
+          const lastHop = rt.hops[rt.hops.length - 1];
+          lb += dist[lastOpIdx] + lastHop.tx + lastHop.pd;
+        }
+      }
+      return round3(lb);
+    }
+
+    // Build a schedule from fully fixed orderings
+    function buildSchedule(fixed) {
+      // Use Bellman-Ford to get start times
+      const n = ops.length;
+      const dist = new Float64Array(n);
+      for (let i = 0; i < n; i++) dist[i] = ops[i].earliest;
+
+      const edges = [];
+      for (let i = 0; i < n; i++) {
+        if (i + 1 < n && ops[i+1].p === ops[i].p && ops[i+1].h === ops[i].h + 1) {
+          edges.push([i, i+1, ops[i].tx + ops[i].pd + model.processing_delay_us]);
+        }
+      }
+      for (const [varIdx, val] of fixed) {
+        const bv = binVars[varIdx];
+        if (val === 0) edges.push([bv.oa.oi, bv.ob.oi, bv.oa.blk]);
+        else edges.push([bv.ob.oi, bv.oa.oi, bv.ob.blk]);
+      }
+      for (let iter = 0; iter < n + 2; iter++) {
+        let changed = false;
+        for (const [u, v, w] of edges) {
+          if (dist[u] + w > dist[v]) { dist[v] = dist[u] + w; changed = true; }
+        }
+        if (!changed) break;
+      }
+
+      // Compute objective
+      let obj = 0;
+      for (let p = 0; p < pkts.length; p++) {
+        if (!pkts[p].tsn) continue;
+        const rt = pkts[p].routes[0], lastH = rt.hops.length - 1;
+        const lastOpIdx = ops.findIndex(o => o.p === p && o.h === lastH);
+        obj += dist[lastOpIdx] + rt.hops[lastH].tx + rt.hops[lastH].pd;
+      }
+      return { obj: round3(obj), starts: dist };
+    }
+
+    // DFS Branch & Bound
+    let nodeCount = 0, pruneCount = 0, solutionCount = 0;
+    let globalBestLB = 0;
+
+    // Stack: each entry is { nodeId, parentId, depth, fixed: Map(varIdx -> val), branchVar, branchVal }
+    const stack = [{ nodeId: 0, parentId: null, depth: 0, fixed: new Map(), branchVar: null, branchVal: null }];
+    nodeCount = 1;
+
+    while (stack.length > 0 && nodeCount <= nodeLimit) {
+      const node = stack.pop();
+
+      // Explore step
+      steps.push({
+        type: 'explore', nodeId: node.nodeId, depth: node.depth,
+        desc: `Exploring node ${node.nodeId} (depth ${node.depth}, ${node.fixed.size}/${binVars.length} vars fixed)`
+      });
+
+      // Compute LB
+      const lb = computeLB(node.fixed);
+      globalBestLB = Math.max(globalBestLB, isFinite(lb) ? lb : globalBestLB);
+
+      if (!isFinite(lb) || lb >= bestUB - 1e-6) {
+        // Prune!
+        pruneCount++;
+        steps.push({
+          type: 'prune', nodeId: node.nodeId, lb: isFinite(lb) ? lb : 'INF',
+          ub: bestUB, reason: !isFinite(lb) ? 'infeasible' : 'LB >= UB',
+          desc: !isFinite(lb) ? 'Infeasible (cycle exceeded)' : `Pruned: LB ${round3(lb)} >= UB ${round3(bestUB)}`
+        });
+        continue;
+      }
+
+      // Check if all variables fixed → feasible solution
+      if (node.fixed.size === binVars.length) {
+        const sched = buildSchedule(node.fixed);
+        solutionCount++;
+        if (sched.obj < bestUB) {
+          bestUB = sched.obj;
+          // Rebuild full result using greedy (it matches when all orderings are correct)
+          bestSchedule = greedyResult; // Use greedy as backup
+          steps.push({
+            type: 'new_solution', nodeId: node.nodeId, obj: sched.obj,
+            improvement: round3(greedyResult.objective - sched.obj),
+            desc: `New best: ${sched.obj} us (improved by ${round3(greedyResult.objective - sched.obj)} us)`
+          });
+        }
+        continue;
+      }
+
+      // Branch: pick unfixed variable on most congested link
+      let bestVar = -1, bestCongestion = -1;
+      for (let vi = 0; vi < binVars.length; vi++) {
+        if (node.fixed.has(vi)) continue;
+        const bv = binVars[vi];
+        const linkOps = byLink.get(bv.lid);
+        if (linkOps.length > bestCongestion) {
+          bestCongestion = linkOps.length;
+          bestVar = vi;
+        }
+      }
+
+      if (bestVar < 0) continue; // shouldn't happen
+
+      const bv = binVars[bestVar];
+      steps.push({
+        type: 'branch', nodeId: node.nodeId, varIdx: bestVar,
+        varLabel: bv.label, lid: bv.lid,
+        desc: `Branching on ${bv.label}`
+      });
+
+      // Create two children: y=1 first (pushed first, explored last in DFS)
+      for (const val of [1, 0]) {
+        const childId = nodeCount++;
+        const childFixed = new Map(node.fixed);
+        childFixed.set(bestVar, val);
+        stack.push({
+          nodeId: childId, parentId: node.nodeId,
+          depth: node.depth + 1, fixed: childFixed,
+          branchVar: bestVar, branchVal: val
+        });
+        steps.push({
+          type: 'create_node', nodeId: childId, parentId: node.nodeId,
+          depth: node.depth + 1, lb: null,
+          branchVar: bv.label, branchVal: val,
+          desc: `Child: ${bv.label} = ${val}`
+        });
+      }
+    }
+
+    // Done
+    const gap = bestUB > 0 ? round3((bestUB - globalBestLB) / bestUB * 100) : 0;
+    steps.push({
+      type: 'done', totalNodes: nodeCount, pruned: pruneCount,
+      solutions: solutionCount, bestObj: bestUB, gap,
+      desc: `Complete: ${nodeCount} nodes, ${pruneCount} pruned, gap ${gap}%`
+    });
+
+    return { steps, totalNodes: nodeCount, binVars: binVars.length, bestSchedule, bestUB, pkts };
+  }
+
+  /* ═══════════════════════════════════════
+     D3 B&B TREE RENDERER
+     ═══════════════════════════════════════ */
+  function createTreeRenderer(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    container.innerHTML = '';
+
+    const W = container.clientWidth || 600;
+    const H = container.clientHeight || 400;
+
+    const svg = d3.select(container).append('svg')
+      .attr('width', W).attr('height', H);
+
+    const g = svg.append('g').attr('transform', 'translate(0,30)');
+
+    const zoom = d3.zoom().scaleExtent([0.1, 4])
+      .on('zoom', (e) => g.attr('transform', e.transform));
+    svg.call(zoom);
+
+    // Tree data
+    const treeNodes = new Map(); // nodeId -> { id, parentId, depth, state, label, lb, children[] }
+    const linkG = g.append('g');
+    const nodeG = g.append('g');
+    const labelG = g.append('g');
+
+    function addNode(nodeId, parentId, depth, branchVar, branchVal) {
+      const node = {
+        id: nodeId, parentId, depth, state: 'pending',
+        label: `#${nodeId}`, branchVar, branchVal,
+        lb: null, children: []
+      };
+      treeNodes.set(nodeId, node);
+      if (parentId !== null && treeNodes.has(parentId)) {
+        treeNodes.get(parentId).children.push(nodeId);
+      }
+    }
+
+    function setState(nodeId, state, lb) {
+      const node = treeNodes.get(nodeId);
+      if (node) {
+        node.state = state;
+        if (lb !== undefined && lb !== null) node.lb = lb;
+      }
+    }
+
+    function buildHierarchy() {
+      const root = treeNodes.get(0);
+      if (!root) return null;
+      function recurse(nodeId) {
+        const node = treeNodes.get(nodeId);
+        if (!node) return null;
+        return {
+          ...node,
+          children: node.children.map(cid => recurse(cid)).filter(Boolean)
+        };
+      }
+      return recurse(0);
+    }
+
+    function render() {
+      const rootData = buildHierarchy();
+      if (!rootData) return;
+
+      const hierarchy = d3.hierarchy(rootData, d => d.children);
+      const treeLayout = d3.tree().nodeSize([50, 70]);
+      treeLayout(hierarchy);
+
+      // Links
+      const links = hierarchy.links();
+      const linkSel = linkG.selectAll('path.bb-link').data(links, d => `${d.source.data.id}-${d.target.data.id}`);
+      linkSel.exit().remove();
+      const linkEnter = linkSel.enter().append('path').attr('class', 'bb-link').attr('opacity', 0);
+      linkSel.merge(linkEnter)
+        .attr('d', d => {
+          return `M${d.source.x},${d.source.y}C${d.source.x},${(d.source.y + d.target.y)/2} ${d.target.x},${(d.source.y + d.target.y)/2} ${d.target.x},${d.target.y}`;
+        })
+        .transition().duration(200).attr('opacity', 1);
+
+      // Link labels
+      const linkLabelSel = labelG.selectAll('text.bb-link-label').data(links, d => `${d.source.data.id}-${d.target.data.id}`);
+      linkLabelSel.exit().remove();
+      const linkLabelEnter = linkLabelSel.enter().append('text').attr('class', 'bb-link-label').attr('opacity', 0);
+      linkLabelSel.merge(linkLabelEnter)
+        .attr('x', d => (d.source.x + d.target.x) / 2)
+        .attr('y', d => (d.source.y + d.target.y) / 2 - 4)
+        .attr('text-anchor', 'middle')
+        .text(d => {
+          const n = d.target.data;
+          if (n.branchVal !== null && n.branchVal !== undefined) return `=${n.branchVal}`;
+          return '';
+        })
+        .transition().duration(200).attr('opacity', 1);
+
+      // Nodes
+      const nodes = hierarchy.descendants();
+      const nodeSel = nodeG.selectAll('g.bb-node').data(nodes, d => d.data.id);
+      nodeSel.exit().remove();
+
+      const nodeEnter = nodeSel.enter().append('g').attr('class', d => `bb-node ${d.data.state}`)
+        .attr('transform', d => `translate(${d.x},${d.y})`)
+        .attr('opacity', 0);
+      nodeEnter.append('circle').attr('r', 14);
+      nodeEnter.append('text').attr('dy', 3).attr('text-anchor', 'middle').attr('fill', '#fff').attr('font-size', '8px').attr('font-weight', '700');
+
+      const merged = nodeSel.merge(nodeEnter);
+      merged
+        .attr('class', d => `bb-node ${d.data.state}`)
+        .transition().duration(300)
+        .attr('transform', d => `translate(${d.x},${d.y})`)
+        .attr('opacity', 1);
+      merged.select('text').text(d => d.data.id);
+
+      // Auto-fit zoom
+      if (nodes.length > 0) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        nodes.forEach(n => {
+          minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+          minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+        });
+        const pw = maxX - minX + 100, ph = maxY - minY + 80;
+        const scale = Math.min(W / (pw || 1), (H - 40) / (ph || 1), 2);
+        const tx = W / 2 - (minX + maxX) / 2 * scale;
+        const ty = 30 - minY * scale + 10;
+        svg.transition().duration(400).call(zoom.transform,
+          d3.zoomIdentity.translate(tx, ty).scale(scale));
+      }
+    }
+
+    return { addNode, setState, render, treeNodes };
+  }
+
+  /* ═══════════════════════════════════════
+     ANIMATION CONTROLLER
+     ═══════════════════════════════════════ */
+  let ctrl = null;
+
+  class Controller {
+    constructor(modelKey) {
+      this.modelKey = modelKey;
+      this.steps = []; this.cur = 0; this.playing = false; this.speed = 1;
+      this.model = null; this.tree = null;
+      this.nodesCreated = 0; this.pruned = 0; this.solutions = 0;
+      this.bestUB = Infinity; this.currentLB = 0; this.bestObj = Infinity;
+      this.af = null; this.lastT = 0;
+    }
+
+    load() {
+      this.stop(); this.cur = 0;
+      this.nodesCreated = 0; this.pruned = 0; this.solutions = 0;
+      this.bestUB = Infinity; this.currentLB = 0;
+
+      const cfg = CONFIGS[this.modelKey];
+      this.model = deep(cfg.data);
+      const limit = parseInt(document.getElementById('nodeLimit').value);
+
+      // Run B&B solver
+      const res = solveBB(this.model, limit);
+      this.steps = res.steps;
+      this.bestObj = res.bestUB;
+
+      // Render standard charts with greedy result
+      const stdModel = deep(cfg.data);
+      const stdResult = solveGreedy(stdModel);
+      this.bestScheduleResult = stdResult;
+      const W = document.getElementById('topoContainer').clientWidth;
+      renderMetrics(stdModel, stdResult);
+      renderTopology(stdModel, stdResult, { nodePositions: cfg.pos(W, 520), nodeColors: cfg.colors, height: 520 });
+      renderSwitchGCL(stdModel, stdResult, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
+      renderDelayChart(stdModel, stdResult, fcopts);
+      renderUtilization(stdModel, stdResult, { beColor: '#e2e8f0' });
+      renderTable(stdResult, fcopts);
+
+      // Render initial best Gantt
+      this._renderBestGantt(stdResult);
+
+      // Initialize tree renderer
+      this.tree = createTreeRenderer('bbTreeContainer');
+
+      this.updateStats(); this.updateStep(null); this.updateProgress();
+      document.querySelectorAll('.stat-item').forEach(e => e.classList.remove('done'));
+      document.getElementById('status').innerHTML =
+        `<span style="color:var(--text3)">${res.binVars} binary vars &middot; ${this.steps.length} steps</span>`;
+    }
+
+    _renderBestGantt(result) {
+      const container = document.getElementById('bestGanttContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      renderGCL(this.model, result, {
+        containerId: 'bestGanttContainer',
+        flowColorFn: realFlowColor,
+        beColor: '#e2e8f0',
+        beBorder: 'rgba(59,130,246,0.15)'
+      });
+    }
+
+    play() {
+      if (this.cur >= this.steps.length) this.cur = 0;
+      this.playing = true;
+      document.getElementById('btnPlay').textContent = '\u23F8 Pause';
+      document.getElementById('btnPlay').classList.add('active');
+      audio.init(); this.lastT = performance.now(); this._tick();
+    }
+    pause() {
+      this.playing = false;
+      document.getElementById('btnPlay').textContent = '\u25B6 Play';
+      document.getElementById('btnPlay').classList.remove('active');
+      if (this.af) { cancelAnimationFrame(this.af); this.af = null; }
+    }
+    stop() { this.pause(); this.cur = 0; }
+    toggle() { this.playing ? this.pause() : this.play(); }
+
+    _tick() {
+      if (!this.playing || this.cur >= this.steps.length) {
+        if (this.cur >= this.steps.length) { this.pause(); this._onFinish(); }
+        return;
+      }
+      const now = performance.now();
+      const delay = this._delay(this.steps[this.cur]) / this.speed;
+      if (now - this.lastT >= delay) {
+        this._exec(this.steps[this.cur]); this.cur++; this.lastT = now;
+      }
+      this.af = requestAnimationFrame(() => this._tick());
+    }
+
+    _delay(s) {
+      switch (s.type) {
+        case 'create_node': return 150;
+        case 'explore': return 200;
+        case 'prune': return 400;
+        case 'branch': return 250;
+        case 'new_solution': return 600;
+        case 'done': return 200;
+        default: return 150;
+      }
+    }
+
+    stepFwd() {
+      audio.init();
+      if (this.cur < this.steps.length) { this._exec(this.steps[this.cur]); this.cur++; }
+      if (this.cur >= this.steps.length) this._onFinish();
+    }
+
+    _exec(s) {
+      this.updateStep(s); this.updateProgress();
+      if (!this.tree) return;
+
+      switch (s.type) {
+        case 'create_node':
+          this.nodesCreated++;
+          this.tree.addNode(s.nodeId, s.parentId, s.depth, s.branchVar, s.branchVal);
+          this.tree.render();
+          audio.createNode(s.depth || 0);
+          break;
+
+        case 'explore':
+          this.tree.setState(s.nodeId, 'exploring');
+          this.tree.render();
+          break;
+
+        case 'prune':
+          this.pruned++;
+          this.tree.setState(s.nodeId, 'pruned', s.lb);
+          this.tree.render();
+          audio.prune();
+          break;
+
+        case 'branch':
+          this.tree.setState(s.nodeId, 'branched');
+          this.tree.render();
+          audio.branch();
+          break;
+
+        case 'new_solution':
+          this.solutions++;
+          this.bestUB = s.obj;
+          this.tree.setState(s.nodeId, 'solution', s.obj);
+          this.tree.render();
+          audio.newSolution();
+          break;
+
+        case 'done':
+          this.bestUB = s.bestObj;
+          audio.complete();
+          break;
+      }
+      this.updateStats();
+    }
+
+    _onFinish() {
+      document.querySelectorAll('.stat-item').forEach(e => e.classList.add('done'));
+      document.getElementById('status').innerHTML = '<span style="color:var(--green)">&#10003; Complete</span>';
+    }
+
+    updateStats() {
+      document.getElementById('statNodes').textContent = this.nodesCreated;
+      document.getElementById('statPruned').textContent = this.pruned;
+      document.getElementById('statUB').textContent = isFinite(this.bestUB) ? `${round3(this.bestUB)}` : (isFinite(this.bestObj) ? `${round3(this.bestObj)}` : '\u2014');
+      document.getElementById('statLB').textContent = this.currentLB > 0 ? `${round3(this.currentLB)}` : '\u2014';
+      const ub = isFinite(this.bestUB) ? this.bestUB : this.bestObj;
+      const gap = ub > 0 && this.currentLB > 0 ? round3((ub - this.currentLB) / ub * 100) : 0;
+      document.getElementById('statGap').textContent = this.currentLB > 0 ? `${gap}%` : '\u2014';
+      document.getElementById('statSolutions').textContent = this.solutions;
+
+      const limit = parseInt(document.getElementById('nodeLimit').value);
+      const pct = Math.min(100, this.nodesCreated / limit * 100);
+      document.getElementById('bbProgressFill').style.width = pct + '%';
+    }
+
+    updateStep(s) {
+      const el = document.getElementById('stepInfo');
+      if (!s) {
+        el.innerHTML = '<div class="detail">Press \u25B6 Play or \u23ED Step&ensp;|&ensp;Space: play/pause &middot; \u2192: step &middot; R: reset</div>';
+        return;
+      }
+
+      switch (s.type) {
+        case 'create_node':
+          el.innerHTML = `<div class="pname">Node #${s.nodeId}</div>
+            <div class="detail">${s.desc}</div>
+            ${s.branchVar ? `<div class="cst">${s.branchVar} = ${s.branchVal}</div>` : ''}`;
+          break;
+        case 'explore':
+          el.innerHTML = `<div class="pname">Exploring #${s.nodeId}</div>
+            <div class="detail">${s.desc}</div>`;
+          break;
+        case 'prune':
+          el.innerHTML = `<div class="pname">Pruned #${s.nodeId}</div>
+            <div class="cst prune">${s.desc}</div>
+            <div class="detail">LB: ${s.lb} &middot; UB: ${round3(s.ub)}</div>`;
+          break;
+        case 'branch':
+          el.innerHTML = `<div class="pname">Branching at #${s.nodeId}</div>
+            <div class="detail">${s.desc}</div>
+            <div class="cst">${s.varLabel}</div>`;
+          break;
+        case 'new_solution':
+          el.innerHTML = `<div class="pname" style="color:var(--green)">New Incumbent!</div>
+            <div class="detail">${s.desc}</div>
+            <div class="cst pass">Objective: ${s.obj} us</div>`;
+          break;
+        case 'done':
+          el.innerHTML = `<div class="pname" style="color:var(--green)">Search Complete</div>
+            <div class="detail">${s.desc}</div>
+            <div class="cst pass">Best: ${round3(s.bestObj)} us &middot; Gap: ${s.gap}%</div>`;
+          break;
+      }
+    }
+
+    updateProgress() {
+      document.getElementById('progressFill').style.width =
+        (this.steps.length > 0 ? (this.cur / this.steps.length * 100) : 0) + '%';
+    }
+
+    reset() {
+      this.modelKey = document.getElementById('modelSelect').value;
+      this.load();
+      init3D();
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     3D SHUTTLE
+     ═══════════════════════════════════════ */
+  const TMPL = {
+    lidar_g32:    { w:1,h:1,d:1, color:0x10B981 },
+    lidar_pandar: { w:1,h:1,d:1, color:0x0D9488 },
+    radar:        { w:1,h:1,d:1, color:0x952aff },
+    replicator:   { w:2,h:1.5,d:2, color:0xd97706 },
+    switch_f:     { w:4,h:2,d:4, color:0x3B82F6 },
+    switch_r:     { w:4,h:2,d:4, color:0x06B6D4 },
+    ecu:          { w:4,h:2,d:4, color:0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId), t = TMPL[type];
+    const group = new THREE.Group(); let geo;
+    if (type === 'lidar_g32') geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    else if (type === 'lidar_pandar') geo = new THREE.CylinderGeometry(t.w*0.6, t.w*0.6, t.h*0.8, 16);
+    else if (type === 'replicator') geo = new THREE.OctahedronGeometry(t.w*0.7);
+    else geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    const mat = new THREE.MeshPhongMaterial({ color:t.color, emissive:t.color, emissiveIntensity:0.5, specular:0x888888, shininess:30 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color:0xffffff, linewidth:5 })));
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = 'rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle = '#FFF'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText(label, 256, 75);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+    const ls = Math.max(t.w, t.d) * 1.2;
+    sprite.scale.set(ls, ls*0.25, 1); sprite.position.y = t.h + 1; group.add(sprite);
+    group.position.copy(position);
+    if (tilt) { if (tilt.x !== undefined) group.rotation.x = tilt.x; if (tilt.y !== undefined) group.rotation.y = tilt.y; if (tilt.z !== undefined) group.rotation.z = tilt.z; }
+    return { mesh, group };
+  }
+
+  let renderer3d = null;
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+    container.innerHTML = '';
+    const cfg = CONFIGS[document.getElementById('modelSelect').value];
+    const modelData = cfg.data;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera.position.set(50, 35, 70);
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = new THREE.WebGLRenderer({ antialias: true });
+    renderer3d.shadowMap.enabled = true; renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+    function updateSize() { const w=container.clientWidth, h=container.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer3d.setSize(w,h); }
+    updateSize(); container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+    const controls = new THREE.OrbitControls(camera, renderer3d.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05; controls.autoRotate=true; controls.autoRotateSpeed=1.2;
+    controls.minDistance=20; controls.maxDistance=120; controls.target.set(0,0,0);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const ml = new THREE.DirectionalLight(0xffffff, 1.5); ml.position.set(30,50,30);
+    ml.castShadow=true; ml.shadow.mapSize.set(2048,2048);
+    ml.shadow.camera.near=0.5; ml.shadow.camera.far=200;
+    ml.shadow.camera.left=-60; ml.shadow.camera.right=60; ml.shadow.camera.top=60; ml.shadow.camera.bottom=-60;
+    scene.add(ml);
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.0)).position.set(0,50,0);
+    scene.add(new THREE.PointLight(0x3B82F6, 2, 100)).position.set(20,15,20);
+    scene.add(new THREE.PointLight(0x06B6D4, 1.5, 80)).position.set(-20,15,-20);
+    const grid = new THREE.GridHelper(100,50,0x3B82F6,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m = gltf.scene, box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+      const s = 40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c => { if (!c.isMesh) return; [].concat(c.material).forEach(mt => { mt.transparent=true; mt.opacity=0.3; mt.side=THREE.DoubleSide; mt.depthWrite=true; if(mt.color)mt.color.multiplyScalar(1.5); mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff); mt.emissiveIntensity=0.4; }); c.castShadow=true; c.receiveShadow=true; });
+      scene.add(m);
+    }, undefined, err => console.warn('GLB:', err));
+
+    const dynGroup = new THREE.Group(); scene.add(dynGroup);
+    const pos3d = cfg.pos3d, labels3d = cfg.labels3d, tilts3d = cfg.tilts3d;
+    const nodeMeshes = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
+      dynGroup.add(dev.group); nodeMeshes[id]=dev.mesh;
+    }
+    const drawn = new Set();
+    for (const link of modelData.links) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1 = pos3d[link.from], p2 = pos3d[link.to]; if(!p1||!p2) continue;
+      const v1 = new THREE.Vector3(p1.x,p1.y,p1.z), v2 = new THREE.Vector3(p2.x,p2.y,p2.z);
+      const curve = new THREE.CatmullRomCurve3([v1,v2]);
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+    }
+    const clock = new THREE.Clock();
+    (function animate() {
+      requestAnimationFrame(animate); controls.update();
+      const pulse = Math.sin(clock.elapsedTime*2.5)*0.06;
+      for (const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      renderer3d.render(scene, camera);
+    })();
+  }
+
+  /* ═══════════════════════════════════════
+     INIT
+     ═══════════════════════════════════════ */
+  ctrl = new Controller('reconf');
+  ctrl.load();
+  try { init3D(); } catch(e) { console.warn('3D:', e); }
+
+  document.getElementById('btnPlay').addEventListener('click', () => ctrl.toggle());
+  document.getElementById('btnStep').addEventListener('click', () => ctrl.stepFwd());
+  document.getElementById('btnReset').addEventListener('click', () => ctrl.reset());
+  document.getElementById('speedSlider').addEventListener('input', e => {
+    ctrl.speed = parseFloat(e.target.value);
+    document.getElementById('speedLabel').innerHTML = ctrl.speed + '&times;';
+  });
+  document.getElementById('volSlider').addEventListener('input', e => { audio.vol = parseFloat(e.target.value); });
+  document.getElementById('modelSelect').addEventListener('change', () => ctrl.reset());
+  document.getElementById('nodeLimit').addEventListener('change', () => ctrl.reset());
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === ' ') { e.preventDefault(); ctrl.toggle(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); ctrl.stepFwd(); }
+    else if (e.key === 'r' || e.key === 'R') ctrl.reset();
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => ctrl.load(), 300); });
+  </script>
+</body>
+</html>
