@@ -6,10 +6,10 @@
 /* ── Shared Topology ────────────────────────────── */
 const NODES = [
   // LiDAR sensors (4)
-  { id: "LIDAR_FC", type: "endstation" },  // Robosense G32
+  { id: "LIDAR_FC", type: "endstation" },  // AutoL G32
   { id: "LIDAR_FL", type: "endstation" },  // Hesai Pandar 40P
   { id: "LIDAR_FR", type: "endstation" },  // Hesai Pandar 40P
-  { id: "LIDAR_R",  type: "endstation" },  // Robosense G32
+  { id: "LIDAR_R",  type: "endstation" },  // AutoL G32
   // Radar sensors (5) — Continental MRR-35
   { id: "RADAR_F",   type: "endstation" },
   { id: "RADAR_FLC", type: "endstation" },
@@ -142,7 +142,7 @@ export function realFlowColor(fid) {
 /* ── Scenario Descriptions ───────────────────── */
 export const ROII_REAL_STANDARD_SCENARIO = {
   title: "ROii Realistic \u2014 Standard 10ms Cycle",
-  description: "Realistic ROii shuttle sensor network. All links 1 Gbps. Robosense G32 sends 128KB point cloud burst (1048.9\u00b5s tx), Hesai Pandar 40P sends 32KB sub-sampled data (262.4\u00b5s tx), Continental MRR-35 sends 4KB detection data at 50Hz (2 pkts/cycle, 33.1\u00b5s tx each). <strong>9 flows, 14 pkts/cycle</strong>. Bottleneck utilization \u2248 30%.",
+  description: "Realistic ROii shuttle sensor network. All links 1 Gbps. AutoL G32 sends 128KB point cloud burst (1048.9\u00b5s tx), Hesai Pandar 40P sends 32KB sub-sampled data (262.4\u00b5s tx), Continental MRR-35 sends 4KB detection data at 50Hz (2 pkts/cycle, 33.1\u00b5s tx each). <strong>9 flows, 14 pkts/cycle</strong>. Bottleneck utilization \u2248 30%.",
   flows: [
     { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "128KB point cloud, P7, 1Gbps (1048.9\u00b5s tx)" },
     { name: "Pandar FL \u2192 ACU-IT",   color: "#0D9488", desc: "32KB sub-sampled, P7, 1Gbps (262.4\u00b5s tx)" },
@@ -235,10 +235,10 @@ export function realGetDeviceType(nodeId) {
 
 const RECONF_NODES = [
   // LiDAR sensors (4)
-  { id: "LIDAR_FC", type: "endstation" },  // Robosense G32
+  { id: "LIDAR_FC", type: "endstation" },  // AutoL G32
   { id: "LIDAR_FL", type: "endstation" },  // Hesai Pandar 40P
   { id: "LIDAR_FR", type: "endstation" },  // Hesai Pandar 40P
-  { id: "LIDAR_R",  type: "endstation" },  // Robosense G32
+  { id: "LIDAR_R",  type: "endstation" },  // AutoL G32
   // Radar sensors (5)
   { id: "RADAR_F",   type: "endstation" }, // Continental MRR-35
   { id: "RADAR_FLC", type: "endstation" },

@@ -223,6 +223,12 @@
     .iface-eth { background: rgba(16,185,129,0.08); color: #10B981; border: 1px solid rgba(16,185,129,0.2); }
     .iface-can { background: rgba(149,42,255,0.08); color: #952aff; border: 1px solid rgba(149,42,255,0.2); }
     .iface-vbo { background: rgba(100,116,139,0.08); color: #64748b; border: 1px solid rgba(100,116,139,0.2); }
+
+    /* ── Mode transition ─── */
+    .svg-container, .metrics, .gcl-switch-grid, .auto-desc {
+      transition: opacity 0.25s ease;
+    }
+    .fade-out { opacity: 0 !important; }
   </style>
 </head>
 <body>
@@ -508,6 +514,8 @@
   let linkMeshes3d = {};
   let clock3d = null;
   let glbModel = null;
+  let linkParticles3d = [];
+  let canfdLineMats3d = [];
 
   /* ── Link Failure Scenarios (Switched mode only) ── */
   const LINK_FAIL = {
@@ -651,9 +659,15 @@
       updateScenarioUI();
       updateModeUI();
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
-      renderScenarioDesc();
-      rebuild3D(MODES[currentMode]);
-      reload();
+      // Fade out → rebuild → fade in
+      const fadeEls = document.querySelectorAll('.svg-container, .metrics, .gcl-switch-grid, .auto-desc');
+      fadeEls.forEach(el => el.classList.add('fade-out'));
+      setTimeout(() => {
+        renderScenarioDesc();
+        rebuild3D(MODES[currentMode]);
+        reload();
+        requestAnimationFrame(() => fadeEls.forEach(el => el.classList.remove('fade-out')));
+      }, 250);
     });
   });
 
@@ -675,6 +689,14 @@
         m.tube.material.opacity = 0.95;
         m.glow.material.color.setHex(0x3B82F6);
         m.glow.material.opacity = 0.35;
+      }
+    }
+    // Hide/show particles on failed links
+    for (const p of linkParticles3d) {
+      const linkEntry = linkMeshes3d[p.linkKey];
+      if (linkEntry) {
+        const pFailed = linkEntry.linkIds.some(id => failIds.has(id));
+        p.mesh.visible = !pFailed;
       }
     }
   }
@@ -791,26 +813,102 @@
     renderTable(currentResult, fcopts);
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
 
-    // Add 10G-T1 annotation on topology SVG for sw10g mode
+    // 2D: Backbone link thickness differentiation (switch-switch = 3px)
+    if (currentMode !== 'direct') {
+      const svg = d3.select('#topoContainer svg');
+      const switchIds = new Set(['SW_FL','SW_FR','SW_REAR','ACU_IT']);
+      const switchPositions = {};
+      for (const sid of switchIds) {
+        if (positions[sid]) switchPositions[sid] = positions[sid];
+      }
+      const switchCoords = new Set();
+      for (const p of Object.values(switchPositions)) {
+        switchCoords.add(`${Math.round(p.x)},${Math.round(p.y)}`);
+      }
+      svg.selectAll('line.topo-link').each(function() {
+        const el = d3.select(this);
+        const x1 = Math.round(parseFloat(el.attr('x1'))), y1 = Math.round(parseFloat(el.attr('y1')));
+        const x2 = Math.round(parseFloat(el.attr('x2'))), y2 = Math.round(parseFloat(el.attr('y2')));
+        if (switchCoords.has(`${x1},${y1}`) && switchCoords.has(`${x2},${y2}`)) {
+          el.attr('stroke-width', 3).attr('stroke', 'rgba(59,130,246,0.45)');
+        }
+      });
+    }
+
+    // 2D: 10G-T1 pill badge annotation
     if (currentMode === 'sw10g') {
       const svg = d3.select('#topoContainer svg');
       const pos = MODES[currentMode].getPositions(W, 520);
       if (svg.node() && pos.SW_REAR && pos.ACU_IT) {
-        const mx = (pos.SW_REAR.x + pos.ACU_IT.x) / 2 + 18;
+        const mx = (pos.SW_REAR.x + pos.ACU_IT.x) / 2;
         const my = (pos.SW_REAR.y + pos.ACU_IT.y) / 2;
-        svg.append('text')
-          .attr('x', mx).attr('y', my)
-          .attr('font-size', '13px').attr('font-weight', '800')
-          .attr('fill', '#dc2626')
-          .text('10G-T1');
-        // Draw thick red line over the gateway link
-        svg.insert('line', ':first-child')
+        // Thick red underline
+        svg.append('line')
           .attr('x1', pos.SW_REAR.x).attr('y1', pos.SW_REAR.y)
           .attr('x2', pos.ACU_IT.x).attr('y2', pos.ACU_IT.y)
-          .attr('stroke', '#dc2626').attr('stroke-width', 4)
-          .attr('stroke-dasharray', '8,4').attr('opacity', 0.6);
+          .attr('stroke', '#dc2626').attr('stroke-width', 5)
+          .attr('opacity', 0.35);
+        svg.append('line')
+          .attr('x1', pos.SW_REAR.x).attr('y1', pos.SW_REAR.y)
+          .attr('x2', pos.ACU_IT.x).attr('y2', pos.ACU_IT.y)
+          .attr('stroke', '#dc2626').attr('stroke-width', 2)
+          .attr('stroke-dasharray', '8,4').attr('opacity', 0.8);
+        // Pill badge
+        const pillG = svg.append('g').attr('transform', `translate(${mx + 18}, ${my})`);
+        pillG.append('rect')
+          .attr('x', -30).attr('y', -11).attr('width', 60).attr('height', 22)
+          .attr('rx', 11).attr('fill', '#dc2626').attr('opacity', 0.9);
+        pillG.append('text')
+          .attr('text-anchor', 'middle').attr('dy', '0.35em')
+          .attr('font-size', '11px').attr('font-weight', '800').attr('fill', '#fff')
+          .text('10G-T1');
       }
     }
+
+    // 2D: Direct mode CAN-FD overlay
+    if (currentMode === 'direct') {
+      const svg = d3.select('#topoContainer svg');
+      if (svg.node()) {
+        const pos = MODES[currentMode].getPositions(W, 520);
+        const acuP = pos.ACU_IT;
+        const radarIds = ['RADAR_F','RADAR_FLC','RADAR_FRC','RADAR_RLC','RADAR_RRC','RADAR_R'];
+        if (acuP) {
+          radarIds.forEach(rid => {
+            const rP = pos[rid];
+            if (!rP) return;
+            svg.append('line')
+              .attr('x1', rP.x).attr('y1', rP.y)
+              .attr('x2', acuP.x).attr('y2', acuP.y)
+              .attr('stroke', '#952aff').attr('stroke-width', 1.5)
+              .attr('stroke-dasharray', '6,4').attr('opacity', 0.5);
+          });
+          // CAN-FD label near first radar
+          const fr = pos.RADAR_F;
+          if (fr) {
+            svg.append('text')
+              .attr('x', (fr.x + acuP.x) / 2 + 10).attr('y', (fr.y + acuP.y) / 2 - 8)
+              .attr('font-size', '10px').attr('font-weight', '700')
+              .attr('fill', '#952aff').attr('opacity', 0.7)
+              .text('CAN-FD Direct');
+          }
+        }
+      }
+    }
+
+    // 2D: Utilization color coding (util-label text and util-arc fill)
+    setTimeout(() => {
+      d3.selectAll('#utilContainer .util-label').each(function() {
+        const el = d3.select(this);
+        const val = parseFloat(el.text());
+        if (isNaN(val)) return;
+        let color;
+        if (val < 20) color = '#059669';
+        else if (val < 50) color = '#3B82F6';
+        else if (val < 80) color = '#d97706';
+        else color = '#dc2626';
+        el.style('fill', color).style('font-weight', '800');
+      });
+    }, 1200);
   }
 
   // Responsive
@@ -1020,6 +1118,32 @@
         if (m && m.material) m.material.emissiveIntensity = 0.2 + pulse;
       }
 
+      // Link tube pulse animation
+      const t = clock3d.elapsedTime;
+      for (const [key, m] of Object.entries(linkMeshes3d)) {
+        if (!m.tube.visible) continue;
+        const is10g = m.tube.material.color.r > 0.7 && m.tube.material.color.g < 0.3;
+        const speed = is10g ? 5.0 : 2.5;
+        const base = is10g ? 1.0 : 0.7;
+        const amp = is10g ? 0.4 : 0.25;
+        m.tube.material.emissiveIntensity = base + Math.sin(t * speed) * amp;
+        m.glow.material.opacity = (is10g ? 0.45 : 0.3) + Math.sin(t * speed + 1) * 0.1;
+      }
+
+      // CAN-FD dash line crawling animation
+      for (const mat of canfdLineMats3d) {
+        mat.dashOffset -= dt * 2.0;
+      }
+
+      // Particle animation
+      for (const p of linkParticles3d) {
+        if (!p.mesh.visible) continue;
+        p.t = (p.t + dt * p.speed) % 1.0;
+        const pt = p.curve.getPointAt(p.t);
+        p.mesh.position.copy(pt);
+        p.mesh.material.emissiveIntensity = 0.8 + Math.sin(t * 4 + p.phase) * 0.3;
+      }
+
       renderer3d.render(scene3d, camera3d);
     }
     animate();
@@ -1043,6 +1167,8 @@
       });
     }
     nodeMeshes3d = {};
+    linkParticles3d = [];
+    canfdLineMats3d = [];
 
     const pos3d = mode.pos3d;
     const labels3d = mode.labels3d;
@@ -1094,7 +1220,29 @@
       const linkIds = mode.model.links.filter(l =>
         [l.from, l.to].sort().join('|') === key
       ).map(l => l.id);
-      linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds };
+      linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, line: lineMat, linkIds, curve };
+    }
+
+    // Create data flow particles for each link
+    for (const [key, m] of Object.entries(linkMeshes3d)) {
+      const is10g = (currentMode === 'sw10g' && key === ['ACU_IT','SW_REAR'].sort().join('|'));
+      const count = is10g ? 3 : 1;
+      const speed = is10g ? 0.8 : 0.3;
+      const color = is10g ? 0xdc2626 : 0x3B82F6;
+      for (let i = 0; i < count; i++) {
+        const pGeo = new THREE.SphereGeometry(0.15, 8, 8);
+        const pMat = new THREE.MeshStandardMaterial({
+          color, emissive: color, emissiveIntensity: 1.0,
+          transparent: true, opacity: 0.9
+        });
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        pMesh.position.copy(m.curve.getPointAt(0));
+        dynamicGroup.add(pMesh);
+        linkParticles3d.push({
+          mesh: pMesh, curve: m.curve, linkKey: key,
+          t: i / count, speed, phase: Math.random() * Math.PI * 2
+        });
+      }
     }
 
     // Direct mode: draw CAN-FD dashed lines from radars to ACU
@@ -1108,11 +1256,27 @@
           const geo = new THREE.BufferGeometry().setFromPoints([rPos, acuPos]);
           const mat = new THREE.LineDashedMaterial({
             color: 0x952aff, dashSize: 0.8, gapSize: 0.4,
-            transparent: true, opacity: 0.4
+            transparent: true, opacity: 0.65
           });
           const line = new THREE.Line(geo, mat);
           line.computeLineDistances();
           dynamicGroup.add(line);
+          canfdLineMats3d.push(mat);
+
+          // CAN-FD particle
+          const canCurve = new THREE.CatmullRomCurve3([rPos.clone(), acuPos.clone()]);
+          const cpGeo = new THREE.SphereGeometry(0.15, 8, 8);
+          const cpMat = new THREE.MeshStandardMaterial({
+            color: 0x952aff, emissive: 0x952aff, emissiveIntensity: 1.0,
+            transparent: true, opacity: 0.9
+          });
+          const cpMesh = new THREE.Mesh(cpGeo, cpMat);
+          cpMesh.position.copy(rPos);
+          dynamicGroup.add(cpMesh);
+          linkParticles3d.push({
+            mesh: cpMesh, curve: canCurve, linkKey: 'canfd_' + rid,
+            t: Math.random(), speed: 0.3, phase: Math.random() * Math.PI * 2
+          });
         });
       }
       // Dim radar devices (not on Ethernet TSN)

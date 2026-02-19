@@ -15,7 +15,7 @@ Browser-based IEEE 802.1Qbv Time-Aware Shaper (TAS) Gate Control List scheduler 
 
 ### ROii Realistic Sensor (`roii-real.html`)
 
-2-mode toggle: **Standard** (13 nodes, 9 flows) vs **Reconfigured** (14 nodes + 802.1CB REP, 11 flows). Triangle backbone with link failure scenarios. Robosense G32 (128KB), Hesai Pandar 40P (32KB), Continental MRR-35 (4KB ×2 at 50Hz).
+2-mode toggle: **Standard** (13 nodes, 9 flows) vs **Reconfigured** (14 nodes + 802.1CB REP, 11 flows). Triangle backbone with link failure scenarios. AutoL G32 (128KB), Hesai Pandar 40P (32KB), Continental MRR-35 (4KB ×2 at 50Hz).
 
 ### ROii Balanced Grid (`roii-grid.html`)
 

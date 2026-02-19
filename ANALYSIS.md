@@ -41,10 +41,10 @@ solver와 Greedy 휴리스틱을 함께 사용한다.
 
 | 센서 | 모델 | 페이로드 | 주기 | Tx 시간 (1홉) | 패킷/사이클 |
 |------|------|----------|------|---------------|-------------|
-| Front Center LiDAR | Robosense G32 | 131,072 B (128 KB) | 10 ms (100 Hz) | 1,048.9 µs | 1 |
+| Front Center LiDAR | AutoL G32 | 131,072 B (128 KB) | 10 ms (100 Hz) | 1,048.9 µs | 1 |
 | Front Left LiDAR | Hesai Pandar 40P | 32,768 B (32 KB) | 10 ms (100 Hz) | 262.4 µs | 1 |
 | Front Right LiDAR | Hesai Pandar 40P | 32,768 B (32 KB) | 10 ms (100 Hz) | 262.4 µs | 1 |
-| Rear LiDAR | Robosense G32 | 131,072 B (128 KB) | 10 ms (100 Hz) | 1,048.9 µs | 1 |
+| Rear LiDAR | AutoL G32 | 131,072 B (128 KB) | 10 ms (100 Hz) | 1,048.9 µs | 1 |
 | Front Radar | Continental MRR-35 | 4,096 B (4 KB) | 5 ms (50 Hz) | 33.1 µs | 2 |
 | Front-Left Corner | Continental MRR-35 | 4,096 B (4 KB) | 5 ms (50 Hz) | 33.1 µs | 2 |
 | Front-Right Corner | Continental MRR-35 | 4,096 B (4 KB) | 5 ms (50 Hz) | 33.1 µs | 2 |
