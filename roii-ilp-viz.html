@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scheduler Animation &mdash; TSN/GCL Solver</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override (same as roii-learn.html)
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px; background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
+    }
+    #canvas3d {
+      width: 100%; height: 420px; display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 0.72rem; color: var(--text3);
+      background: rgba(255,255,255,0.85); padding: 4px 10px;
+      border-radius: 8px; backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
+    /* ── Animation Controls ────────────────────── */
+    .anim-controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .anim-controls .btn {
+      font-size: 0.92rem; padding: 8px 18px; font-weight: 700;
+    }
+    .anim-controls .btn.active {
+      background: linear-gradient(135deg, #3B82F6, #06B6D4); color: #fff;
+      border: none;
+    }
+    .ctrl-group {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.85rem; color: var(--text2); font-weight: 600;
+    }
+    .ctrl-group input[type="range"] { width: 80px; accent-color: var(--blue); }
+    .ctrl-group span.val { font-family: 'Courier New', monospace; min-width: 28px; }
+
+    /* ── Step Info + Stats ──────────────────────── */
+    .anim-two-col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;
+    }
+    @media (max-width: 700px) { .anim-two-col { grid-template-columns: 1fr; } }
+    .step-info { font-size: 0.88rem; line-height: 1.7; min-height: 100px; }
+    .step-info .pname { font-size: 1.1rem; font-weight: 800; color: var(--blue); }
+    .step-info .detail { color: var(--text2); font-size: 0.85rem; }
+    .step-info .cst { font-family: 'Courier New', monospace; font-size: 0.78rem; }
+    .step-info .cst.pass { color: var(--green); }
+    .step-info .cst.fail { color: var(--red); }
+    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-item {
+      text-align: center; padding: 10px 8px; border-radius: 10px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .stat-item .label { font-size: 0.72rem; color: var(--text3); text-transform: uppercase; font-weight: 600; }
+    .stat-item .value { font-size: 1.4rem; font-weight: 900; color: var(--blue); font-family: 'Courier New', monospace; }
+    .stat-item .value.miss { color: var(--red); }
+    .stat-item .value.ok { color: var(--green); }
+    .progress-bar { height: 5px; background: rgba(59,130,246,0.08); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+    .progress-bar .fill { height: 100%; background: linear-gradient(90deg, #3B82F6, #06B6D4); border-radius: 3px; transition: width 0.3s; }
+
+    /* ── Flow Legend ────────────────────────────── */
+    .flow-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .flow-legend .item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.8rem; color: var(--text2); font-weight: 600;
+    }
+    .flow-legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+
+    /* ── Animated Gantt ─────────────────────────── */
+    .gcl-grid line { stroke: rgba(59,130,246,0.06); stroke-width: 1; }
+    .gcl-axis text { fill: var(--text3) !important; font-size: 10px; }
+    .gcl-axis path, .gcl-axis line { stroke: rgba(59,130,246,0.15); }
+    .gcl-label { fill: rgba(0,0,0,0.55); font-size: 8px; font-weight: 600; pointer-events: none; }
+    .scan-cursor { stroke: var(--blue); stroke-width: 2; opacity: 0; filter: drop-shadow(0 0 4px rgba(59,130,246,0.4)); }
+    .scan-cursor.active { opacity: 1; }
+
+    /* ── Per-Switch GCL Cards ────────────────────── */
+    .gcl-switch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600; }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Done Animation ─────────────────────────── */
+    @keyframes statPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+    .stat-item.done { animation: statPulse 0.5s ease-in-out 2; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>Scheduler Animation</h1>
+      </div>
+      <div class="sub">Step-by-step greedy scheduling visualization with Web Audio &mdash; TSN/GCL IEEE 802.1Qbv</div>
+    </div>
+
+    <!-- 3D Shuttle -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
+    </div>
+
+    <!-- Animation Controls -->
+    <div class="card" style="padding:14px 20px;">
+      <div class="anim-controls">
+        <button class="btn btn-primary" id="btnPlay">&#9654; Play</button>
+        <button class="btn btn-secondary" id="btnStep">&#9193; Step</button>
+        <button class="btn btn-secondary" id="btnReset">&#10226; Reset</button>
+        <div class="ctrl-group">
+          <label>Speed</label>
+          <input type="range" id="speedSlider" min="0.25" max="4" step="0.25" value="1">
+          <span class="val" id="speedLabel">1&times;</span>
+        </div>
+        <div class="ctrl-group">
+          <label>&#128266;</label>
+          <input type="range" id="volSlider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+        <select id="modelSelect" class="btn btn-secondary" style="font-weight:600;font-size:0.85rem;">
+          <option value="standard">Standard (13N, 9F)</option>
+          <option value="reconf" selected>Reconf (14N, 11F)</option>
+          <option value="optimal">Optimal Tri-Star</option>
+        </select>
+        <div id="status" style="font-size:0.88rem;font-weight:600;color:var(--text3);margin-left:auto;"></div>
+        <a href="index.html" class="btn btn-secondary" style="font-size:0.82rem;">Home</a>
+      </div>
+    </div>
+
+    <!-- Step Info + Stats -->
+    <div class="anim-two-col">
+      <div class="card">
+        <div class="card-title">Current Step</div>
+        <div class="step-info" id="stepInfo">
+          <div class="detail">Press &#9654; Play or &#9193; Step to start&ensp;|&ensp;Space: play/pause &middot; &rarr;: step &middot; R: reset</div>
+        </div>
+        <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Statistics</div>
+        <div class="stat-grid">
+          <div class="stat-item" id="siPlaced"><div class="label">Placed</div><div class="value" id="statPlaced">0/0</div></div>
+          <div class="stat-item" id="siObj"><div class="label">Objective</div><div class="value" id="statObj">0</div></div>
+          <div class="stat-item" id="siUtil"><div class="label">Max Util</div><div class="value" id="statUtil">&mdash;</div></div>
+          <div class="stat-item" id="siMiss"><div class="label">Violations</div><div class="value ok" id="statMiss">0</div></div>
+        </div>
+        <div class="flow-legend" id="flowLegend"></div>
+      </div>
+    </div>
+
+    <!-- Animated Gantt -->
+    <div class="card">
+      <div class="card-title">Schedule Timeline <span style="font-weight:400;color:var(--text3);font-size:0.78rem">&mdash; Greedy priority-based list scheduler</span></div>
+      <div class="svg-container" id="animGanttContainer" style="min-height:300px;"></div>
+    </div>
+
+    <!-- Standard Charts (rendered on load) -->
+    <div class="card">
+      <div class="card-title">Network Topology</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:520px;"></div>
+    </div>
+
+    <div class="metrics" id="metricsArea"></div>
+
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import {
+    initTooltip, solveGreedy, expandPackets,
+    renderMetrics, renderTopology, renderGCL, renderDelayChart,
+    renderUtilization, renderTable, renderSwitchGCL
+  } from './js/ilp-core.js';
+  import {
+    ROII_REAL_STANDARD, ROII_REAL_RECONF, ROII_OPTIMAL,
+    getRealPositions, getReconfPositions, getOptimalPositions,
+    ROII_REAL_NODE_COLORS, ROII_RECONF_NODE_COLORS, ROII_OPTIMAL_NODE_COLORS,
+    ROII_REAL_3D_POSITIONS, ROII_REAL_3D_POSITIONS_RECONF, ROII_OPTIMAL_3D_POSITIONS,
+    ROII_REAL_3D_LABELS, ROII_REAL_3D_LABELS_RECONF, ROII_OPTIMAL_3D_LABELS,
+    ROII_REAL_3D_TILTS,
+    realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
+  } from './js/roii-real-data.js';
+
+  initTooltip();
+  const round3 = v => Math.round(v * 1000) / 1000;
+  const deep = o => JSON.parse(JSON.stringify(o));
+  const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+
+  const CONFIGS = {
+    standard: { data: ROII_REAL_STANDARD, pos: getRealPositions, colors: ROII_REAL_NODE_COLORS,
+                pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
+    reconf:   { data: ROII_REAL_RECONF, pos: getReconfPositions, colors: ROII_RECONF_NODE_COLORS,
+                pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF, tilts3d: ROII_REAL_3D_TILTS },
+    optimal:  { data: ROII_OPTIMAL, pos: getOptimalPositions, colors: ROII_OPTIMAL_NODE_COLORS,
+                pos3d: ROII_OPTIMAL_3D_POSITIONS, labels3d: ROII_OPTIMAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
+  };
+
+  /* ═══════════════════════════════════════
+     WEB AUDIO ENGINE
+     ═══════════════════════════════════════ */
+  const PENTA = [220,262,294,330,392,440,523,587,659,784,880];
+  class AudioEngine {
+    constructor() { this.ctx = null; this.vol = 0.3; }
+    init() {
+      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+    _tone(freq, dur, type) {
+      if (!this.ctx || this.vol <= 0) return;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(this.vol * 0.18, this.ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime + dur);
+    }
+    place(idx) { this._tone(PENTA[idx % PENTA.length], 0.12, 'triangle'); }
+    conflict() { this._tone(80, 0.07, 'sawtooth'); }
+    complete() { [4,6,8].forEach((n,i) => setTimeout(() => this._tone(PENTA[n], 0.15, 'sine'), i*70)); }
+  }
+  const audio = new AudioEngine();
+
+  /* ═══════════════════════════════════════
+     ANIMATED GREEDY SOLVER (step recorder)
+     ═══════════════════════════════════════ */
+  function solveAnimated(model) {
+    if (!model.processing_delay_us) model.processing_delay_us = 3;
+    if (!model.guard_band_us) model.guard_band_us = 3;
+    const pkts = expandPackets(model);
+    const steps = [];
+    const linkOcc = Object.fromEntries(model.links.map(l => [l.id, []]));
+
+    const order = pkts.map((_, i) => i);
+    order.sort((a, b) => {
+      const pa = pkts[a], pb = pkts[b];
+      if (pa.pri !== pb.pri) return pb.pri - pa.pri;
+      if (pa.rel !== pb.rel) return pa.rel - pb.rel;
+      return (pa.dl ?? Infinity) - (pb.dl ?? Infinity);
+    });
+
+    let pktsDone = 0;
+    for (const pi of order) {
+      const pk = pkts[pi];
+      steps.push({ type:'select', pid:pk.pid, fid:pk.fid, pri:pk.pri, rel:pk.rel, dl:pk.dl, rc:pk.routes.length });
+
+      let bestR = 0, bestEnd = Infinity, bestS = null, bestPS = null;
+      for (let ri = 0; ri < pk.routes.length; ri++) {
+        const rt = pk.routes[ri], starts = [], tentative = [];
+        let t = pk.rel, valid = true;
+        for (let h = 0; h < rt.hops.length; h++) {
+          const hp = rt.hops[h], guard = pk.tsn ? model.guard_band_us : 0;
+          let s = t; const conflicts = [];
+          for (;;) {
+            let moved = false;
+            for (const [os, oe] of linkOcc[hp.lid]) {
+              if (s < oe && s + hp.tx + guard > os) {
+                conflicts.push({ from: round3(s), cs: round3(os), ce: round3(oe) });
+                s = oe; moved = true; break;
+              }
+            }
+            if (!moved) break;
+          }
+          if (s + hp.tx > model.cycle_time_us) { valid = false; break; }
+          starts.push(s);
+          tentative.push({
+            type:'place', pid:pk.pid, fid:pk.fid, pri:pk.pri,
+            ri, h, nh:rt.hops.length, lid:hp.lid,
+            s:round3(s), e:round3(s+hp.tx), ge:round3(s+hp.tx+guard),
+            tx:round3(hp.tx), earliest:round3(t), conflicts,
+            color: realFlowColor(pk.fid),
+          });
+          t = s + hp.tx + hp.pd + model.processing_delay_us;
+        }
+        if (valid) {
+          const fin = starts.at(-1) + rt.hops.at(-1).tx + rt.hops.at(-1).pd;
+          if (fin < bestEnd) { bestEnd = fin; bestR = ri; bestS = starts; bestPS = tentative; }
+        }
+      }
+
+      if (!bestS) {
+        const rt = pk.routes[0]; bestS = []; bestPS = []; let t = pk.rel;
+        for (let h = 0; h < rt.hops.length; h++) {
+          const hp = rt.hops[h], guard = pk.tsn ? model.guard_band_us : 0;
+          bestS.push(t);
+          bestPS.push({
+            type:'place', pid:pk.pid, fid:pk.fid, pri:pk.pri,
+            ri:0, h, nh:rt.hops.length, lid:hp.lid,
+            s:round3(t), e:round3(t+hp.tx), ge:round3(t+hp.tx+guard),
+            tx:round3(hp.tx), earliest:round3(t), conflicts:[],
+            color: realFlowColor(pk.fid),
+          });
+          t += hp.tx + hp.pd + model.processing_delay_us;
+        }
+        bestR = 0;
+      }
+
+      steps.push(...bestPS);
+
+      const rt = pk.routes[bestR];
+      for (let h = 0; h < rt.hops.length; h++) {
+        const hp = rt.hops[h], guard = pk.tsn ? model.guard_band_us : 0;
+        linkOcc[hp.lid].push([bestS[h], bestS[h] + hp.tx + guard]);
+        linkOcc[hp.lid].sort((a, b) => a[0] - b[0]);
+      }
+
+      pktsDone++;
+      const selRt = pk.routes[bestR], lastH = selRt.hops.at(-1);
+      const fin = bestS.at(-1) + lastH.tx + lastH.pd;
+      const e2e = round3(fin - pk.rel);
+      const ok = pk.dl == null || fin <= pk.dl + 1e-6;
+      steps.push({
+        type:'done', pid:pk.pid, fid:pk.fid, e2e,
+        status: pk.dl == null ? 'BE' : ok ? 'OK' : 'MISS',
+        pktsDone, totalPkts: pkts.length,
+      });
+    }
+
+    const linkUtils = {};
+    for (const l of model.links) {
+      let a = 0; for (const [s, e] of linkOcc[l.id]) a += (e - s);
+      linkUtils[l.id] = round3(a / model.cycle_time_us * 100);
+    }
+    return { steps, totalPkts: pkts.length, linkUtils, activeLinks: model.links.filter(l => linkOcc[l.id].length > 0) };
+  }
+
+  /* ═══════════════════════════════════════
+     ANIMATED GANTT RENDERER
+     ═══════════════════════════════════════ */
+  function renderAnimGantt(container, model, activeLinks) {
+    container.innerHTML = '';
+    const margin = { top: 28, right: 20, bottom: 40, left: 130 };
+    const rowH = 44;
+    const W = container.clientWidth || 800;
+    const H = margin.top + activeLinks.length * rowH + margin.bottom;
+
+    const svg = d3.select(container).append('svg')
+      .attr('viewBox', `0 0 ${W} ${H}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    const defs = svg.append('defs');
+    const gp = defs.append('pattern').attr('id','guardHatch')
+      .attr('patternUnits','userSpaceOnUse').attr('width',6).attr('height',6)
+      .attr('patternTransform','rotate(45)');
+    gp.append('rect').attr('width',6).attr('height',6).attr('fill','#f9a825');
+    gp.append('line').attr('x1',0).attr('y1',0).attr('x2',0).attr('y2',6)
+      .attr('stroke','rgba(0,0,0,0.2)').attr('stroke-width',2);
+
+    const glow = defs.append('filter').attr('id','pGlow')
+      .attr('x','-15%').attr('y','-15%').attr('width','130%').attr('height','130%');
+    glow.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','2').attr('result','b');
+    const fm = glow.append('feMerge');
+    fm.append('feMergeNode').attr('in','b');
+    fm.append('feMergeNode').attr('in','SourceGraphic');
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+    const innerW = W - margin.left - margin.right;
+    const innerH = activeLinks.length * rowH;
+
+    const x = d3.scaleLinear().domain([0, model.cycle_time_us]).range([0, innerW]);
+    const y = d3.scaleBand().domain(activeLinks.map(l=>l.id)).range([0, innerH]).padding(0.15);
+
+    g.append('g').attr('class','gcl-grid')
+      .selectAll('line').data(x.ticks(10)).enter().append('line')
+      .attr('x1',d=>x(d)).attr('x2',d=>x(d)).attr('y1',0).attr('y2',innerH);
+
+    g.append('g').attr('class','gcl-axis').attr('transform',`translate(0,${innerH})`)
+      .call(d3.axisBottom(x).ticks(10).tickFormat(d=>d+' \u00b5s'));
+
+    g.append('g').attr('class','gcl-axis')
+      .call(d3.axisLeft(y).tickSize(0).tickPadding(6))
+      .selectAll('text').text(d => {
+        const lnk = model.links.find(l=>l.id===d);
+        return lnk ? `${lnk.from} \u2192 ${lnk.to}` : d;
+      }).attr('font-size','9px');
+
+    g.selectAll('.rbg').data(activeLinks).enter().append('rect')
+      .attr('x',0).attr('y',d=>y(d.id))
+      .attr('width',innerW).attr('height',y.bandwidth())
+      .attr('fill',(_,i)=>i%2===0?'rgba(59,130,246,0.03)':'transparent').attr('rx',3);
+
+    const cursor = g.append('line').attr('class','scan-cursor');
+    const pktG = g.append('g');
+
+    svg.append('text').attr('x',margin.left).attr('y',margin.top-10)
+      .attr('fill','var(--text3)').attr('font-size','9px')
+      .text(`Cycle: ${model.cycle_time_us} \u00b5s | Guard: ${model.guard_band_us} \u00b5s | Active: ${activeLinks.length}/${model.links.length} links`);
+
+    return { svg, g, x, y, cursor, pktG };
+  }
+
+  /* ═══════════════════════════════════════
+     ANIMATION CONTROLLER
+     ═══════════════════════════════════════ */
+  let ctrl = null;
+
+  class Controller {
+    constructor(modelKey) {
+      this.modelKey = modelKey;
+      this.steps = []; this.cur = 0; this.playing = false; this.speed = 1;
+      this.tl = null; this.model = null;
+      this.pktsDone = 0; this.totalPkts = 0; this.obj = 0; this.misses = 0;
+      this.linkUtils = {}; this.linkNoteMap = {};
+      this.af = null; this.lastT = 0;
+    }
+
+    load() {
+      this.stop(); this.cur = 0; this.pktsDone = 0; this.obj = 0; this.misses = 0;
+      const cfg = CONFIGS[this.modelKey];
+      this.model = deep(cfg.data);
+
+      // Animated solver
+      const res = solveAnimated(this.model);
+      this.steps = res.steps;
+      this.totalPkts = res.totalPkts;
+      this.linkUtils = res.linkUtils;
+      this.activeLinks = res.activeLinks;
+      res.activeLinks.forEach((l, i) => { this.linkNoteMap[l.id] = i; });
+
+      // Standard charts with normal solveGreedy
+      const stdModel = deep(cfg.data);
+      const stdResult = solveGreedy(stdModel);
+      const W = document.getElementById('topoContainer').clientWidth;
+      renderMetrics(stdModel, stdResult);
+      renderTopology(stdModel, stdResult, { nodePositions: cfg.pos(W, 520), nodeColors: cfg.colors, height: 520 });
+      renderSwitchGCL(stdModel, stdResult, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
+      renderDelayChart(stdModel, stdResult, fcopts);
+      renderUtilization(stdModel, stdResult, { beColor: '#e2e8f0' });
+      renderTable(stdResult, fcopts);
+
+      // Animated Gantt
+      this.tl = renderAnimGantt(document.getElementById('animGanttContainer'), this.model, res.activeLinks);
+
+      // Legend
+      this._renderLegend();
+      this.updateStats(); this.updateStep(null); this.updateProgress();
+      document.querySelectorAll('.stat-item').forEach(e => e.classList.remove('done'));
+      document.getElementById('status').innerHTML = `<span style="color:var(--text3)">${this.totalPkts} packets &middot; ${this.steps.length} steps</span>`;
+    }
+
+    _renderLegend() {
+      const el = document.getElementById('flowLegend'); el.innerHTML = '';
+      const seen = new Set();
+      this.model.flows.forEach(f => {
+        if (seen.has(f.id)) return; seen.add(f.id);
+        const d = document.createElement('div'); d.className = 'item';
+        d.innerHTML = `<div class="sw" style="background:${realFlowColor(f.id)}"></div>${f.id}`;
+        el.appendChild(d);
+      });
+    }
+
+    play() {
+      if (this.cur >= this.steps.length) this.cur = 0;
+      this.playing = true;
+      document.getElementById('btnPlay').textContent = '\u23F8 Pause';
+      document.getElementById('btnPlay').classList.add('active');
+      audio.init(); this.lastT = performance.now(); this._tick();
+    }
+    pause() {
+      this.playing = false;
+      document.getElementById('btnPlay').textContent = '\u25B6 Play';
+      document.getElementById('btnPlay').classList.remove('active');
+      if (this.af) { cancelAnimationFrame(this.af); this.af = null; }
+    }
+    stop() { this.pause(); this.cur = 0; }
+    toggle() { this.playing ? this.pause() : this.play(); }
+
+    _tick() {
+      if (!this.playing || this.cur >= this.steps.length) {
+        if (this.cur >= this.steps.length) { this.pause(); this._onFinish(); }
+        return;
+      }
+      const now = performance.now();
+      const delay = this._delay(this.steps[this.cur]) / this.speed;
+      if (now - this.lastT >= delay) {
+        this._exec(this.steps[this.cur]); this.cur++; this.lastT = now;
+      }
+      this.af = requestAnimationFrame(() => this._tick());
+    }
+
+    _delay(s) { return s.type === 'select' ? 200 : s.type === 'place' ? 300 : 120; }
+
+    stepFwd() {
+      audio.init();
+      if (this.cur < this.steps.length) { this._exec(this.steps[this.cur]); this.cur++; }
+      if (this.cur >= this.steps.length) this._onFinish();
+    }
+
+    _exec(s) {
+      this.updateStep(s); this.updateProgress();
+      if (s.type === 'place') this._animPlace(s);
+      if (s.type === 'done') this._onDone(s);
+    }
+
+    _animPlace(s) {
+      const tl = this.tl; if (!tl) return;
+      const { x, y, cursor, pktG } = tl;
+      const yPos = y(s.lid); if (yPos === undefined) return;
+      const bw = y.bandwidth(), spd = this.speed;
+
+      // Scan cursor
+      cursor.attr('x1',x(s.earliest)).attr('x2',x(s.earliest))
+        .attr('y1',yPos).attr('y2',yPos+bw).attr('class','scan-cursor active');
+      cursor.transition().duration(120/spd)
+        .attr('x1',x(s.s)).attr('x2',x(s.s))
+        .on('end', () => cursor.attr('class','scan-cursor'));
+
+      if (s.conflicts.length > 0) audio.conflict();
+
+      // Packet rect
+      const r = pktG.append('rect')
+        .attr('x',x(s.s)).attr('y',yPos).attr('width',0).attr('height',bw)
+        .attr('fill',s.color).attr('stroke','rgba(255,255,255,0.4)')
+        .attr('stroke-width',0.8).attr('rx',3).attr('opacity',0.9)
+        .attr('filter','url(#pGlow)');
+      r.transition().duration(180/spd).attr('width', Math.max(x(s.e)-x(s.s), 3));
+      setTimeout(() => r.attr('filter','none'), 400/spd);
+
+      // Guard band
+      if (s.e < s.ge) {
+        const gr = pktG.append('rect')
+          .attr('x',x(s.e)).attr('y',yPos).attr('width',0).attr('height',bw)
+          .attr('fill','url(#guardHatch)').attr('stroke','#e8a317')
+          .attr('stroke-width',0.5).attr('rx',2).attr('opacity',0.7);
+        gr.transition().delay(80/spd).duration(80/spd)
+          .attr('width', Math.max(x(s.ge)-x(s.e),1));
+      }
+
+      // Label
+      const pw = x(s.e) - x(s.s);
+      if (pw > 35) {
+        pktG.append('text').attr('class','gcl-label')
+          .attr('x', x(s.s)+pw/2).attr('y', yPos+bw/2)
+          .attr('text-anchor','middle').attr('dominant-baseline','central')
+          .attr('opacity',0).text(s.pid.replace('#','.'))
+          .transition().delay(180/spd).duration(150/spd).attr('opacity',0.8);
+      }
+
+      audio.place(this.linkNoteMap[s.lid] || 0);
+    }
+
+    _onDone(s) {
+      this.pktsDone = s.pktsDone;
+      if (s.status !== 'BE') this.obj += s.e2e;
+      if (s.status === 'MISS') this.misses++;
+      this.updateStats();
+    }
+
+    _onFinish() {
+      audio.complete();
+      document.querySelectorAll('.stat-item').forEach(e => e.classList.add('done'));
+      document.getElementById('status').innerHTML = '<span style="color:var(--green)">&#10003; Complete</span>';
+    }
+
+    updateStats() {
+      document.getElementById('statPlaced').textContent = `${this.pktsDone}/${this.totalPkts}`;
+      document.getElementById('statObj').textContent = `${round3(this.obj)} \u00b5s`;
+      const maxU = Math.max(0, ...Object.values(this.linkUtils));
+      document.getElementById('statUtil').textContent = this.pktsDone >= this.totalPkts ? `${round3(maxU)}%` : '\u2026';
+      const me = document.getElementById('statMiss');
+      me.textContent = this.misses; me.className = `value ${this.misses > 0 ? 'miss' : 'ok'}`;
+    }
+
+    updateStep(s) {
+      const el = document.getElementById('stepInfo');
+      if (!s) { el.innerHTML = '<div class="detail">Press \u25B6 Play or \u23ED Step&ensp;|&ensp;Space: play/pause &middot; \u2192: step &middot; R: reset</div>'; return; }
+      if (s.type === 'select') {
+        el.innerHTML = `<div class="pname">${s.pid}</div>
+          <div class="detail">Priority ${s.pri} &middot; Release ${s.rel} \u00b5s${s.dl != null ? ' &middot; Deadline ' + s.dl + ' \u00b5s' : ''}</div>
+          <div class="detail">${s.rc} candidate route${s.rc>1?'s':''}</div>`;
+      } else if (s.type === 'place') {
+        const lnk = this.model.links.find(l=>l.id===s.lid);
+        const ll = lnk ? `${lnk.from} \u2192 ${lnk.to}` : s.lid;
+        el.innerHTML = `<div class="pname">${s.pid}</div>
+          <div class="detail">Hop ${s.h+1}/${s.nh}: ${ll}</div>
+          <div class="detail">Tx ${s.tx} \u00b5s &middot; Slot [${s.s}, ${s.e}] \u00b5s</div>
+          ${s.conflicts.length > 0
+            ? `<div class="cst fail">\u26A0 ${s.conflicts.length} conflict(s) \u2014 shifted from ${s.earliest}</div>`
+            : `<div class="cst pass">\u2713 placed at earliest ${s.s} \u00b5s</div>`}
+          ${s.h > 0 ? `<div class="cst pass">\u2713 chain \u2265 ${s.earliest} \u00b5s</div>` : ''}`;
+      } else if (s.type === 'done') {
+        el.innerHTML = `<div class="pname">${s.pid} \u2713</div>
+          <div class="detail">E2E ${s.e2e} \u00b5s &middot; <span style="color:${s.status==='OK'?'var(--green)':s.status==='MISS'?'var(--red)':'var(--text3)'}">${s.status}</span></div>
+          <div class="detail">${s.pktsDone}/${s.totalPkts} packets scheduled</div>`;
+      }
+    }
+
+    updateProgress() {
+      document.getElementById('progressFill').style.width = (this.steps.length > 0 ? (this.cur / this.steps.length * 100) : 0) + '%';
+    }
+
+    reset() {
+      this.modelKey = document.getElementById('modelSelect').value;
+      this.load();
+      init3D();
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     3D SHUTTLE (same as roii-learn.html)
+     ═══════════════════════════════════════ */
+  const TMPL = {
+    lidar_g32:    { w:1,h:1,d:1, color:0x10B981 },
+    lidar_pandar: { w:1,h:1,d:1, color:0x0D9488 },
+    radar:        { w:1,h:1,d:1, color:0x952aff },
+    replicator:   { w:2,h:1.5,d:2, color:0xd97706 },
+    switch_f:     { w:4,h:2,d:4, color:0x3B82F6 },
+    switch_r:     { w:4,h:2,d:4, color:0x06B6D4 },
+    ecu:          { w:4,h:2,d:4, color:0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId), t = TMPL[type];
+    const group = new THREE.Group(); let geo;
+    if (type === 'lidar_g32') geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    else if (type === 'lidar_pandar') geo = new THREE.CylinderGeometry(t.w*0.6, t.w*0.6, t.h*0.8, 16);
+    else if (type === 'replicator') geo = new THREE.OctahedronGeometry(t.w*0.7);
+    else geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    const mat = new THREE.MeshPhongMaterial({ color:t.color, emissive:t.color, emissiveIntensity:0.5, specular:0x888888, shininess:30 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color:0xffffff, linewidth:5 })));
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = 'rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle = '#FFF'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText(label, 256, 75);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+    const ls = Math.max(t.w, t.d) * 1.2;
+    sprite.scale.set(ls, ls*0.25, 1); sprite.position.y = t.h + 1; group.add(sprite);
+    group.position.copy(position);
+    if (tilt) { if (tilt.x !== undefined) group.rotation.x = tilt.x; if (tilt.y !== undefined) group.rotation.y = tilt.y; if (tilt.z !== undefined) group.rotation.z = tilt.z; }
+    return { mesh, group };
+  }
+
+  let renderer3d = null;
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+    container.innerHTML = '';
+    const cfg = CONFIGS[document.getElementById('modelSelect').value];
+    const modelData = cfg.data;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera.position.set(50, 35, 70);
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = new THREE.WebGLRenderer({ antialias: true });
+    renderer3d.shadowMap.enabled = true; renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+    function updateSize() { const w=container.clientWidth, h=container.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer3d.setSize(w,h); }
+    updateSize(); container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+    const controls = new THREE.OrbitControls(camera, renderer3d.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05; controls.autoRotate=true; controls.autoRotateSpeed=1.2;
+    controls.minDistance=20; controls.maxDistance=120; controls.target.set(0,0,0);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const ml = new THREE.DirectionalLight(0xffffff, 1.5); ml.position.set(30,50,30);
+    ml.castShadow=true; ml.shadow.mapSize.set(2048,2048);
+    ml.shadow.camera.near=0.5; ml.shadow.camera.far=200;
+    ml.shadow.camera.left=-60; ml.shadow.camera.right=60; ml.shadow.camera.top=60; ml.shadow.camera.bottom=-60;
+    scene.add(ml);
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.0)).position.set(0,50,0);
+    scene.add(new THREE.PointLight(0x3B82F6, 2, 100)).position.set(20,15,20);
+    scene.add(new THREE.PointLight(0x06B6D4, 1.5, 80)).position.set(-20,15,-20);
+    const grid = new THREE.GridHelper(100,50,0x3B82F6,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m = gltf.scene, box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+      const s = 40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c => { if (!c.isMesh) return; [].concat(c.material).forEach(mt => { mt.transparent=true; mt.opacity=0.3; mt.side=THREE.DoubleSide; mt.depthWrite=true; if(mt.color)mt.color.multiplyScalar(1.5); mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff); mt.emissiveIntensity=0.4; }); c.castShadow=true; c.receiveShadow=true; });
+      scene.add(m);
+    }, undefined, err => console.warn('GLB:', err));
+
+    const dynGroup = new THREE.Group(); scene.add(dynGroup);
+    const pos3d = cfg.pos3d, labels3d = cfg.labels3d, tilts3d = cfg.tilts3d;
+    const nodeMeshes = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
+      dynGroup.add(dev.group); nodeMeshes[id]=dev.mesh;
+    }
+    const drawn = new Set();
+    for (const link of modelData.links) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1 = pos3d[link.from], p2 = pos3d[link.to]; if(!p1||!p2) continue;
+      const v1 = new THREE.Vector3(p1.x,p1.y,p1.z), v2 = new THREE.Vector3(p2.x,p2.y,p2.z);
+      const curve = new THREE.CatmullRomCurve3([v1,v2]);
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+    }
+    const clock = new THREE.Clock();
+    (function animate() {
+      requestAnimationFrame(animate); controls.update();
+      const pulse = Math.sin(clock.elapsedTime*2.5)*0.06;
+      for (const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      renderer3d.render(scene, camera);
+    })();
+  }
+
+  /* ═══════════════════════════════════════
+     INIT
+     ═══════════════════════════════════════ */
+  ctrl = new Controller('reconf');
+  ctrl.load();
+  try { init3D(); } catch(e) { console.warn('3D:', e); }
+
+  document.getElementById('btnPlay').addEventListener('click', () => ctrl.toggle());
+  document.getElementById('btnStep').addEventListener('click', () => ctrl.stepFwd());
+  document.getElementById('btnReset').addEventListener('click', () => ctrl.reset());
+  document.getElementById('speedSlider').addEventListener('input', e => {
+    ctrl.speed = parseFloat(e.target.value);
+    document.getElementById('speedLabel').innerHTML = ctrl.speed + '&times;';
+  });
+  document.getElementById('volSlider').addEventListener('input', e => { audio.vol = parseFloat(e.target.value); });
+  document.getElementById('modelSelect').addEventListener('change', () => ctrl.reset());
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === ' ') { e.preventDefault(); ctrl.toggle(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); ctrl.stepFwd(); }
+    else if (e.key === 'r' || e.key === 'R') ctrl.reset();
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => ctrl.load(), 300); });
+  </script>
+</body>
+</html>
