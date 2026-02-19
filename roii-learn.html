@@ -306,6 +306,51 @@
     .collapsible.open .arrow { transform: rotate(90deg); }
     .collapse-body { display: none; }
     .collapse-body.show { display: block; }
+
+    /* ── Model Selector ────────────────────────────── */
+    .model-select {
+      padding: 7px 14px; border-radius: 8px; font-size: 0.88rem; font-weight: 700;
+      border: 1.5px solid rgba(59,130,246,0.25); background: #fff; color: var(--text);
+      cursor: pointer; transition: border-color 0.2s;
+    }
+    .model-select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+
+    /* ── Link Editor Table ─────────────────────────── */
+    .link-edit-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 12px; }
+    .link-edit-table th {
+      text-align: left; padding: 7px 8px; color: var(--text3); font-weight: 700;
+      border-bottom: 2px solid rgba(59,130,246,0.25); font-size: 0.75rem;
+      text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .link-edit-table td { padding: 5px 6px; border-bottom: 1px solid rgba(0,0,0,0.06); vertical-align: middle; }
+    .link-edit-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .link-edit-table input[type="number"], .link-edit-table select {
+      width: 80px; padding: 4px 6px; border-radius: 6px;
+      border: 1.5px solid rgba(59,130,246,0.2); background: #fff;
+      font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: 600;
+      color: var(--text); transition: border-color 0.2s;
+    }
+    .link-edit-table input:focus, .link-edit-table select:focus {
+      outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+    }
+    .link-edit-table .link-nodes { font-weight: 700; font-size: 0.88rem; color: var(--text); white-space: nowrap; }
+
+    /* ── Add / Remove Buttons ──────────────────────── */
+    .btn-sm {
+      padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 700;
+      border: 1.5px solid; cursor: pointer; transition: all 0.2s; line-height: 1.4;
+    }
+    .btn-add { border-color: rgba(5,150,105,0.3); color: var(--green); background: rgba(5,150,105,0.06); }
+    .btn-add:hover { background: rgba(5,150,105,0.15); border-color: var(--green); }
+    .btn-rm { border-color: rgba(220,38,38,0.3); color: var(--red); background: rgba(220,38,38,0.06); padding: 3px 8px; }
+    .btn-rm:hover { background: rgba(220,38,38,0.15); border-color: var(--red); }
+    .table-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+
+    /* ── Node Select in Link/Flow Editor ───────────── */
+    .node-select {
+      width: 110px; padding: 4px 6px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      border: 1.5px solid rgba(59,130,246,0.2); background: #fff; color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -330,6 +375,11 @@
     <!-- Solve Controls -->
     <div class="card" style="padding:14px 20px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <select class="model-select" id="modelSelect">
+          <option value="reconf">Reconf (14N, 11F)</option>
+          <option value="standard">Standard (13N, 9F)</option>
+          <option value="optimal">Optimal Tri-Star (13N, 9F)</option>
+        </select>
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
         <button class="btn btn-secondary" id="greedyBtn">Solve (Greedy)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset All</button>
@@ -365,18 +415,39 @@
       </div>
     </div>
 
+    <!-- Link Editor Table -->
+    <div class="card">
+      <div class="card-title">Link Specifications</div>
+      <div style="overflow-x:auto;">
+        <table class="link-edit-table" id="linkTable">
+          <thead><tr>
+            <th>From</th><th>To</th><th>Rate (Mbps)</th><th>Prop Delay (&micro;s)</th><th></th>
+          </tr></thead>
+          <tbody id="linkTableBody"></tbody>
+        </table>
+      </div>
+      <div class="table-actions">
+        <button class="btn-sm btn-add" id="addLinkBtn">+ Add Link</button>
+        <span style="font-size:0.78rem;color:var(--text3);margin-left:8px;">Edit link rates and propagation delays, or add/remove links</span>
+      </div>
+    </div>
+
     <!-- Editable Flow Table -->
     <div class="card">
       <div class="card-title">Flow Specifications</div>
       <div style="overflow-x:auto;">
         <table class="flow-table" id="flowTable">
           <thead><tr>
-            <th></th><th>Flow</th><th>Type</th>
+            <th></th><th>Flow</th><th>Src</th><th>Dst</th>
             <th>Payload (B)</th><th>Period (&micro;s)</th><th>Deadline (&micro;s)</th><th>Priority</th>
-            <th>Tx Time</th><th>Pkts/Cycle</th>
+            <th>Tx Time</th><th>Pkts/Cycle</th><th></th>
           </tr></thead>
           <tbody id="flowTableBody"></tbody>
         </table>
+      </div>
+      <div class="table-actions">
+        <button class="btn-sm btn-add" id="addFlowBtn">+ Add Flow</button>
+        <span style="font-size:0.78rem;color:var(--text3);margin-left:8px;">Edit flow parameters, add/remove flows. Changes auto-solve.</span>
       </div>
     </div>
 
@@ -557,18 +628,44 @@
     renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    ROII_REAL_RECONF,
-    getReconfPositions, ROII_RECONF_NODE_COLORS,
+    ROII_REAL_STANDARD, ROII_REAL_RECONF, ROII_OPTIMAL,
+    getRealPositions, getReconfPositions, getOptimalPositions,
+    ROII_REAL_NODE_COLORS, ROII_RECONF_NODE_COLORS, ROII_OPTIMAL_NODE_COLORS,
+    ROII_REAL_3D_POSITIONS, ROII_REAL_3D_LABELS,
     ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
+    ROII_OPTIMAL_3D_POSITIONS, ROII_OPTIMAL_3D_LABELS,
     ROII_REAL_3D_TILTS,
     realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
-  } from './js/roii-real-data.js?v=4';
+  } from './js/roii-real-data.js?v=5';
 
   /* ── Helpers ── */
   function txTimeUs(bytes, mbps) { return ((bytes + 38) * 8) / mbps; }
   function round3(v) { return Math.round(v * 1000) / 1000; }
 
+  /* ── Model Configurations ── */
+  const CONFIGS = {
+    standard: {
+      label: 'Standard (13N, 9F)', model: ROII_REAL_STANDARD,
+      posFn: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
+      switches: ROII_REAL_SWITCHES
+    },
+    reconf: {
+      label: 'Reconf (14N, 11F)', model: ROII_REAL_RECONF,
+      posFn: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
+      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
+      switches: ROII_REAL_SWITCHES
+    },
+    optimal: {
+      label: 'Optimal Tri-Star (13N, 9F)', model: ROII_OPTIMAL,
+      posFn: getOptimalPositions, nodeColors: ROII_OPTIMAL_NODE_COLORS,
+      pos3d: ROII_OPTIMAL_3D_POSITIONS, labels3d: ROII_OPTIMAL_3D_LABELS,
+      switches: ROII_REAL_SWITCHES
+    }
+  };
+
   /* ── State ── */
+  let configKey = 'reconf';
   const ORIGINAL = JSON.parse(JSON.stringify(ROII_REAL_RECONF));
   let editableModel = JSON.parse(JSON.stringify(ORIGINAL));
   let glpk = null, currentModel = null, currentResult = null;
@@ -596,6 +693,95 @@
   });
 
   /* ══════════════════════════════════════════════════
+     MODEL SWITCHING
+     ══════════════════════════════════════════════════ */
+  const modelSelectEl = document.getElementById("modelSelect");
+  modelSelectEl.addEventListener("change", () => switchModel(modelSelectEl.value));
+
+  function switchModel(key) {
+    const cfg = CONFIGS[key];
+    if (!cfg) return;
+    configKey = key;
+    const base = JSON.parse(JSON.stringify(cfg.model));
+    editableModel = base;
+    document.getElementById("paramCycleTime").value = base.cycle_time_us;
+    document.getElementById("paramGuardBand").value = base.guard_band_us;
+    document.getElementById("paramProcDelay").value = base.processing_delay_us;
+    greedyResult = null; ilpResult = null;
+    compareBadgeEl.style.display = 'none';
+    buildLinkTable();
+    buildFlowTable();
+    syncAndSolveGreedy();
+    rebuild3D();
+    statusEl.innerHTML = `<span style="color:var(--blue)">Switched to ${cfg.label}</span>`;
+  }
+
+  /* ══════════════════════════════════════════════════
+     LINK EDITOR TABLE
+     ══════════════════════════════════════════════════ */
+  function getNodeIds() { return editableModel.nodes.map(n => n.id); }
+
+  function buildLinkTable() {
+    const tbody = document.getElementById("linkTableBody");
+    tbody.innerHTML = "";
+    const nodeIds = getNodeIds();
+    editableModel.links.forEach((lk, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="link-nodes">${lk.from}</td>
+        <td class="link-nodes">${lk.to}</td>
+        <td><input type="number" data-link="${i}" data-field="rate_mbps" value="${lk.rate_mbps}" min="10" step="100"></td>
+        <td><input type="number" data-link="${i}" data-field="prop_delay_us" value="${lk.prop_delay_us}" min="0" step="0.1"></td>
+        <td><button class="btn-sm btn-rm" data-rm-link="${i}" title="Remove link">&times;</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll("input").forEach(el => el.addEventListener("input", onLinkEdit));
+    tbody.querySelectorAll("[data-rm-link]").forEach(el => el.addEventListener("click", e => removeLink(parseInt(e.target.dataset.rmLink))));
+  }
+
+  function onLinkEdit(e) {
+    const el = e.target, idx = parseInt(el.dataset.link), field = el.dataset.field;
+    const val = parseFloat(el.value);
+    if (isNaN(val) || val <= 0) return;
+    editableModel.links[idx][field] = val;
+    scheduleAutoSolve();
+  }
+
+  function addLink() {
+    const nodeIds = getNodeIds();
+    if (nodeIds.length < 2) return;
+    const newId = `l_custom_${Date.now()}`;
+    editableModel.links.push({
+      id: newId, from: nodeIds[0], to: nodeIds[1], rate_mbps: 1000, prop_delay_us: 0.5
+    });
+    buildLinkTable();
+    enableLinkNodeEditing(editableModel.links.length - 1);
+    scheduleAutoSolve();
+  }
+
+  function enableLinkNodeEditing(idx) {
+    const tbody = document.getElementById("linkTableBody");
+    const row = tbody.rows[idx];
+    if (!row) return;
+    const nodeIds = getNodeIds();
+    const lk = editableModel.links[idx];
+    const fromCell = row.cells[0], toCell = row.cells[1];
+    fromCell.innerHTML = `<select class="node-select" data-link="${idx}" data-field="from">${nodeIds.map(n => `<option value="${n}" ${n===lk.from?'selected':''}>${n}</option>`).join('')}</select>`;
+    toCell.innerHTML = `<select class="node-select" data-link="${idx}" data-field="to">${nodeIds.map(n => `<option value="${n}" ${n===lk.to?'selected':''}>${n}</option>`).join('')}</select>`;
+    fromCell.querySelector('select').addEventListener('change', e => { lk.from = e.target.value; lk.id = `l_${lk.from.toLowerCase()}_${lk.to.toLowerCase()}`; scheduleAutoSolve(); });
+    toCell.querySelector('select').addEventListener('change', e => { lk.to = e.target.value; lk.id = `l_${lk.from.toLowerCase()}_${lk.to.toLowerCase()}`; scheduleAutoSolve(); });
+  }
+
+  function removeLink(idx) {
+    editableModel.links.splice(idx, 1);
+    buildLinkTable();
+    scheduleAutoSolve();
+  }
+
+  document.getElementById("addLinkBtn").addEventListener("click", addLink);
+
+  /* ══════════════════════════════════════════════════
      EDITABLE FLOW TABLE
      ══════════════════════════════════════════════════ */
   function buildFlowTable() {
@@ -609,7 +795,8 @@
       tr.innerHTML = `
         <td><span class="flow-dot" style="background:${color}"></span></td>
         <td class="flow-id-cell">${f.id.replace('f_','')}</td>
-        <td class="flow-type-cell">${f.traffic_type}</td>
+        <td class="flow-type-cell" style="font-size:0.78rem">${f.src}</td>
+        <td class="flow-type-cell" style="font-size:0.78rem">${f.dst}</td>
         <td><input type="number" data-flow="${i}" data-field="payload_bytes" value="${f.payload_bytes}" min="64" step="64"></td>
         <td><input type="number" data-flow="${i}" data-field="period_us" value="${f.period_us}" min="100" step="100"></td>
         <td><input type="number" data-flow="${i}" data-field="deadline_us" value="${f.deadline_us}" min="100" step="100"></td>
@@ -618,11 +805,36 @@
         </select></td>
         <td class="computed" id="txTime_${i}">${txUs} &micro;s</td>
         <td class="computed" id="pktsPerCycle_${i}">${pktsPerCycle}</td>
+        <td><button class="btn-sm btn-rm" data-rm-flow="${i}" title="Remove flow">&times;</button></td>
       `;
       tbody.appendChild(tr);
     });
-    tbody.querySelectorAll("input, select").forEach(el => el.addEventListener("input", onFlowEdit));
+    tbody.querySelectorAll("input, select").forEach(el => {
+      if (el.dataset.flow !== undefined) el.addEventListener("input", onFlowEdit);
+    });
+    tbody.querySelectorAll("[data-rm-flow]").forEach(el => el.addEventListener("click", e => removeFlow(parseInt(e.target.dataset.rmFlow))));
   }
+
+  function addFlow() {
+    const nodeIds = getNodeIds();
+    const src = nodeIds.find(n => n.startsWith('LIDAR') || n.startsWith('RADAR')) || nodeIds[0];
+    const dst = nodeIds.find(n => n === 'ACU_IT') || nodeIds[nodeIds.length - 1];
+    const newId = `f_custom_${editableModel.flows.length + 1}`;
+    editableModel.flows.push({
+      id: newId, priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
+      traffic_type: "custom", src, dst, k_paths: 2
+    });
+    buildFlowTable();
+    scheduleAutoSolve();
+  }
+
+  function removeFlow(idx) {
+    editableModel.flows.splice(idx, 1);
+    buildFlowTable();
+    scheduleAutoSolve();
+  }
+
+  document.getElementById("addFlowBtn").addEventListener("click", addFlow);
 
   function onFlowEdit(e) {
     const el = e.target, idx = parseInt(el.dataset.flow), field = el.dataset.field;
@@ -717,10 +929,11 @@
   /* ── Render All Charts ── */
   function renderAll() {
     if (!currentResult) return;
+    const cfg = CONFIGS[configKey];
     const W = document.getElementById("topoContainer").clientWidth;
     renderMetrics(currentModel, currentResult);
-    renderTopology(currentModel, currentResult, { nodePositions: getReconfPositions(W, 520), nodeColors: ROII_RECONF_NODE_COLORS, height: 520 });
-    renderSwitchGCL(currentModel, currentResult, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
+    renderTopology(currentModel, currentResult, { nodePositions: cfg.posFn(W, 520), nodeColors: cfg.nodeColors, height: 520 });
+    renderSwitchGCL(currentModel, currentResult, { switches: cfg.switches, flowColorFn: realFlowColor });
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
@@ -913,13 +1126,14 @@
 
   /* ── Buttons ── */
   resetBtn.addEventListener("click", () => {
-    editableModel = JSON.parse(JSON.stringify(ORIGINAL));
-    document.getElementById("paramCycleTime").value = ORIGINAL.cycle_time_us;
-    document.getElementById("paramGuardBand").value = ORIGINAL.guard_band_us;
-    document.getElementById("paramProcDelay").value = ORIGINAL.processing_delay_us;
+    const cfg = CONFIGS[configKey];
+    editableModel = JSON.parse(JSON.stringify(cfg.model));
+    document.getElementById("paramCycleTime").value = editableModel.cycle_time_us;
+    document.getElementById("paramGuardBand").value = editableModel.guard_band_us;
+    document.getElementById("paramProcDelay").value = editableModel.processing_delay_us;
     greedyResult = null; ilpResult = null;
     compareBadgeEl.style.display = 'none';
-    buildFlowTable(); syncAndSolveGreedy();
+    buildLinkTable(); buildFlowTable(); syncAndSolveGreedy();
     statusEl.textContent = "Reset to defaults";
   });
   greedyBtn.addEventListener("click", syncAndSolveGreedy);
@@ -929,7 +1143,7 @@
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 300); });
 
   /* ══════════════════════════════════════════════════
-     3D SHUTTLE VISUALIZATION (from roii-grid.html)
+     3D SHUTTLE VISUALIZATION
      ══════════════════════════════════════════════════ */
   const TMPL = {
     lidar_g32:    { w:1,h:1,d:1, color:0x10B981 },
@@ -967,6 +1181,9 @@
     return { mesh, group };
   }
 
+  // Persistent 3D state (scene, camera, renderer survive model switch)
+  let _3d = null;
+
   function init3D() {
     const container = document.getElementById('canvas3d');
     if (!container || typeof THREE === 'undefined') return;
@@ -996,7 +1213,7 @@
     grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.ShadowMaterial({opacity:0.3}));
     plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
-    // GLB
+    // GLB (static, shared across models)
     const loader = new THREE.GLTFLoader();
     loader.load('./roii.glb', gltf => {
       const m = gltf.scene, box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
@@ -1005,36 +1222,56 @@
       m.traverse(c => { if (!c.isMesh) return; [].concat(c.material).forEach(mt => { mt.transparent=true; mt.opacity=0.3; mt.side=THREE.DoubleSide; mt.depthWrite=true; if(mt.color)mt.color.multiplyScalar(1.5); mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff); mt.emissiveIntensity=0.4; }); c.castShadow=true; c.receiveShadow=true; });
       scene.add(m);
     }, undefined, err => console.warn('GLB:', err));
-    // Devices
+    // Dynamic group for devices + links
     const dynGroup = new THREE.Group(); scene.add(dynGroup);
-    const pos3d = ROII_REAL_3D_POSITIONS_RECONF, labels3d = ROII_REAL_3D_LABELS_RECONF, tilts3d = ROII_REAL_3D_TILTS;
-    const nodePos3D = {}, nodeMeshes = {};
-    for (const [id, pos] of Object.entries(pos3d)) {
-      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
-      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
-      dynGroup.add(dev.group); nodePos3D[id]=v; nodeMeshes[id]=dev.mesh;
-    }
-    // Links
-    const drawn = new Set();
-    for (const link of ROII_REAL_RECONF.links) {
-      const key = [link.from,link.to].sort().join('|');
-      if (drawn.has(key)) continue; drawn.add(key);
-      const p1=nodePos3D[link.from], p2=nodePos3D[link.to]; if(!p1||!p2) continue;
-      dynGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.3})));
-      const curve = new THREE.CatmullRomCurve3([p1.clone(),p2.clone()]);
-      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
-      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
-    }
+    const nodeMeshes = {};
+    _3d = { scene, camera, renderer, controls, dynGroup, nodeMeshes };
+    populateDynGroup();
     const clock = new THREE.Clock();
     (function animate() {
       requestAnimationFrame(animate); controls.update();
       const pulse = Math.sin(clock.elapsedTime*2.5)*0.06;
-      for (const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      if (_3d) for (const m of Object.values(_3d.nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
       renderer.render(scene, camera);
     })();
   }
 
+  function populateDynGroup() {
+    if (!_3d) return;
+    // Clear existing dynamic objects
+    while (_3d.dynGroup.children.length > 0) {
+      const c = _3d.dynGroup.children[0];
+      _3d.dynGroup.remove(c);
+      c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); } });
+    }
+    _3d.nodeMeshes = {};
+    const cfg = CONFIGS[configKey];
+    const pos3d = cfg.pos3d, labels3d = cfg.labels3d, tilts3d = ROII_REAL_3D_TILTS;
+    const nodePos3D = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
+      _3d.dynGroup.add(dev.group); nodePos3D[id]=v; _3d.nodeMeshes[id]=dev.mesh;
+    }
+    // Links from current editable model
+    const drawn = new Set();
+    for (const link of editableModel.links) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1=nodePos3D[link.from], p2=nodePos3D[link.to]; if(!p1||!p2) continue;
+      _3d.dynGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.3})));
+      const curve = new THREE.CatmullRomCurve3([p1.clone(),p2.clone()]);
+      _3d.dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      _3d.dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+    }
+  }
+
+  function rebuild3D() {
+    try { populateDynGroup(); } catch(e) { console.warn('3D rebuild:', e); }
+  }
+
   /* ── Initialize ── */
+  buildLinkTable();
   buildFlowTable();
   const badge = document.getElementById("engineBadge");
   badge.className = "engine-badge ready"; badge.innerHTML = "&#9679; Greedy Ready";
