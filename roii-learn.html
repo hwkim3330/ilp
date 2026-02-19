@@ -1238,12 +1238,10 @@
 
   function populateDynGroup() {
     if (!_3d) return;
-    // Clear existing dynamic objects
-    while (_3d.dynGroup.children.length > 0) {
-      const c = _3d.dynGroup.children[0];
-      _3d.dynGroup.remove(c);
-      c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); } });
-    }
+    // Replace dynGroup entirely (avoids disposal-related WebGL corruption)
+    const parent = _3d.dynGroup.parent;
+    const oldGroup = _3d.dynGroup;
+    const newGroup = new THREE.Group();
     _3d.nodeMeshes = {};
     const cfg = CONFIGS[configKey];
     const pos3d = cfg.pos3d, labels3d = cfg.labels3d, tilts3d = ROII_REAL_3D_TILTS;
@@ -1251,7 +1249,7 @@
     for (const [id, pos] of Object.entries(pos3d)) {
       const v = new THREE.Vector3(pos.x, pos.y, pos.z);
       const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
-      _3d.dynGroup.add(dev.group); nodePos3D[id]=v; _3d.nodeMeshes[id]=dev.mesh;
+      newGroup.add(dev.group); nodePos3D[id]=v; _3d.nodeMeshes[id]=dev.mesh;
     }
     // Links from current editable model
     const drawn = new Set();
@@ -1259,15 +1257,28 @@
       const key = [link.from,link.to].sort().join('|');
       if (drawn.has(key)) continue; drawn.add(key);
       const p1=nodePos3D[link.from], p2=nodePos3D[link.to]; if(!p1||!p2) continue;
-      _3d.dynGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.3})));
+      newGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.3})));
       const curve = new THREE.CatmullRomCurve3([p1.clone(),p2.clone()]);
-      _3d.dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
-      _3d.dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+      newGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      newGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
     }
+    // Swap: add new first, then remove old (atomic from render perspective)
+    if (parent) { parent.add(newGroup); parent.remove(oldGroup); }
+    _3d.dynGroup = newGroup;
+    // Deferred cleanup of old group
+    setTimeout(() => {
+      oldGroup.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          mats.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+        }
+      });
+    }, 100);
   }
 
   function rebuild3D() {
-    try { populateDynGroup(); } catch(e) { console.warn('3D rebuild:', e); }
+    try { populateDynGroup(); } catch(e) { console.error('3D rebuild failed:', e); }
   }
 
   /* ── Initialize ── */
