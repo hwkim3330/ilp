@@ -494,7 +494,7 @@
         if (dist[i] + ops[i].tx > model.cycle_time_us + 1e-6) return Infinity;
       }
 
-      // LB = sum of earliest last-hop start times for TSN packets
+      // LB = sum of E2E delays = sum of (finish - release) for TSN packets
       let lb = 0;
       for (let p = 0; p < pkts.length; p++) {
         if (!pkts[p].tsn) continue;
@@ -502,7 +502,7 @@
         const lastOpIdx = ops.findIndex(o => o.p === p && o.h === rt.hops.length - 1);
         if (lastOpIdx >= 0) {
           const lastHop = rt.hops[rt.hops.length - 1];
-          lb += dist[lastOpIdx] + lastHop.tx + lastHop.pd;
+          lb += dist[lastOpIdx] + lastHop.tx + lastHop.pd - pkts[p].rel;
         }
       }
       return round3(lb);
@@ -534,13 +534,13 @@
         if (!changed) break;
       }
 
-      // Compute objective
+      // Compute objective = sum of E2E delays (finish - release)
       let obj = 0;
       for (let p = 0; p < pkts.length; p++) {
         if (!pkts[p].tsn) continue;
         const rt = pkts[p].routes[0], lastH = rt.hops.length - 1;
         const lastOpIdx = ops.findIndex(o => o.p === p && o.h === lastH);
-        obj += dist[lastOpIdx] + rt.hops[lastH].tx + rt.hops[lastH].pd;
+        obj += dist[lastOpIdx] + rt.hops[lastH].tx + rt.hops[lastH].pd - pkts[p].rel;
       }
       return { obj: round3(obj), starts: dist };
     }
@@ -556,15 +556,16 @@
     while (stack.length > 0 && nodeCount <= nodeLimit) {
       const node = stack.pop();
 
-      // Explore step
-      steps.push({
-        type: 'explore', nodeId: node.nodeId, depth: node.depth,
-        desc: `Exploring node ${node.nodeId} (depth ${node.depth}, ${node.fixed.size}/${binVars.length} vars fixed)`
-      });
-
-      // Compute LB
+      // Compute LB first so we can include it in the explore step
       const lb = computeLB(node.fixed);
       globalBestLB = Math.max(globalBestLB, isFinite(lb) ? lb : globalBestLB);
+
+      // Explore step (with LB)
+      steps.push({
+        type: 'explore', nodeId: node.nodeId, depth: node.depth,
+        lb: isFinite(lb) ? lb : 'INF', bestLB: globalBestLB,
+        desc: `Exploring node ${node.nodeId} (depth ${node.depth}, ${node.fixed.size}/${binVars.length} vars fixed, LB=${isFinite(lb) ? round3(lb) : 'INF'})`
+      });
 
       if (!isFinite(lb) || lb >= bestUB - 1e-6) {
         // Prune!
@@ -670,6 +671,7 @@
     const linkG = g.append('g');
     const nodeG = g.append('g');
     const labelG = g.append('g');
+    let lastNodeCount = 0; // track structural changes for auto-zoom
 
     function addNode(nodeId, parentId, depth, branchVar, branchVal) {
       const node = {
@@ -758,8 +760,9 @@
         .attr('opacity', 1);
       merged.select('text').text(d => d.data.id);
 
-      // Auto-fit zoom
-      if (nodes.length > 0) {
+      // Auto-fit zoom only when tree structure changes (new nodes added)
+      if (nodes.length > 0 && nodes.length !== lastNodeCount) {
+        lastNodeCount = nodes.length;
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         nodes.forEach(n => {
           minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
@@ -902,12 +905,14 @@
           break;
 
         case 'explore':
-          this.tree.setState(s.nodeId, 'exploring');
+          if (typeof s.bestLB === 'number') this.currentLB = s.bestLB;
+          this.tree.setState(s.nodeId, 'exploring', s.lb);
           this.tree.render();
           break;
 
         case 'prune':
           this.pruned++;
+          if (typeof s.lb === 'number' && isFinite(s.lb)) this.currentLB = Math.max(this.currentLB, s.lb);
           this.tree.setState(s.nodeId, 'pruned', s.lb);
           this.tree.render();
           audio.prune();
@@ -970,7 +975,8 @@
           break;
         case 'explore':
           el.innerHTML = `<div class="pname">Exploring #${s.nodeId}</div>
-            <div class="detail">${s.desc}</div>`;
+            <div class="detail">${s.desc}</div>
+            <div class="cst ${s.lb !== 'INF' && s.lb < this.bestUB ? 'pass' : 'fail'}">LB: ${typeof s.lb === 'number' ? round3(s.lb) : s.lb} &middot; UB: ${isFinite(this.bestUB) ? round3(this.bestUB) : round3(this.bestObj)}</div>`;
           break;
         case 'prune':
           el.innerHTML = `<div class="pname">Pruned #${s.nodeId}</div>
