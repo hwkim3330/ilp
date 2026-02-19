@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ILP Learning Mode &mdash; TSN/GCL Solver</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     /* ═══════════════════════════════════════════════
        Light Theme Override
@@ -62,9 +66,6 @@
     .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
     .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
     .topo-link { stroke: rgba(59,130,246,0.25); }
-    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .auto-desc h3 { color: var(--blue); }
-    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
     pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
     textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
 
@@ -80,159 +81,196 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
 
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px; background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
+    }
+    #canvas3d {
+      width: 100%; height: 420px; display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 0.72rem; color: var(--text3);
+      background: rgba(255,255,255,0.85); padding: 4px 10px;
+      border-radius: 8px; backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
     /* ── Editable Params ─────────────────────────── */
     .param-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px; margin: 12px 0;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px; margin: 14px 0;
     }
-    .param-item {
-      display: flex; flex-direction: column; gap: 4px;
-    }
+    .param-item { display: flex; flex-direction: column; gap: 5px; }
     .param-item label {
-      font-size: 0.75rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
+      font-size: 0.82rem; font-weight: 700; color: var(--text2); letter-spacing: 0.3px;
     }
-    .param-item input {
-      padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(59,130,246,0.2);
-      background: rgba(248,250,252,0.9); font-size: 0.85rem; color: var(--text);
-      font-family: 'Courier New', monospace; font-weight: 600;
-      transition: border-color 0.2s;
+    .param-item input[type="number"] {
+      padding: 8px 12px; border-radius: 8px; border: 1.5px solid rgba(59,130,246,0.25);
+      background: #fff; font-size: 1rem; color: var(--text);
+      font-family: 'Courier New', monospace; font-weight: 700;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .param-item input:focus {
-      outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    .param-item input[type="number"]:focus {
+      outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
     }
-    .param-item .param-unit { font-size: 0.7rem; color: var(--text3); margin-top: 2px; }
+    .param-item .param-unit { font-size: 0.74rem; color: var(--text3); }
 
     /* ── Editable Flow Table ─────────────────────── */
-    .flow-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 10px; }
+    .flow-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 12px; }
     .flow-table th {
-      text-align: left; padding: 6px 8px; color: var(--text3); font-weight: 600;
-      border-bottom: 2px solid rgba(59,130,246,0.2); font-size: 0.72rem;
-      text-transform: uppercase; letter-spacing: 0.3px;
+      text-align: left; padding: 8px 10px; color: var(--text3); font-weight: 700;
+      border-bottom: 2px solid rgba(59,130,246,0.25); font-size: 0.78rem;
+      text-transform: uppercase; letter-spacing: 0.4px;
     }
-    .flow-table td { padding: 4px 6px; border-bottom: 1px solid rgba(0,0,0,0.05); }
-    .flow-table tr:hover td { background: rgba(59,130,246,0.03); }
-    .flow-table input {
-      width: 80px; padding: 3px 6px; border-radius: 4px;
-      border: 1px solid rgba(59,130,246,0.15); background: #fff;
-      font-size: 0.78rem; font-family: 'Courier New', monospace;
+    .flow-table td { padding: 6px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); vertical-align: middle; }
+    .flow-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .flow-table input[type="number"] {
+      width: 90px; padding: 5px 8px; border-radius: 6px;
+      border: 1.5px solid rgba(59,130,246,0.2); background: #fff;
+      font-size: 0.88rem; font-family: 'Courier New', monospace; font-weight: 600;
       color: var(--text); transition: border-color 0.2s;
     }
-    .flow-table input:focus {
+    .flow-table input[type="number"]:focus {
       outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
     }
     .flow-table select {
-      padding: 3px 6px; border-radius: 4px;
-      border: 1px solid rgba(59,130,246,0.15); background: #fff;
-      font-size: 0.78rem; color: var(--text);
+      padding: 5px 8px; border-radius: 6px; font-size: 0.88rem; font-weight: 600;
+      border: 1.5px solid rgba(59,130,246,0.2); background: #fff; color: var(--text);
     }
     .flow-table .computed {
-      font-family: 'Courier New', monospace; color: var(--blue); font-weight: 600;
+      font-family: 'Courier New', monospace; color: var(--blue); font-weight: 700; font-size: 0.92rem;
     }
-    .flow-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .flow-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+    .flow-id-cell { font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+    .flow-type-cell { font-size: 0.8rem; color: var(--text3); font-weight: 600; }
 
-    /* ── ILP Formulation Panel ─────────────────── */
-    .formulation-panel {
-      background: rgba(248,250,252,0.95); border: 1px solid rgba(59,130,246,0.15);
-      border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
-    }
-    .form-section { margin-bottom: 16px; }
+    /* ── ILP Formulation ────────────────────────── */
+    .form-section { margin-bottom: 20px; }
     .form-section-title {
-      font-size: 0.82rem; font-weight: 700; color: var(--blue);
-      margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+      font-size: 0.95rem; font-weight: 800; color: var(--text);
+      margin-bottom: 10px; display: flex; align-items: center; gap: 10px;
     }
     .form-section-title::before {
-      content: ''; width: 3px; height: 14px; border-radius: 2px; background: var(--blue);
+      content: ''; width: 4px; height: 18px; border-radius: 2px; background: var(--blue);
     }
     .form-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 8px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
     }
     .form-stat {
-      padding: 8px 12px; border-radius: 6px;
-      background: rgba(255,255,255,0.9); border: 1px solid rgba(59,130,246,0.1);
+      padding: 12px 16px; border-radius: 10px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
     .form-stat .stat-val {
-      font-size: 1.1rem; font-weight: 800; color: var(--blue);
-      font-family: 'Courier New', monospace;
+      font-size: 1.4rem; font-weight: 900; color: var(--blue);
+      font-family: 'Courier New', monospace; line-height: 1.2;
     }
-    .form-stat .stat-label { font-size: 0.7rem; color: var(--text3); margin-top: 2px; }
+    .form-stat .stat-label { font-size: 0.78rem; color: var(--text2); margin-top: 4px; font-weight: 600; }
+    .form-stat .stat-sub { font-size: 0.68rem; color: var(--text3); margin-top: 2px; }
     .math-block {
-      background: rgba(255,255,255,0.9); padding: 10px 14px; border-radius: 6px;
-      border: 1px solid rgba(59,130,246,0.1); font-family: 'Courier New', monospace;
-      font-size: 0.82rem; color: var(--text); line-height: 1.6; overflow-x: auto;
+      background: #fff; padding: 14px 18px; border-radius: 10px;
+      border: 1px solid rgba(59,130,246,0.12); font-family: 'Courier New', monospace;
+      font-size: 0.95rem; color: var(--text); line-height: 1.7; overflow-x: auto;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
-    .constraint-list {
-      list-style: none; padding: 0; margin: 0;
-    }
+    .constraint-list { list-style: none; padding: 0; margin: 0; }
     .constraint-list li {
-      padding: 6px 10px; border-radius: 4px; margin-bottom: 4px;
-      background: rgba(255,255,255,0.9); border: 1px solid rgba(59,130,246,0.08);
-      font-family: 'Courier New', monospace; font-size: 0.78rem;
-      color: var(--text2); line-height: 1.5;
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 6px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.1);
+      font-family: 'Courier New', monospace; font-size: 0.88rem;
+      color: var(--text); line-height: 1.6;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
     .constraint-list .c-type {
-      display: inline-block; padding: 1px 6px; border-radius: 3px;
-      font-size: 0.68rem; font-weight: 700; margin-right: 6px;
-      text-transform: uppercase;
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.72rem; font-weight: 800; margin-right: 8px;
+      text-transform: uppercase; letter-spacing: 0.5px;
     }
     .c-bound { background: rgba(59,130,246,0.1); color: var(--blue); }
     .c-chain { background: rgba(5,150,105,0.1); color: var(--green); }
     .c-deadline { background: rgba(220,38,38,0.1); color: var(--red); }
     .c-nonoverlap { background: rgba(124,58,237,0.1); color: var(--purple); }
+    .c-explain { font-family: inherit; font-size: 0.78rem; color: var(--text3); font-weight: 400; }
 
-    .link-contention-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .link-contention-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     .link-contention-table th {
-      text-align: left; padding: 5px 8px; color: var(--text3); font-weight: 600;
-      border-bottom: 1px solid rgba(59,130,246,0.15); font-size: 0.72rem;
+      text-align: left; padding: 8px 10px; color: var(--text3); font-weight: 700;
+      border-bottom: 2px solid rgba(59,130,246,0.15); font-size: 0.78rem;
     }
-    .link-contention-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.04); font-family: 'Courier New', monospace; }
+    .link-contention-table td {
+      padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.05);
+      font-family: 'Courier New', monospace; font-weight: 600;
+    }
+    .link-contention-table tr:hover td { background: rgba(59,130,246,0.03); }
 
-    .compare-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-    }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 600px) { .compare-grid { grid-template-columns: 1fr; } }
     .compare-box {
-      padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(59,130,246,0.15);
-      background: rgba(255,255,255,0.95);
+      padding: 16px 20px; border-radius: 12px; border: 1.5px solid rgba(59,130,246,0.15);
+      background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
-    .compare-box h4 {
-      font-size: 0.82rem; font-weight: 700; margin: 0 0 8px;
+    .compare-box h4 { font-size: 1rem; font-weight: 800; margin: 0 0 10px; }
+    .compare-box .cv {
+      font-family: 'Courier New', monospace; font-size: 0.95rem;
+      padding: 3px 0; color: var(--text);
     }
-    .compare-box .cv { font-family: 'Courier New', monospace; font-size: 0.85rem; }
+    .compare-box .cv strong { font-weight: 800; }
+    .compare-greedy { border-color: rgba(217,119,6,0.3); }
     .compare-greedy h4 { color: var(--orange); }
+    .compare-ilp { border-color: rgba(5,150,105,0.3); }
     .compare-ilp h4 { color: var(--green); }
 
-    /* ── Educational Reference ───────────────────── */
-    .edu-panel {
-      background: linear-gradient(135deg, rgba(248,250,252,0.95), rgba(255,255,255,0.95));
-      border: 1px solid rgba(59,130,246,0.15); border-radius: var(--radius);
-      padding: 20px; margin-bottom: 16px;
+    /* ── Per-Packet Detail ──────────────────────── */
+    .pkt-detail-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 8px;
     }
+    .pkt-detail-item {
+      padding: 10px 14px; border-radius: 8px; background: #fff;
+      border: 1px solid rgba(59,130,246,0.1); font-size: 0.82rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .pkt-detail-item .pkt-id { font-weight: 800; font-size: 0.9rem; margin-bottom: 4px; }
+    .pkt-detail-item .pkt-info {
+      color: var(--text2); font-family: 'Courier New', monospace;
+      line-height: 1.6; font-size: 0.8rem;
+    }
+
+    /* ── Educational Reference ───────────────────── */
     .edu-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px; margin-top: 12px;
     }
     .edu-item {
-      padding: 14px; border-radius: 8px; background: rgba(255,255,255,0.9);
-      border: 1px solid rgba(59,130,246,0.1);
+      padding: 18px; border-radius: 10px; background: #fff;
+      border: 1px solid rgba(59,130,246,0.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
     .edu-item h4 {
-      font-size: 0.82rem; font-weight: 700; color: var(--blue);
-      margin: 0 0 8px; display: flex; align-items: center; gap: 6px;
+      font-size: 0.95rem; font-weight: 800; color: var(--blue);
+      margin: 0 0 8px;
     }
     .edu-item p {
-      font-size: 0.78rem; color: var(--text2); line-height: 1.6; margin: 0;
+      font-size: 0.88rem; color: var(--text2); line-height: 1.7; margin: 0;
     }
     .edu-item code {
-      background: rgba(59,130,246,0.08); padding: 1px 5px; border-radius: 3px;
-      font-size: 0.76rem; color: var(--blue); font-weight: 600;
+      background: rgba(59,130,246,0.08); padding: 2px 7px; border-radius: 4px;
+      font-size: 0.85rem; color: var(--blue); font-weight: 700;
     }
 
     /* ── Auto-Solve Toggle ───────────────────────── */
     .auto-solve-toggle {
-      display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text2);
+      display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--text2); font-weight: 600;
     }
     .auto-solve-toggle input[type="checkbox"] {
-      width: 16px; height: 16px; accent-color: var(--blue);
+      width: 18px; height: 18px; accent-color: var(--blue);
     }
 
     /* ── Per-Switch GCL Cards ────────────────────── */
@@ -260,18 +298,7 @@
     .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
     .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
 
-    /* ── Per-Packet Detail (collapsible) ──────────── */
-    .pkt-detail-grid {
-      display: grid; grid-template-columns: 1fr; gap: 6px; max-height: 400px; overflow-y: auto;
-    }
-    .pkt-detail-item {
-      padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.9);
-      border: 1px solid rgba(59,130,246,0.08); font-size: 0.76rem;
-    }
-    .pkt-detail-item .pkt-id { font-weight: 700; color: var(--text); margin-bottom: 4px; }
-    .pkt-detail-item .pkt-info { color: var(--text2); font-family: 'Courier New', monospace; line-height: 1.5; }
-
-    /* ── Collapsible overrides ────────────────────── */
+    /* ── Collapsible (JSON only) ──────────────────── */
     .collapsible { cursor: pointer; user-select: none; }
     .collapsible .arrow {
       display: inline-block; transition: transform 0.3s; font-size: 0.7rem; margin-right: 6px;
@@ -290,170 +317,110 @@
         <h1>ILP Learning Mode</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub">Parameter Editing + ILP Formulation Visualization &mdash; Educational TSN/GCL Solver</div>
+      <div class="sub">Interactive Parameter Editor + ILP Formulation Viewer &mdash; TSN/GCL Scheduling</div>
     </div>
 
-    <!-- Educational Reference Panel -->
-    <div class="edu-panel">
-      <div class="card-title">Reference &mdash; ILP Formulation Basics</div>
-      <div class="edu-grid">
-        <div class="edu-item">
-          <h4>Tx Time Formula</h4>
-          <p>
-            <code>Tx = (payload + 38) &times; 8 / rate</code><br>
-            Ethernet overhead = 38 bytes (7 preamble + 1 SFD + 14 header + 4 FCS + 12 IFG).
-            Result in &micro;s when rate is in Mbps.
-          </p>
-        </div>
-        <div class="edu-item">
-          <h4>Guard Band</h4>
-          <p>
-            A small gap (typically 3&micro;s) inserted after each TSN frame transmission.
-            Prevents frame interference from clock jitter and switch processing latency.
-            Gate closes during guard band &mdash; <code>gate_mask = 00000000</code>.
-          </p>
-        </div>
-        <div class="edu-item">
-          <h4>Priority Scheduling</h4>
-          <p>
-            IEEE 802.1Q defines 8 traffic classes (TC0&ndash;TC7). Higher priority = lower latency.
-            LiDAR uses P7 (highest TSN), Radar uses P6.
-            Gate mask: one bit per queue, e.g. <code>10000000</code> = TC7 only.
-          </p>
-        </div>
-        <div class="edu-item">
-          <h4>Big-M Method</h4>
-          <p>
-            To model "either A before B or B before A" (disjunctive constraint),
-            introduce binary variable <code>y &isin; {0,1}</code> and a large constant M.<br>
-            <code>s<sub>B</sub> &ge; s<sub>A</sub> + blk<sub>A</sub> - M&middot;y</code><br>
-            <code>s<sub>A</sub> &ge; s<sub>B</sub> + blk<sub>B</sub> - M&middot;(1-y)</code>
-          </p>
-        </div>
-        <div class="edu-item">
-          <h4>Link Utilization</h4>
-          <p>
-            <code>Util = &Sigma;(flow_time + guard_time) / cycle_time &times; 100%</code><br>
-            Remaining time is best-effort (BE). Bottleneck link = highest utilization.
-            Over 80% utilization may cause deadline misses.
-          </p>
-        </div>
-        <div class="edu-item">
-          <h4>Objective Function</h4>
-          <p>
-            <code>min &Sigma; s<sub>p,last_hop</sub></code> for all TSN packets.<br>
-            Minimizing the sum of last-hop start times minimizes total end-to-end delay.
-            ILP finds the mathematically optimal schedule; Greedy uses priority heuristics.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Global Parameters -->
-    <div class="card">
-      <div class="card-title">Global Parameters (Editable)</div>
-      <div class="param-grid">
-        <div class="param-item">
-          <label>Cycle Time</label>
-          <input type="number" id="paramCycleTime" value="10000" min="100" step="100">
-          <span class="param-unit">&micro;s &mdash; must be divisible by all flow periods</span>
-        </div>
-        <div class="param-item">
-          <label>Guard Band</label>
-          <input type="number" id="paramGuardBand" value="3" min="0" step="1">
-          <span class="param-unit">&micro;s &mdash; gap after each TSN frame</span>
-        </div>
-        <div class="param-item">
-          <label>Processing Delay</label>
-          <input type="number" id="paramProcDelay" value="3" min="0" step="1">
-          <span class="param-unit">&micro;s &mdash; switch forwarding latency per hop</span>
-        </div>
-      </div>
+    <!-- 3D Shuttle Visualization -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
     </div>
 
     <!-- Solve Controls -->
-    <div class="card" style="padding:12px 20px;">
+    <div class="card" style="padding:14px 20px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
         <button class="btn btn-secondary" id="greedyBtn">Solve (Greedy)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset All</button>
         <div class="auto-solve-toggle">
           <input type="checkbox" id="autoSolve" checked>
-          <label for="autoSolve">Auto-solve on edit (Greedy)</label>
+          <label for="autoSolve">Auto-solve on edit</label>
         </div>
-        <div id="status" style="font-size:0.82rem;"></div>
-        <div id="compareBadge" style="display:none;font-size:0.78rem;padding:4px 10px;border-radius:999px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);color:var(--blue);"></div>
-        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+        <div id="status" style="font-size:0.88rem;font-weight:600;"></div>
+        <div id="compareBadge" style="display:none;font-size:0.82rem;padding:5px 12px;border-radius:999px;border:1.5px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);color:var(--blue);font-weight:700;"></div>
+        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.82rem;">Home</a>
+      </div>
+    </div>
+
+    <!-- Global Parameters -->
+    <div class="card">
+      <div class="card-title">Global Parameters</div>
+      <div class="param-grid">
+        <div class="param-item">
+          <label>Cycle Time (&micro;s)</label>
+          <input type="number" id="paramCycleTime" value="10000" min="100" step="100">
+          <span class="param-unit">Must be divisible by all flow periods</span>
+        </div>
+        <div class="param-item">
+          <label>Guard Band (&micro;s)</label>
+          <input type="number" id="paramGuardBand" value="3" min="0" step="1">
+          <span class="param-unit">Gap after each TSN frame</span>
+        </div>
+        <div class="param-item">
+          <label>Processing Delay (&micro;s)</label>
+          <input type="number" id="paramProcDelay" value="3" min="0" step="1">
+          <span class="param-unit">Switch forwarding latency per hop</span>
+        </div>
       </div>
     </div>
 
     <!-- Editable Flow Table -->
     <div class="card">
-      <div class="card-title">Flow Specifications (Editable)</div>
+      <div class="card-title">Flow Specifications</div>
       <div style="overflow-x:auto;">
         <table class="flow-table" id="flowTable">
           <thead><tr>
-            <th></th>
-            <th>Flow ID</th>
-            <th>Type</th>
-            <th>Payload (B)</th>
-            <th>Period (&micro;s)</th>
-            <th>Deadline (&micro;s)</th>
-            <th>Priority</th>
-            <th>Tx Time (&micro;s)</th>
-            <th>Pkts/Cycle</th>
+            <th></th><th>Flow</th><th>Type</th>
+            <th>Payload (B)</th><th>Period (&micro;s)</th><th>Deadline (&micro;s)</th><th>Priority</th>
+            <th>Tx Time</th><th>Pkts/Cycle</th>
           </tr></thead>
           <tbody id="flowTableBody"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- ILP Formulation Panel -->
+    <!-- ILP Formulation: Problem Size + Objective -->
     <div class="card">
-      <div class="card-title collapsible open" id="formulationToggle">
-        <span class="arrow">&#9654;</span> ILP Formulation Detail
+      <div class="card-title">ILP Problem Size</div>
+      <div class="form-grid" id="problemSize"></div>
+      <div class="form-section" style="margin-top:18px;">
+        <div class="form-section-title">Objective Function</div>
+        <div class="math-block" id="objectiveDisplay"></div>
       </div>
-      <div class="collapse-body show" id="formulationBody">
-        <div class="formulation-panel" id="formulationPanel">
-          <div class="form-section">
-            <div class="form-section-title">Problem Size</div>
-            <div class="form-grid" id="problemSize"></div>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title">Objective Function</div>
-            <div class="math-block" id="objectiveDisplay"></div>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title">Constraint Breakdown</div>
-            <div class="form-grid" id="constraintBreakdown"></div>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title">Constraint Examples</div>
-            <ul class="constraint-list" id="constraintExamples"></ul>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title">Link Contention</div>
-            <div style="overflow-x:auto;">
-              <table class="link-contention-table" id="linkContentionTable">
-                <thead><tr><th>Link</th><th>Packets</th><th>Pairs</th><th>Binary Vars</th><th>Window-Pruned</th></tr></thead>
-                <tbody id="linkContentionBody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title collapsible" id="pktDetailToggle">
-              <span class="arrow">&#9654;</span> Per-Packet Detail
-            </div>
-            <div class="collapse-body" id="pktDetailBody">
-              <div class="pkt-detail-grid" id="pktDetailGrid"></div>
-            </div>
-          </div>
-          <div class="form-section">
-            <div class="form-section-title">Greedy vs ILP Comparison</div>
-            <div class="compare-grid" id="compareGrid"></div>
-          </div>
-        </div>
+    </div>
+
+    <!-- Greedy vs ILP Comparison -->
+    <div class="card">
+      <div class="card-title">Greedy vs ILP Comparison</div>
+      <div class="compare-grid" id="compareGrid"></div>
+    </div>
+
+    <!-- Constraint Breakdown + Examples -->
+    <div class="card">
+      <div class="card-title">Constraint Breakdown</div>
+      <div class="form-grid" id="constraintBreakdown"></div>
+      <div class="form-section" style="margin-top:18px;">
+        <div class="form-section-title">Constraint Examples</div>
+        <ul class="constraint-list" id="constraintExamples"></ul>
       </div>
+    </div>
+
+    <!-- Link Contention Table -->
+    <div class="card">
+      <div class="card-title">Link Contention &mdash; Binary Variable Allocation</div>
+      <div style="overflow-x:auto;">
+        <table class="link-contention-table" id="linkContentionTable">
+          <thead><tr><th>Link</th><th>Packets</th><th>Pairs</th><th>Binary Vars (y)</th><th>Window-Pruned</th></tr></thead>
+          <tbody id="linkContentionBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Per-Packet Detail -->
+    <div class="card">
+      <div class="card-title">Per-Packet Scheduling Detail</div>
+      <div class="pkt-detail-grid" id="pktDetailGrid"></div>
     </div>
 
     <!-- Network Topology -->
@@ -491,7 +458,7 @@
       </div>
     </div>
 
-    <!-- Table -->
+    <!-- Packet Schedule Table -->
     <div class="card">
       <div class="card-title">Packet Schedule Table</div>
       <div style="overflow-x:auto;">
@@ -504,7 +471,62 @@
       </div>
     </div>
 
-    <!-- Collapsible JSON Editor -->
+    <!-- Educational Reference (bottom) -->
+    <div class="card">
+      <div class="card-title">Reference &mdash; ILP Formulation Basics</div>
+      <div class="edu-grid">
+        <div class="edu-item">
+          <h4>Tx Time Formula</h4>
+          <p>
+            <code>Tx = (payload + 38) &times; 8 / rate</code><br>
+            Ethernet overhead = 38 bytes: 7 preamble + 1 SFD + 14 header + 4 FCS + 12 IFG.
+            Result in &micro;s when rate is in Mbps.
+          </p>
+        </div>
+        <div class="edu-item">
+          <h4>Guard Band</h4>
+          <p>
+            Small gap (typically 3&micro;s) after each TSN frame.
+            Prevents frame interference from clock jitter.
+            Gate closes: <code>gate_mask = 00000000</code>.
+          </p>
+        </div>
+        <div class="edu-item">
+          <h4>Priority &amp; Gate Mask</h4>
+          <p>
+            8 traffic classes (TC0&ndash;TC7). LiDAR = P7, Radar = P6.
+            Gate mask = 8-bit string, one per TC.
+            <code>10000000</code> = only TC7 open.
+          </p>
+        </div>
+        <div class="edu-item">
+          <h4>Big-M Method</h4>
+          <p>
+            Disjunctive "A before B or B before A" requires binary <code>y &isin; {0,1}</code>:<br>
+            <code>s<sub>B</sub> &ge; s<sub>A</sub> + blk<sub>A</sub> - M&middot;y</code><br>
+            <code>s<sub>A</sub> &ge; s<sub>B</sub> + blk<sub>B</sub> - M(1-y)</code><br>
+            Per-pair tight M reduces LP relaxation gap.
+          </p>
+        </div>
+        <div class="edu-item">
+          <h4>Link Utilization</h4>
+          <p>
+            <code>Util = &Sigma;(flow + guard) / cycle &times; 100%</code><br>
+            Remaining time = best-effort (BE).
+            Bottleneck &gt; 80% risks deadline misses.
+          </p>
+        </div>
+        <div class="edu-item">
+          <h4>Objective Function</h4>
+          <p>
+            <code>min &Sigma; s<sub>p,last_hop</sub></code> over all TSN packets.<br>
+            Minimizes total E2E delay sum. ILP = global optimum, Greedy = local heuristic.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- JSON Editor (collapsible) -->
     <div class="card">
       <div class="card-title collapsible" id="jsonEditorToggle">
         <span class="arrow">&#9654;</span> Customize Model (JSON)
@@ -514,7 +536,7 @@
       </div>
     </div>
 
-    <!-- Raw GCL -->
+    <!-- Raw GCL (collapsible) -->
     <div class="card">
       <div class="card-title collapsible" id="gclJsonToggle">
         <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
@@ -537,27 +559,24 @@
   import {
     ROII_REAL_RECONF,
     getReconfPositions, ROII_RECONF_NODE_COLORS,
-    ROII_RECONF_SCENARIO,
-    realFlowColor, ROII_REAL_SWITCHES
+    ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF,
+    ROII_REAL_3D_TILTS,
+    realFlowColor, realGetDeviceType, ROII_REAL_SWITCHES
   } from './js/roii-real-data.js?v=4';
 
-  /* ── Helpers (inline copies — no ilp-core.js modification) ── */
+  /* ── Helpers ── */
   function txTimeUs(bytes, mbps) { return ((bytes + 38) * 8) / mbps; }
   function round3(v) { return Math.round(v * 1000) / 1000; }
 
   /* ── State ── */
   const ORIGINAL = JSON.parse(JSON.stringify(ROII_REAL_RECONF));
   let editableModel = JSON.parse(JSON.stringify(ORIGINAL));
-  let glpk = null;
-  let currentModel = null;
-  let currentResult = null;
-  let greedyResult = null;
-  let ilpResult = null;
-  let debounceTimer = null;
+  let glpk = null, currentModel = null, currentResult = null;
+  let greedyResult = null, ilpResult = null, debounceTimer = null;
 
   const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
-  /* ── DOM Refs ── */
+  /* ── DOM ── */
   const statusEl = document.getElementById("status");
   const compareBadgeEl = document.getElementById("compareBadge");
   const resolveBtn = document.getElementById("resolveBtn");
@@ -566,77 +585,54 @@
   const inputEl = document.getElementById("input");
   const autoSolveEl = document.getElementById("autoSolve");
 
-  /* ── Init ── */
   initTooltip();
 
-  // Collapsibles
-  function setupCollapsible(toggleId) {
-    const el = document.getElementById(toggleId);
-    if (!el) return;
-    el.addEventListener("click", function() {
+  // Collapsibles (JSON sections only)
+  ["jsonEditorToggle", "gclJsonToggle"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function() {
       this.classList.toggle("open");
-      const body = this.nextElementSibling || this.parentElement.querySelector(".collapse-body");
-      if (body) body.classList.toggle("show");
+      this.parentElement.querySelector(".collapse-body").classList.toggle("show");
     });
-  }
-  setupCollapsible("formulationToggle");
-  setupCollapsible("jsonEditorToggle");
-  setupCollapsible("gclJsonToggle");
-
-  // Per-packet detail toggle
-  document.getElementById("pktDetailToggle").addEventListener("click", function() {
-    this.classList.toggle("open");
-    document.getElementById("pktDetailBody").classList.toggle("show");
   });
 
-  /* ── Build Editable Flow Table ── */
+  /* ══════════════════════════════════════════════════
+     EDITABLE FLOW TABLE
+     ══════════════════════════════════════════════════ */
   function buildFlowTable() {
     const tbody = document.getElementById("flowTableBody");
     tbody.innerHTML = "";
     editableModel.flows.forEach((f, i) => {
       const color = realFlowColor(f.id);
-      const txUs = round3(txTimeUs(f.payload_bytes, 1000)); // all links 1Gbps
+      const txUs = round3(txTimeUs(f.payload_bytes, 1000));
       const pktsPerCycle = editableModel.cycle_time_us / f.period_us;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><span class="flow-dot" style="background:${color}"></span></td>
-        <td style="font-weight:600;font-size:0.8rem;">${f.id.replace('f_','')}</td>
-        <td>${f.traffic_type}</td>
+        <td class="flow-id-cell">${f.id.replace('f_','')}</td>
+        <td class="flow-type-cell">${f.traffic_type}</td>
         <td><input type="number" data-flow="${i}" data-field="payload_bytes" value="${f.payload_bytes}" min="64" step="64"></td>
         <td><input type="number" data-flow="${i}" data-field="period_us" value="${f.period_us}" min="100" step="100"></td>
         <td><input type="number" data-flow="${i}" data-field="deadline_us" value="${f.deadline_us}" min="100" step="100"></td>
-        <td>
-          <select data-flow="${i}" data-field="priority">
-            ${[7,6,5,4,3,2,1,0].map(p => `<option value="${p}" ${p === f.priority ? 'selected' : ''}>P${p}</option>`).join('')}
-          </select>
-        </td>
-        <td class="computed" id="txTime_${i}">${txUs}</td>
+        <td><select data-flow="${i}" data-field="priority">
+          ${[7,6,5,4,3,2,1,0].map(p => `<option value="${p}" ${p===f.priority?'selected':''}}>P${p}</option>`).join('')}
+        </select></td>
+        <td class="computed" id="txTime_${i}">${txUs} &micro;s</td>
         <td class="computed" id="pktsPerCycle_${i}">${pktsPerCycle}</td>
       `;
       tbody.appendChild(tr);
     });
-
-    // Bind input events
-    tbody.querySelectorAll("input, select").forEach(el => {
-      el.addEventListener("input", onFlowEdit);
-    });
+    tbody.querySelectorAll("input, select").forEach(el => el.addEventListener("input", onFlowEdit));
   }
 
   function onFlowEdit(e) {
-    const el = e.target;
-    const idx = parseInt(el.dataset.flow);
-    const field = el.dataset.field;
+    const el = e.target, idx = parseInt(el.dataset.flow), field = el.dataset.field;
     const val = field === "priority" ? parseInt(el.value) : parseFloat(el.value);
     if (isNaN(val) || val <= 0) return;
-
     editableModel.flows[idx][field] = val;
-
-    // Update computed columns
     const txUs = round3(txTimeUs(editableModel.flows[idx].payload_bytes, 1000));
     const pkts = editableModel.cycle_time_us / editableModel.flows[idx].period_us;
-    document.getElementById(`txTime_${idx}`).textContent = txUs;
+    document.getElementById(`txTime_${idx}`).innerHTML = txUs + ' &micro;s';
     document.getElementById(`pktsPerCycle_${idx}`).textContent = Number.isInteger(pkts) ? pkts : pkts.toFixed(2);
-
     scheduleAutoSolve();
   }
 
@@ -662,108 +658,69 @@
     });
   }
 
-  /* ── Auto-Solve with Debounce ── */
   function scheduleAutoSolve() {
     if (!autoSolveEl.checked) return;
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      syncAndSolveGreedy();
-    }, 500);
+    debounceTimer = setTimeout(syncAndSolveGreedy, 500);
   }
 
-  function syncModelToJSON() {
-    inputEl.value = JSON.stringify(editableModel, null, 2);
-  }
+  function syncModelToJSON() { inputEl.value = JSON.stringify(editableModel, null, 2); }
 
-  /* ── Greedy Solver ── */
-  function syncAndSolveGreedy() {
-    syncModelToJSON();
-    runGreedy();
-  }
+  /* ══════════════════════════════════════════════════
+     SOLVERS
+     ══════════════════════════════════════════════════ */
+  function syncAndSolveGreedy() { syncModelToJSON(); runGreedy(); }
 
   function runGreedy() {
     try {
       const model = JSON.parse(inputEl.value);
       const t0 = performance.now();
       const result = solveGreedy(model);
-      const wallMs = Math.round(performance.now() - t0);
-      currentModel = model;
-      currentResult = result;
-      greedyResult = result;
-      renderAll();
-      renderFormulation(model, result);
-      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets`;
-      statusEl.className = "status-ok";
+      const ms = Math.round(performance.now() - t0);
+      currentModel = model; currentResult = result; greedyResult = result;
+      renderAll(); renderFormulation(model, result);
+      statusEl.innerHTML = `<span style="color:var(--green)">Greedy ${ms}ms</span> &mdash; ${result.packetRows.length} pkts`;
       updateCompareBadge();
-    } catch (e) {
-      statusEl.textContent = "Error: " + e.message;
-      statusEl.className = "status-err";
-    }
+    } catch (e) { statusEl.textContent = "Error: " + e.message; }
   }
 
-  /* ── ILP Solver ── */
   async function runILPSolve() {
-    if (!glpk) { statusEl.textContent = "GLPK not loaded yet"; return; }
+    if (!glpk) { statusEl.textContent = "GLPK not loaded"; return; }
     try {
       const model = JSON.parse(inputEl.value);
       resolveBtn.disabled = true;
-      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=15s)...';
-      statusEl.className = "";
+      statusEl.innerHTML = '<span class="spinner"></span> Solving ILP...';
       await new Promise(r => setTimeout(r, 50));
-
       const result = await solveILP(model, glpk, { tmlim: 15 });
-      currentModel = model;
-      currentResult = result;
-      ilpResult = result;
-      renderAll();
-      renderFormulation(model, result);
-      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
-      statusEl.className = "status-ok";
+      currentModel = model; currentResult = result; ilpResult = result;
+      renderAll(); renderFormulation(model, result);
+      statusEl.innerHTML = `<span style="color:var(--green)">ILP ${result.stats.runtime_ms}ms</span> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
       updateCompareBadge();
-    } catch (e) {
-      statusEl.textContent = "ILP failed: " + e.message;
-      statusEl.className = "status-err";
-    }
+    } catch (e) { statusEl.textContent = "ILP failed: " + e.message; }
     resolveBtn.disabled = false;
   }
 
-  /* ── Compare Badge ── */
   function updateCompareBadge() {
-    if (!greedyResult || !ilpResult) {
-      compareBadgeEl.style.display = 'none';
-      return;
-    }
-    const gObj = Number(greedyResult.objective || 0);
-    const iObj = Number(ilpResult.objective || 0);
-    const deltaPct = gObj > 0 ? ((gObj - iObj) / gObj) * 100 : 0;
-    const gMiss = greedyResult.packetRows.filter(p => p.status === "MISS").length;
-    const iMiss = ilpResult.packetRows.filter(p => p.status === "MISS").length;
-    const improved = deltaPct >= 0 && iMiss <= gMiss;
-
+    if (!greedyResult || !ilpResult) { compareBadgeEl.style.display = 'none'; return; }
+    const gObj = Number(greedyResult.objective), iObj = Number(ilpResult.objective);
+    const pct = gObj > 0 ? ((gObj - iObj) / gObj * 100) : 0;
+    const gM = greedyResult.packetRows.filter(p => p.status === "MISS").length;
+    const iM = ilpResult.packetRows.filter(p => p.status === "MISS").length;
+    const ok = pct >= 0 && iM <= gM;
     compareBadgeEl.style.display = 'inline-block';
-    compareBadgeEl.style.borderColor = improved ? 'rgba(5,150,105,0.25)' : 'rgba(217,119,6,0.25)';
-    compareBadgeEl.style.background = improved ? 'rgba(5,150,105,0.08)' : 'rgba(217,119,6,0.10)';
-    compareBadgeEl.style.color = improved ? 'var(--green)' : 'var(--orange)';
-    compareBadgeEl.textContent = `ILP vs Greedy: ${deltaPct >= 0 ? '-' : '+'}${Math.abs(deltaPct).toFixed(1)}% objective, MISS ${gMiss}\u2192${iMiss}`;
+    compareBadgeEl.style.borderColor = ok ? 'rgba(5,150,105,0.3)' : 'rgba(217,119,6,0.3)';
+    compareBadgeEl.style.background = ok ? 'rgba(5,150,105,0.08)' : 'rgba(217,119,6,0.08)';
+    compareBadgeEl.style.color = ok ? 'var(--green)' : 'var(--orange)';
+    compareBadgeEl.textContent = `ILP: -${Math.abs(pct).toFixed(1)}% delay, MISS ${gM}\u2192${iM}`;
   }
 
   /* ── Render All Charts ── */
   function renderAll() {
     if (!currentResult) return;
-    const container = document.getElementById("topoContainer");
-    const W = container.clientWidth;
-    const positions = getReconfPositions(W, 520);
-
+    const W = document.getElementById("topoContainer").clientWidth;
     renderMetrics(currentModel, currentResult);
-    renderTopology(currentModel, currentResult, {
-      nodePositions: positions,
-      nodeColors: ROII_RECONF_NODE_COLORS,
-      height: 520
-    });
-    renderSwitchGCL(currentModel, currentResult, {
-      switches: ROII_REAL_SWITCHES,
-      flowColorFn: realFlowColor
-    });
+    renderTopology(currentModel, currentResult, { nodePositions: getReconfPositions(W, 520), nodeColors: ROII_RECONF_NODE_COLORS, height: 520 });
+    renderSwitchGCL(currentModel, currentResult, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
     renderGCL(currentModel, currentResult, fcopts);
     renderDelayChart(currentModel, currentResult, fcopts);
     renderUtilization(currentModel, currentResult, { beColor: '#e2e8f0' });
@@ -771,9 +728,9 @@
     document.getElementById("jsonOut").textContent = JSON.stringify(currentResult.gcl, null, 2);
   }
 
-  /* ════════════════════════════════════════════════
-     ILP FORMULATION PANEL — Educational Visualization
-     ════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════
+     FORMULATION PANEL RENDERERS
+     ══════════════════════════════════════════════════ */
   function renderFormulation(model, result) {
     try {
       const pkts = expandPackets(model);
@@ -783,199 +740,137 @@
       renderConstraintExamples(model, pkts);
       renderLinkContention(model, pkts);
       renderPktDetail(model, pkts, result);
-      renderComparison(result);
+      renderComparison();
     } catch (e) {
       document.getElementById("problemSize").innerHTML = `<div class="form-stat"><div class="stat-val" style="color:var(--red)">Error</div><div class="stat-label">${e.message}</div></div>`;
     }
   }
 
-  function renderProblemSize(model, pkts, result) {
-    const el = document.getElementById("problemSize");
-    const tsnPkts = pkts.filter(p => p.tsn);
-    const totalHops = pkts.reduce((s, p) => s + p.routes[0].hops.length, 0);
-    const allSingle = pkts.every(p => p.routes.length === 1);
-
-    // Count non-overlap pairs per link
-    let totalBins = 0, totalPairsRaw = 0;
-    const lm = new Map(model.links.map(l => [l.id, l]));
+  function buildOps(model, pkts) {
+    const ops = [];
     for (const link of model.links) {
-      const lo = [];
       pkts.forEach((pk, p) => {
         pk.routes[0].hops.forEach((hp, h) => {
-          if (hp.lid === link.id) {
-            const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
-            let earliest = pk.rel;
-            for (let hh = 0; hh < h; hh++) {
-              earliest += pk.routes[0].hops[hh].tx + pk.routes[0].hops[hh].pd + model.processing_delay_us;
-            }
-            let latest = model.cycle_time_us - hp.tx;
-            lo.push({ p, h, earliest, latest, blk });
-          }
+          if (hp.lid !== link.id) return;
+          const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
+          let earliest = pk.rel;
+          for (let hh = 0; hh < h; hh++) earliest += pk.routes[0].hops[hh].tx + pk.routes[0].hops[hh].pd + model.processing_delay_us;
+          ops.push({ lid: link.id, p, h, earliest, latest: model.cycle_time_us - hp.tx, blk });
         });
       });
-      const pairs = lo.length * (lo.length - 1) / 2;
-      totalPairsRaw += pairs;
-      for (let a = 0; a < lo.length; a++)
-        for (let b = a + 1; b < lo.length; b++) {
-          const oa = lo[a], ob = lo[b];
-          if (oa.latest + oa.blk > ob.earliest && ob.latest + ob.blk > oa.earliest) totalBins++;
-        }
     }
+    return ops;
+  }
 
-    const contVars = totalHops; // s_p_h
-    const zVars = allSingle ? 0 : pkts.reduce((s, p) => s + p.routes.length, 0);
+  function countBins(model, pkts) {
+    let total = 0;
+    const byLink = new Map();
+    const ops = buildOps(model, pkts);
+    for (const o of ops) { if (!byLink.has(o.lid)) byLink.set(o.lid, []); byLink.get(o.lid).push(o); }
+    for (const [lid, lo] of byLink) {
+      for (let a = 0; a < lo.length; a++)
+        for (let b = a + 1; b < lo.length; b++)
+          if (lo[a].latest + lo[a].blk > lo[b].earliest && lo[b].latest + lo[b].blk > lo[a].earliest) total++;
+    }
+    return { total, byLink };
+  }
 
-    // Constraint counts
-    const bounds = totalHops * 2; // lb + ub per hop
-    const chains = pkts.reduce((s, p) => s + Math.max(0, p.routes[0].hops.length - 1), 0);
-    const deadlines = tsnPkts.length;
-    const nonOverlap = totalBins * 2; // two constraints per binary
-    const totalConstraints = bounds + chains + deadlines + nonOverlap;
-
-    el.innerHTML = [
-      { val: pkts.length, label: 'Total Packets', sub: `${tsnPkts.length} TSN + ${pkts.length - tsnPkts.length} BE` },
-      { val: contVars, label: 'Continuous Vars (s)', sub: `s_p_h start times` },
-      { val: totalBins, label: 'Binary Vars (y)', sub: `ordering decisions` },
-      { val: zVars, label: 'Route Vars (z)', sub: allSingle ? 'all single-route' : 'route selection' },
-      { val: totalConstraints, label: 'Total Constraints', sub: `${bounds} bound + ${chains} chain + ${deadlines} dl + ${nonOverlap} non-overlap` },
-      { val: result.stats.runtime_ms + 'ms', label: 'Solve Time', sub: result.method.split('(')[0] }
-    ].map(s => `<div class="form-stat"><div class="stat-val">${s.val}</div><div class="stat-label">${s.label}</div><div class="stat-label" style="font-size:0.65rem;margin-top:1px;">${s.sub}</div></div>`).join('');
+  function renderProblemSize(model, pkts, result) {
+    const el = document.getElementById("problemSize");
+    const tsn = pkts.filter(p => p.tsn);
+    const hops = pkts.reduce((s, p) => s + p.routes[0].hops.length, 0);
+    const { total: bins } = countBins(model, pkts);
+    const allSingle = pkts.every(p => p.routes.length === 1);
+    const bounds = hops * 2, chains = pkts.reduce((s, p) => s + Math.max(0, p.routes[0].hops.length - 1), 0);
+    const dls = tsn.length, nonoverlap = bins * 2;
+    const items = [
+      { v: pkts.length, l: 'Packets', s: `${tsn.length} TSN` },
+      { v: hops, l: 'Continuous Vars', s: 's\u209A\u2095 start times' },
+      { v: bins, l: 'Binary Vars', s: 'ordering y' },
+      { v: allSingle ? 0 : pkts.reduce((s,p) => s + p.routes.length, 0), l: 'Route Vars', s: allSingle ? 'single-route' : 'z selection' },
+      { v: bounds + chains + dls + nonoverlap, l: 'Constraints', s: `${bounds}b + ${chains}c + ${dls}d + ${nonoverlap}n` },
+      { v: result.stats.runtime_ms + 'ms', l: 'Solve Time', s: result.method.split('(')[0].trim() },
+    ];
+    el.innerHTML = items.map(i => `<div class="form-stat"><div class="stat-val">${i.v}</div><div class="stat-label">${i.l}</div><div class="stat-sub">${i.s}</div></div>`).join('');
   }
 
   function renderObjective(pkts) {
     const el = document.getElementById("objectiveDisplay");
-    const tsnPkts = pkts.filter(p => p.tsn);
-    const terms = tsnPkts.map(p => {
-      const lastH = p.routes[0].hops.length - 1;
-      return `s<sub>${p.pid.replace('#','_')},${lastH}</sub>`;
-    });
-    if (terms.length > 6) {
-      el.innerHTML = `<strong>min</strong> ${terms.slice(0, 4).join(' + ')} + ... + ${terms.slice(-2).join(' + ')}<br><span style="font-size:0.72rem;color:var(--text3);">(${terms.length} TSN packet last-hop start times)</span>`;
-    } else {
-      el.innerHTML = `<strong>min</strong> ${terms.join(' + ')}`;
-    }
+    const tsn = pkts.filter(p => p.tsn);
+    const terms = tsn.map(p => `s<sub>${p.pid.replace('#','_')},${p.routes[0].hops.length-1}</sub>`);
+    el.innerHTML = terms.length > 8
+      ? `<strong>min</strong>  ${terms.slice(0,4).join(' + ')}  + &hellip; +  ${terms.slice(-2).join(' + ')}<br><span style="color:var(--text3);font-size:0.82rem">${terms.length} TSN packet last-hop start times</span>`
+      : `<strong>min</strong>  ${terms.join('  +  ')}`;
   }
 
   function renderConstraintBreakdown(model, pkts) {
     const el = document.getElementById("constraintBreakdown");
-    const totalHops = pkts.reduce((s, p) => s + p.routes[0].hops.length, 0);
+    const hops = pkts.reduce((s, p) => s + p.routes[0].hops.length, 0);
     const chains = pkts.reduce((s, p) => s + Math.max(0, p.routes[0].hops.length - 1), 0);
-    const deadlines = pkts.filter(p => p.tsn).length;
-
-    let nonOverlap = 0;
-    for (const link of model.links) {
-      const lo = [];
-      pkts.forEach((pk, p) => {
-        pk.routes[0].hops.forEach((hp, h) => {
-          if (hp.lid === link.id) {
-            const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
-            let earliest = pk.rel;
-            for (let hh = 0; hh < h; hh++)
-              earliest += pk.routes[0].hops[hh].tx + pk.routes[0].hops[hh].pd + model.processing_delay_us;
-            let latest = model.cycle_time_us - hp.tx;
-            lo.push({ earliest, latest, blk });
-          }
-        });
-      });
-      for (let a = 0; a < lo.length; a++)
-        for (let b = a + 1; b < lo.length; b++)
-          if (lo[a].latest + lo[a].blk > lo[b].earliest && lo[b].latest + lo[b].blk > lo[a].earliest) nonOverlap++;
-    }
-
+    const dls = pkts.filter(p => p.tsn).length;
+    const { total: bins } = countBins(model, pkts);
     el.innerHTML = [
-      { val: totalHops * 2, label: 'Bound Constraints', cls: 'c-bound', desc: `${totalHops} lower + ${totalHops} upper` },
-      { val: chains, label: 'Chain Constraints', cls: 'c-chain', desc: 'hop-to-hop ordering' },
-      { val: deadlines, label: 'Deadline Constraints', cls: 'c-deadline', desc: 'TSN packets only' },
-      { val: nonOverlap * 2, label: 'Non-Overlap Constraints', cls: 'c-nonoverlap', desc: `${nonOverlap} pairs \u00d7 2` }
-    ].map(s => `<div class="form-stat"><div class="stat-val">${s.val}</div><div class="stat-label"><span class="c-type ${s.cls}">${s.label.split(' ')[0]}</span> ${s.label}</div><div class="stat-label" style="font-size:0.65rem;">${s.desc}</div></div>`).join('');
+      { v: hops * 2, l: 'Bound', c: 'c-bound', s: `${hops} lower + ${hops} upper` },
+      { v: chains, l: 'Chain', c: 'c-chain', s: 'hop\u2192hop ordering' },
+      { v: dls, l: 'Deadline', c: 'c-deadline', s: 'TSN packets' },
+      { v: bins * 2, l: 'Non-Overlap', c: 'c-nonoverlap', s: `${bins} pairs \u00d7 2` },
+    ].map(i => `<div class="form-stat"><div class="stat-val">${i.v}</div><div class="stat-label"><span class="c-type ${i.c}">${i.l}</span></div><div class="stat-sub">${i.s}</div></div>`).join('');
   }
 
   function renderConstraintExamples(model, pkts) {
     const el = document.getElementById("constraintExamples");
-    if (pkts.length === 0) { el.innerHTML = '<li>No packets</li>'; return; }
-    const examples = [];
-    const lm = new Map(model.links.map(l => [l.id, l]));
+    if (!pkts.length) { el.innerHTML = ''; return; }
+    const ex = [], lm = new Map(model.links.map(l => [l.id, l]));
+    const p0 = pkts[0], h0 = p0.routes[0].hops[0], pid0 = p0.pid.replace('#','_');
 
-    // 1. Lower bound example
-    const p0 = pkts[0], h0 = p0.routes[0].hops[0];
-    const lb = p0.rel;
-    examples.push(`<span class="c-type c-bound">Bound</span> s<sub>${p0.pid.replace('#','_')},0</sub> &ge; ${lb} &micro;s <span style="color:var(--text3)">&mdash; packet release time</span>`);
+    ex.push(`<span class="c-type c-bound">Bound</span> s<sub>${pid0},0</sub>  &ge;  <strong>${p0.rel}</strong> <span class="c-explain">&mdash; release time lower bound</span>`);
+    ex.push(`<span class="c-type c-bound">Bound</span> s<sub>${pid0},0</sub>  &le;  <strong>${round3(model.cycle_time_us - h0.tx)}</strong> <span class="c-explain">&mdash; cycle_time(${model.cycle_time_us}) - tx(${round3(h0.tx)})</span>`);
 
-    // 2. Upper bound example
-    const ub = model.cycle_time_us - h0.tx;
-    examples.push(`<span class="c-type c-bound">Bound</span> s<sub>${p0.pid.replace('#','_')},0</sub> &le; ${round3(ub)} &micro;s <span style="color:var(--text3)">&mdash; must finish within cycle</span>`);
-
-    // 3. Chain example
     if (p0.routes[0].hops.length > 1) {
-      const chainMin = round3(h0.tx + h0.pd + model.processing_delay_us);
-      examples.push(`<span class="c-type c-chain">Chain</span> s<sub>${p0.pid.replace('#','_')},1</sub> &ge; s<sub>${p0.pid.replace('#','_')},0</sub> + ${chainMin} &micro;s <span style="color:var(--text3)">&mdash; tx(${round3(h0.tx)}) + prop(${h0.pd}) + proc(${model.processing_delay_us})</span>`);
+      const gap = round3(h0.tx + h0.pd + model.processing_delay_us);
+      ex.push(`<span class="c-type c-chain">Chain</span> s<sub>${pid0},1</sub>  &ge;  s<sub>${pid0},0</sub> + <strong>${gap}</strong> <span class="c-explain">&mdash; tx(${round3(h0.tx)}) + prop(${h0.pd}) + proc(${model.processing_delay_us})</span>`);
     }
 
-    // 4. Deadline example
-    const tsnPkt = pkts.find(p => p.tsn && p.dl != null);
-    if (tsnPkt) {
-      const lastH = tsnPkt.routes[0].hops.length - 1;
-      const lastHop = tsnPkt.routes[0].hops[lastH];
-      const dlBound = round3(tsnPkt.dl - lastHop.tx - lastHop.pd);
-      examples.push(`<span class="c-type c-deadline">Deadline</span> s<sub>${tsnPkt.pid.replace('#','_')},${lastH}</sub> &le; ${dlBound} &micro;s <span style="color:var(--text3)">&mdash; dl(${tsnPkt.dl}) - tx(${round3(lastHop.tx)}) - prop(${lastHop.pd})</span>`);
+    const tpk = pkts.find(p => p.tsn && p.dl != null);
+    if (tpk) {
+      const lh = tpk.routes[0].hops.length - 1, lhp = tpk.routes[0].hops[lh];
+      ex.push(`<span class="c-type c-deadline">Deadline</span> s<sub>${tpk.pid.replace('#','_')},${lh}</sub>  &le;  <strong>${round3(tpk.dl - lhp.tx - lhp.pd)}</strong> <span class="c-explain">&mdash; dl(${tpk.dl}) - tx(${round3(lhp.tx)}) - prop(${lhp.pd})</span>`);
     }
 
-    // 5. Non-overlap example (find first pair on same link)
-    outer:
     for (const link of model.links) {
       const ops = [];
-      pkts.forEach((pk, pi) => {
-        pk.routes[0].hops.forEach((hp, hi) => {
-          if (hp.lid === link.id) {
-            const blk = round3(hp.tx + (pk.tsn ? model.guard_band_us : 0));
-            ops.push({ pi, hi, pid: pk.pid, blk });
-          }
-        });
-      });
+      pkts.forEach((pk, pi) => pk.routes[0].hops.forEach((hp, hi) => {
+        if (hp.lid === link.id) ops.push({ pid: pk.pid.replace('#','_'), hi, blk: round3(hp.tx + (pk.tsn ? model.guard_band_us : 0)) });
+      }));
       if (ops.length >= 2) {
-        const a = ops[0], b = ops[1];
-        const linkObj = lm.get(link.id);
-        examples.push(`<span class="c-type c-nonoverlap">Non-Overlap</span> On ${linkObj.from}\u2192${linkObj.to}: either s<sub>${b.pid.replace('#','_')},${b.hi}</sub> &ge; s<sub>${a.pid.replace('#','_')},${a.hi}</sub> + ${a.blk} <strong>or</strong> s<sub>${a.pid.replace('#','_')},${a.hi}</sub> &ge; s<sub>${b.pid.replace('#','_')},${b.hi}</sub> + ${b.blk} <span style="color:var(--text3)">&mdash; Big-M with binary y</span>`);
+        const a = ops[0], b = ops[1], lk = lm.get(link.id);
+        ex.push(`<span class="c-type c-nonoverlap">Non-Overlap</span> ${lk.from}\u2192${lk.to}:  s<sub>${b.pid},${b.hi}</sub> &ge; s<sub>${a.pid},${a.hi}</sub> + ${a.blk}  <strong>OR</strong>  s<sub>${a.pid},${a.hi}</sub> &ge; s<sub>${b.pid},${b.hi}</sub> + ${b.blk} <span class="c-explain">&mdash; Big-M binary y</span>`);
         break;
       }
     }
-
-    el.innerHTML = examples.map(e => `<li>${e}</li>`).join('');
+    el.innerHTML = ex.map(e => `<li>${e}</li>`).join('');
   }
 
   function renderLinkContention(model, pkts) {
     const tbody = document.getElementById("linkContentionBody");
+    const { byLink } = countBins(model, pkts);
     const rows = [];
-    for (const link of model.links) {
-      const ops = [];
-      pkts.forEach((pk, p) => {
-        pk.routes[0].hops.forEach((hp, h) => {
-          if (hp.lid === link.id) {
-            const blk = hp.tx + (pk.tsn ? model.guard_band_us : 0);
-            let earliest = pk.rel;
-            for (let hh = 0; hh < h; hh++)
-              earliest += pk.routes[0].hops[hh].tx + pk.routes[0].hops[hh].pd + model.processing_delay_us;
-            let latest = model.cycle_time_us - hp.tx;
-            ops.push({ earliest, latest, blk });
-          }
-        });
-      });
-      if (ops.length < 2) continue;
-      const totalPairs = ops.length * (ops.length - 1) / 2;
-      let activePairs = 0;
-      for (let a = 0; a < ops.length; a++)
-        for (let b = a + 1; b < ops.length; b++)
-          if (ops[a].latest + ops[a].blk > ops[b].earliest && ops[b].latest + ops[b].blk > ops[a].earliest) activePairs++;
-      const pruned = totalPairs - activePairs;
-      rows.push({ from: link.from, to: link.to, pkts: ops.length, pairs: totalPairs, bins: activePairs, pruned });
+    for (const [lid, lo] of byLink) {
+      if (lo.length < 2) continue;
+      const total = lo.length * (lo.length - 1) / 2;
+      let active = 0;
+      for (let a = 0; a < lo.length; a++)
+        for (let b = a + 1; b < lo.length; b++)
+          if (lo[a].latest + lo[a].blk > lo[b].earliest && lo[b].latest + lo[b].blk > lo[a].earliest) active++;
+      const link = model.links.find(l => l.id === lid);
+      rows.push({ from: link.from, to: link.to, n: lo.length, total, active, pruned: total - active });
     }
-    rows.sort((a, b) => b.bins - a.bins);
+    rows.sort((a, b) => b.active - a.active);
     tbody.innerHTML = rows.map(r => `<tr>
-      <td>${r.from} \u2192 ${r.to}</td>
-      <td>${r.pkts}</td>
-      <td>${r.pairs}</td>
-      <td style="font-weight:700;color:var(--blue)">${r.bins}</td>
-      <td style="color:var(--green)">${r.pruned > 0 ? '-' + r.pruned : '0'}</td>
+      <td style="font-weight:700">${r.from} \u2192 ${r.to}</td>
+      <td>${r.n}</td><td>${r.total}</td>
+      <td style="font-weight:800;color:var(--blue)">${r.active}</td>
+      <td style="color:${r.pruned > 0 ? 'var(--green)' : 'var(--text3)'};font-weight:700">${r.pruned > 0 ? '-' + r.pruned : '0'}</td>
     </tr>`).join('');
   }
 
@@ -983,90 +878,170 @@
     const grid = document.getElementById("pktDetailGrid");
     grid.innerHTML = pkts.map(pk => {
       const rt = pk.routes[0];
-      const hopsStr = rt.hops.map((hp, h) => {
-        const link = model.links.find(l => l.id === hp.lid);
-        return `Hop${h}: ${link.from}\u2192${link.to} (tx=${round3(hp.tx)}\u00b5s, prop=${hp.pd}\u00b5s)`;
-      }).join('<br>');
-
-      const pktRow = result.packetRows.find(p => p.packet_id === pk.pid);
-      const schedStr = pktRow ? pktRow.hops.map((h, i) =>
-        `Hop${i}: start=${h.start_us}\u00b5s, end=${h.end_us}\u00b5s`
-      ).join('<br>') : 'not scheduled';
-
+      const hops = rt.hops.map((hp, h) => {
+        const lk = model.links.find(l => l.id === hp.lid);
+        return `<span style="color:var(--text3)">H${h}</span> ${lk.from}\u2192${lk.to} tx=${round3(hp.tx)}`;
+      }).join(' &rarr; ');
+      const pr = result.packetRows.find(p => p.packet_id === pk.pid);
+      const sched = pr ? pr.hops.map((h, i) => `<span style="color:var(--text3)">H${i}</span> [${h.start_us}, ${h.end_us}]`).join(' &rarr; ') : '&mdash;';
       return `<div class="pkt-detail-item">
         <div class="pkt-id" style="color:${realFlowColor(pk.fid)}">${pk.pid}</div>
         <div class="pkt-info">
-          pri=${pk.pri} | rel=${pk.rel}\u00b5s | dl=${pk.dl ?? '\u221e'}\u00b5s | hops=${rt.hops.length}<br>
-          ${hopsStr}<br>
-          <strong>Schedule:</strong> ${schedStr}
-          ${pktRow ? `<br>E2E=${pktRow.e2e_delay_us}\u00b5s | Status=${pktRow.status}` : ''}
+          P${pk.pri} &middot; rel=${pk.rel} &middot; dl=${pk.dl ?? '\u221e'} &middot; ${rt.hops.length}-hop<br>
+          ${hops}<br>
+          <strong>Sched:</strong> ${sched}${pr ? ` &middot; E2E=<strong>${pr.e2e_delay_us}</strong> &middot; ${pr.status}` : ''}
         </div>
       </div>`;
     }).join('');
   }
 
-  function renderComparison(currentResult) {
+  function renderComparison() {
     const grid = document.getElementById("compareGrid");
-    const gRes = greedyResult;
-    const iRes = ilpResult;
-
-    if (!gRes && !iRes) {
-      grid.innerHTML = '<div style="color:var(--text3);font-size:0.82rem;">Solve with both Greedy and ILP to compare.</div>';
-      return;
-    }
-
-    function statBox(res, label, cls) {
+    function box(res, label, cls) {
       if (!res) return `<div class="compare-box ${cls}"><h4>${label}</h4><div class="cv" style="color:var(--text3)">Not yet solved</div></div>`;
       const miss = res.packetRows.filter(p => p.status === "MISS").length;
-      const overlaps = Number(res.stats?.overlap_conflicts || 0);
       return `<div class="compare-box ${cls}">
         <h4>${label}</h4>
-        <div class="cv">Objective: <strong>${res.objective}</strong> \u00b5s</div>
+        <div class="cv">Objective: <strong>${res.objective}</strong> &micro;s</div>
         <div class="cv">Runtime: <strong>${res.stats.runtime_ms}</strong> ms</div>
-        <div class="cv">MISS: <strong style="color:${miss > 0 ? 'var(--red)' : 'var(--green)'}">${miss}</strong></div>
-        <div class="cv">Overlaps: <strong>${overlaps}</strong></div>
-        <div class="cv">Worst Util: <strong>${res.worst_util_percent}%</strong></div>
-        <div class="cv" style="font-size:0.72rem;color:var(--text3);margin-top:4px;">${res.method}</div>
+        <div class="cv">MISS: <strong style="color:${miss?'var(--red)':'var(--green)'}">${miss}</strong> &middot; Worst Util: <strong>${res.worst_util_percent}%</strong></div>
+        <div class="cv" style="font-size:0.78rem;color:var(--text3);margin-top:6px">${res.method}</div>
       </div>`;
     }
-
-    grid.innerHTML = statBox(gRes, 'Greedy', 'compare-greedy') + statBox(iRes, 'ILP', 'compare-ilp');
+    grid.innerHTML = box(greedyResult, 'Greedy', 'compare-greedy') + box(ilpResult, 'ILP', 'compare-ilp');
   }
 
-  /* ── Reset Button ── */
+  /* ── Buttons ── */
   resetBtn.addEventListener("click", () => {
     editableModel = JSON.parse(JSON.stringify(ORIGINAL));
     document.getElementById("paramCycleTime").value = ORIGINAL.cycle_time_us;
     document.getElementById("paramGuardBand").value = ORIGINAL.guard_band_us;
     document.getElementById("paramProcDelay").value = ORIGINAL.processing_delay_us;
-    greedyResult = null;
-    ilpResult = null;
+    greedyResult = null; ilpResult = null;
     compareBadgeEl.style.display = 'none';
-    buildFlowTable();
-    syncAndSolveGreedy();
-    statusEl.textContent = "Reset to ROII_REAL_RECONF defaults";
-    statusEl.className = "status-ok";
+    buildFlowTable(); syncAndSolveGreedy();
+    statusEl.textContent = "Reset to defaults";
   });
-
   greedyBtn.addEventListener("click", syncAndSolveGreedy);
   resolveBtn.addEventListener("click", runILPSolve);
 
-  /* ── Responsive ── */
   let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(renderAll, 300);
-  });
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 300); });
+
+  /* ══════════════════════════════════════════════════
+     3D SHUTTLE VISUALIZATION (from roii-grid.html)
+     ══════════════════════════════════════════════════ */
+  const TMPL = {
+    lidar_g32:    { w:1,h:1,d:1, color:0x10B981 },
+    lidar_pandar: { w:1,h:1,d:1, color:0x0D9488 },
+    radar:        { w:1,h:1,d:1, color:0x952aff },
+    replicator:   { w:2,h:1.5,d:2, color:0xd97706 },
+    switch_f:     { w:4,h:2,d:4, color:0x3B82F6 },
+    switch_r:     { w:4,h:2,d:4, color:0x06B6D4 },
+    ecu:          { w:4,h:2,d:4, color:0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId), t = TMPL[type];
+    const group = new THREE.Group();
+    let geo;
+    if (type === 'lidar_g32') geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    else if (type === 'lidar_pandar') geo = new THREE.CylinderGeometry(t.w*0.6, t.w*0.6, t.h*0.8, 16);
+    else if (type === 'replicator') geo = new THREE.OctahedronGeometry(t.w*0.7);
+    else geo = new THREE.BoxGeometry(t.w, t.h, t.d);
+    const mat = new THREE.MeshPhongMaterial({ color:t.color, emissive:t.color, emissiveIntensity:0.5, specular:0x888888, shininess:30 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    group.add(mesh);
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color:0xffffff, linewidth:5 })));
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = 'rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle = '#FFF'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText(label, 256, 75);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+    const ls = Math.max(t.w, t.d) * 1.2;
+    sprite.scale.set(ls, ls*0.25, 1); sprite.position.y = t.h + 1;
+    group.add(sprite);
+    group.position.copy(position);
+    if (tilt) { if (tilt.x !== undefined) group.rotation.x = tilt.x; if (tilt.y !== undefined) group.rotation.y = tilt.y; if (tilt.z !== undefined) group.rotation.z = tilt.z; }
+    return { mesh, group };
+  }
+
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera.position.set(50, 35, 70);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    function updateSize() { const w=container.clientWidth, h=container.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h); }
+    updateSize(); container.appendChild(renderer.domElement);
+    window.addEventListener('resize', updateSize);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05; controls.autoRotate=true; controls.autoRotateSpeed=1.2;
+    controls.minDistance=20; controls.maxDistance=120; controls.target.set(0,0,0);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const ml = new THREE.DirectionalLight(0xffffff, 1.5); ml.position.set(30,50,30);
+    ml.castShadow=true; ml.shadow.mapSize.set(2048,2048);
+    ml.shadow.camera.near=0.5; ml.shadow.camera.far=200;
+    ml.shadow.camera.left=-60; ml.shadow.camera.right=60; ml.shadow.camera.top=60; ml.shadow.camera.bottom=-60;
+    scene.add(ml);
+    const fl = new THREE.DirectionalLight(0xffffff, 1.0); fl.position.set(0,50,0); scene.add(fl);
+    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100); pl1.position.set(20,15,20); scene.add(pl1);
+    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80); pl2.position.set(-20,15,-20); scene.add(pl2);
+    const grid = new THREE.GridHelper(100,50,0x3B82F6,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+    // GLB
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m = gltf.scene, box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+      const s = 40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c => { if (!c.isMesh) return; [].concat(c.material).forEach(mt => { mt.transparent=true; mt.opacity=0.3; mt.side=THREE.DoubleSide; mt.depthWrite=true; if(mt.color)mt.color.multiplyScalar(1.5); mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff); mt.emissiveIntensity=0.4; }); c.castShadow=true; c.receiveShadow=true; });
+      scene.add(m);
+    }, undefined, err => console.warn('GLB:', err));
+    // Devices
+    const dynGroup = new THREE.Group(); scene.add(dynGroup);
+    const pos3d = ROII_REAL_3D_POSITIONS_RECONF, labels3d = ROII_REAL_3D_LABELS_RECONF, tilts3d = ROII_REAL_3D_TILTS;
+    const nodePos3D = {}, nodeMeshes = {};
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
+      dynGroup.add(dev.group); nodePos3D[id]=v; nodeMeshes[id]=dev.mesh;
+    }
+    // Links
+    const drawn = new Set();
+    for (const link of ROII_REAL_RECONF.links) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1=nodePos3D[link.from], p2=nodePos3D[link.to]; if(!p1||!p2) continue;
+      dynGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.3})));
+      const curve = new THREE.CatmullRomCurve3([p1.clone(),p2.clone()]);
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      dynGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+    }
+    const clock = new THREE.Clock();
+    (function animate() {
+      requestAnimationFrame(animate); controls.update();
+      const pulse = Math.sin(clock.elapsedTime*2.5)*0.06;
+      for (const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      renderer.render(scene, camera);
+    })();
+  }
 
   /* ── Initialize ── */
   buildFlowTable();
   const badge = document.getElementById("engineBadge");
-  badge.className = "engine-badge ready";
-  badge.innerHTML = "&#9679; Greedy Ready";
+  badge.className = "engine-badge ready"; badge.innerHTML = "&#9679; Greedy Ready";
   resolveBtn.disabled = false;
   syncAndSolveGreedy();
+  try { init3D(); } catch(e) { console.warn('3D:', e); }
 
-  /* ── Load GLPK/WASM ── */
   (async () => {
     try {
       const GLPK = (await import('./vendor/glpk.js')).default;
@@ -1074,12 +1049,8 @@
       const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
       badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
       resolveBtn.textContent = "Re-Solve (ILP)";
-      // Auto-run ILP once GLPK is ready
       await runILPSolve();
-    } catch (e) {
-      console.warn('GLPK load failed (greedy works):', e);
-      resolveBtn.textContent = "Re-Solve (Greedy only)";
-    }
+    } catch(e) { console.warn('GLPK:', e); resolveBtn.textContent = "Re-Solve (Greedy only)"; }
   })();
   </script>
 </body>
