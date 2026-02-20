@@ -410,21 +410,22 @@
     .tooltip .tt-k { color: var(--text3); }
     .tooltip .tt-v { font-weight: 600; }
 
-    /* ── D3 Topology Styles ── */
-    .topo-node-rect { cursor: pointer; transition: filter 0.15s, stroke-width 0.15s; }
-    .topo-node-rect:hover { filter: brightness(1.08); }
-    .topo-node-outer { pointer-events: none; }
+    /* ── D3 Topology Styles (neobrutalist) ── */
+    .topo-node-shadow { pointer-events: none; opacity: 0.18; }
+    .topo-node-body { cursor: pointer; transition: filter 0.15s, stroke-width 0.15s; }
+    .topo-node-body:hover { filter: brightness(1.06); }
+    .topo-node-header { pointer-events: none; }
     .topo-node-label {
-      font-size: 10px; font-weight: 700; text-anchor: middle;
-      fill: var(--text); pointer-events: none;
+      font-size: 10px; font-weight: 800; text-anchor: middle;
+      fill: #fff; pointer-events: none; letter-spacing: -0.02em;
     }
-    .topo-node-type-bg { pointer-events: none; }
-    .topo-node-type-text {
-      font-size: 7px; font-weight: 700; pointer-events: none;
+    .topo-node-sub {
+      font-size: 8px; font-weight: 600; text-anchor: middle;
+      pointer-events: none;
     }
     .topo-link-line {
-      stroke: rgba(59,130,246,0.2); stroke-width: 2;
-      transition: stroke 0.3s, stroke-width 0.3s;
+      stroke: rgba(59,130,246,0.2); stroke-width: 2.5;
+      stroke-linecap: round; transition: stroke 0.3s, stroke-width 0.3s;
     }
     .topo-link-hit {
       stroke: transparent; stroke-width: 14; cursor: pointer;
@@ -919,10 +920,10 @@
     if (!STATE.zoomLayer) return;
     STATE.zoomLayer.selectAll('.topo-node-g').each(function(d) {
       if (d.id === nodeId) {
-        d3.select(this).select('.topo-node-rect')
+        d3.select(this).select('.topo-node-body')
           .transition().duration(150)
-          .attr('stroke-width', on ? 3.5 : 2)
-          .style('filter', on ? 'brightness(1.12) drop-shadow(0 0 6px rgba(59,130,246,0.3))' : null);
+          .attr('stroke-width', on ? 3.5 : 2.5)
+          .style('filter', on ? 'brightness(1.1) drop-shadow(0 0 8px ' + (d.stroke || 'rgba(59,130,246,0.4)') + ')' : null);
       }
     });
   }
@@ -995,7 +996,7 @@
       .append('feMergeNode').attr('in', d => d);
 
     defs.append('marker').attr('id', 'arr')
-      .attr('viewBox', '0 0 10 7').attr('refX', 65).attr('refY', 3.5)
+      .attr('viewBox', '0 0 10 7').attr('refX', 58).attr('refY', 3.5)
       .attr('markerWidth', 8).attr('markerHeight', 6).attr('orient', 'auto')
       .append('polygon').attr('points', '0 0, 10 3.5, 0 7').attr('fill', '#94a3b8');
 
@@ -1124,48 +1125,55 @@
       .attr('transform', d => `translate(${d.x},${d.y})`);
 
     // Compute rect width per node based on label length
-    const nodeRectW = d => Math.max(80, d.label.length * 10 + 24);
-    const nodeRectH = 44;
+    const nodeRectW = d => Math.max(100, d.label.length * 9 + 40);
+    const nodeRectH = 48;
 
-    // Outer ring (rounded rect)
+    // a) Hard shadow — black rect offset (4,4)
     nodeSel.append('rect')
-      .attr('class', 'topo-node-outer')
-      .attr('width', d => nodeRectW(d) + 10).attr('height', nodeRectH + 10)
-      .attr('x', d => -(nodeRectW(d) + 10) / 2).attr('y', -(nodeRectH + 10) / 2)
-      .attr('rx', 11).attr('ry', 11)
-      .attr('fill', 'none')
-      .attr('stroke', d => d.stroke).attr('stroke-width', 1).attr('opacity', 0.12);
+      .attr('class', 'topo-node-shadow')
+      .attr('width', d => nodeRectW(d)).attr('height', nodeRectH)
+      .attr('x', d => -nodeRectW(d) / 2 + 4).attr('y', -nodeRectH / 2 + 4)
+      .attr('rx', 6).attr('fill', '#000');
 
-    // Main rounded rect
+    // b) Main body — stroke: 2.5px solid #1e293b
     nodeSel.append('rect')
-      .attr('class', 'topo-node-rect')
+      .attr('class', 'topo-node-body')
       .attr('width', d => nodeRectW(d)).attr('height', nodeRectH)
       .attr('x', d => -nodeRectW(d) / 2).attr('y', -nodeRectH / 2)
-      .attr('rx', 8).attr('ry', 8)
+      .attr('rx', 6)
       .attr('fill', d => d.color)
-      .attr('stroke', d => d.stroke).attr('stroke-width', 2);
+      .attr('stroke', '#1e293b').attr('stroke-width', 2.5);
 
-    // Type badge (top-left inside rect)
+    // c) Header bar — top accent strip (clipped inside body via inset)
     nodeSel.append('rect')
-      .attr('class', 'topo-node-type-bg')
-      .attr('width', 22).attr('height', 12).attr('rx', 3).attr('ry', 3)
-      .attr('x', d => -nodeRectW(d) / 2 + 4).attr('y', -nodeRectH / 2 + 3)
-      .attr('fill', 'rgba(0,0,0,0.08)');
+      .attr('class', 'topo-node-header')
+      .attr('width', d => nodeRectW(d) - 5).attr('height', 22)
+      .attr('x', d => -nodeRectW(d) / 2 + 2.5).attr('y', -nodeRectH / 2 + 2.5)
+      .attr('rx', 4)
+      .attr('fill', d => d.stroke);
+
+    // d) Type badge — pill inside header (left)
+    nodeSel.append('rect')
+      .attr('width', 28).attr('height', 13).attr('rx', 3)
+      .attr('x', d => -nodeRectW(d) / 2 + 7).attr('y', -nodeRectH / 2 + 7)
+      .attr('fill', 'rgba(255,255,255,0.22)')
+      .style('pointer-events', 'none');
     nodeSel.append('text')
-      .attr('class', 'topo-node-type-text')
-      .attr('x', d => -nodeRectW(d) / 2 + 15).attr('y', -nodeRectH / 2 + 12)
+      .attr('x', d => -nodeRectW(d) / 2 + 21).attr('y', -nodeRectH / 2 + 17)
       .attr('text-anchor', 'middle')
-      .attr('fill', d => d.stroke)
+      .attr('font-size', '7px').attr('font-weight', '900')
+      .attr('fill', '#fff')
+      .style('pointer-events', 'none')
       .text(d => d.shortLabel);
 
-    // Label (centered)
+    // e) Label — centered in header bar
     nodeSel.append('text').attr('class', 'topo-node-label')
-      .attr('dy', 5).text(d => d.label);
+      .attr('dy', -nodeRectH / 2 + 17)
+      .text(d => d.label);
 
-    // Show util badge on switch nodes after solve
+    // f) Sub-label area (chip + util%) — bottom half of body
     if (result) {
       nodeSel.filter(d => d.type === 'switch').each(function(d) {
-        // Compute max util on egress links
         let maxUtil = 0;
         model.links.filter(l => l.from === d.id).forEach(l => {
           const entries = result.gcl.links[l.id]?.entries || [];
@@ -1173,13 +1181,21 @@
           entries.forEach(e => { if (!e.note.includes('best-effort')) active += e.duration_us; });
           maxUtil = Math.max(maxUtil, active / model.cycle_time_us * 100);
         });
-        if (maxUtil > 0) {
-          d3.select(this).append('text')
-            .attr('dy', 34).attr('text-anchor', 'middle')
-            .attr('font-size', '8px').attr('font-weight', '700')
-            .attr('fill', maxUtil > 50 ? '#dc2626' : maxUtil > 30 ? '#d97706' : '#059669')
-            .text(maxUtil.toFixed(1) + '%');
-        }
+        const subText = d.shortLabel + (maxUtil > 0 ? '  \u25aa ' + maxUtil.toFixed(1) + '%' : '');
+        const utilColor = maxUtil > 50 ? '#dc2626' : maxUtil > 30 ? '#d97706' : '#059669';
+        d3.select(this).append('text')
+          .attr('class', 'topo-node-sub')
+          .attr('dy', nodeRectH / 2 - 8).attr('text-anchor', 'middle')
+          .attr('fill', maxUtil > 0 ? utilColor : '#64748b')
+          .text(subText);
+      });
+      // Non-switch nodes: show type in sub area
+      nodeSel.filter(d => d.type !== 'switch').each(function(d) {
+        d3.select(this).append('text')
+          .attr('class', 'topo-node-sub')
+          .attr('dy', nodeRectH / 2 - 8).attr('text-anchor', 'middle')
+          .attr('fill', '#64748b')
+          .text(d.type === 'endpoint' ? 'Sensor' : d.type);
       });
     }
 
