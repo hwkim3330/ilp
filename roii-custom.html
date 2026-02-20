@@ -478,6 +478,96 @@
     .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text2); }
     .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
+    /* ── Floating Flow Sidebar (on topology) ── */
+    .flow-sidebar {
+      position: fixed; left: 12px; top: 56px; z-index: 40;
+      width: 200px; max-height: calc(100vh - 120px);
+      overflow-y: auto; padding: 8px;
+      border-radius: 12px; font-size: 0.72rem;
+      transition: opacity 0.2s;
+    }
+    .flow-sidebar::-webkit-scrollbar { width: 3px; }
+    .flow-sidebar::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.15); border-radius: 3px; }
+    .flow-sidebar .fs-title {
+      font-size: 0.68rem; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px; display: flex; align-items: center; gap: 4px;
+    }
+    .flow-sidebar .fs-flow {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 8px; border-radius: 8px; cursor: pointer;
+      transition: all 0.12s; margin-bottom: 2px;
+      border: 1px solid transparent;
+    }
+    .flow-sidebar .fs-flow:hover { background: rgba(59,130,246,0.06); }
+    .flow-sidebar .fs-flow.active {
+      background: rgba(59,130,246,0.08);
+      border-color: rgba(59,130,246,0.25);
+    }
+    .flow-sidebar .fs-dot {
+      width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0;
+    }
+    .flow-sidebar .fs-name {
+      flex: 1; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .flow-sidebar .fs-info {
+      font-size: 0.62rem; color: var(--text3); white-space: nowrap;
+    }
+    .flow-sidebar .fs-add {
+      display: flex; align-items: center; justify-content: center;
+      padding: 4px; border-radius: 6px; margin-top: 4px;
+      border: 1px dashed rgba(59,130,246,0.25); background: transparent;
+      color: var(--blue); font-size: 0.68rem; font-weight: 600;
+      cursor: pointer; width: 100%;
+    }
+    .flow-sidebar .fs-add:hover { background: rgba(59,130,246,0.06); }
+    @media (max-width: 900px) {
+      .flow-sidebar { width: 160px; left: 6px; top: 52px; }
+    }
+
+    /* ── Flow Path Overlays on Topology ── */
+    .flow-path-line {
+      fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round;
+      opacity: 0.5; cursor: pointer; pointer-events: stroke;
+      transition: opacity 0.15s, stroke-width 0.15s;
+    }
+    .flow-path-line:hover { opacity: 0.85; stroke-width: 6; }
+    .flow-path-line.active { opacity: 0.9; stroke-width: 7; }
+    .flow-path-line.dimmed { opacity: 0.08; stroke-width: 2; }
+
+    /* ── Flow Edit Popover (on canvas) ── */
+    .flow-popover {
+      position: absolute; z-index: 60; width: 260px;
+      border-radius: 12px; padding: 12px 14px;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(59,130,246,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      font-size: 0.78rem; pointer-events: auto;
+    }
+    .flow-popover .fp-header {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 8px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(59,130,246,0.1);
+    }
+    .flow-popover .fp-tag { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+    .flow-popover .fp-id { font-weight: 700; font-size: 0.85rem; flex: 1; }
+    .flow-popover .fp-grid {
+      display: grid; grid-template-columns: 70px 1fr; gap: 4px 8px;
+      align-items: center;
+    }
+    .flow-popover .fp-grid label { font-size: 0.7rem; font-weight: 600; color: var(--text3); }
+    .flow-popover .fp-grid select, .flow-popover .fp-grid input {
+      width: 100%; padding: 3px 6px; font-size: 0.72rem;
+      border: 1px solid rgba(59,130,246,0.15); border-radius: 5px;
+      background: #fff; color: var(--text);
+    }
+    .flow-popover .fp-computed {
+      margin-top: 6px; padding-top: 5px; border-top: 1px dashed rgba(59,130,246,0.1);
+      font-size: 0.68rem; color: var(--text3); font-family: monospace;
+    }
+
     /* ── Flow Editor Cards ── */
     .flow-editor-list { display: flex; flex-direction: column; gap: 8px; }
     .flow-card {
@@ -639,6 +729,7 @@
 
   <!-- Top Bar -->
   <div class="top-bar glass">
+    <img src="keti.png" alt="KETI" style="height:28px;width:auto;" onerror="this.style.display='none'">
     <span class="logo">TSN Playground</span>
     <div class="preset-pills" id="presetPills">
       <span class="preset-pill active" data-preset="standard">Standard</span>
@@ -664,6 +755,9 @@
     <div class="pip-canvas-wrap" id="pipCanvas"></div>
     <div class="pip-resize-handle" id="pipResize"></div>
   </div>
+
+  <!-- Floating Flow Sidebar on Topology -->
+  <div class="flow-sidebar glass" id="flowSidebar"></div>
 
   <!-- Metrics Ribbon -->
   <div class="metrics-ribbon" id="metricsRibbon"></div>
@@ -1000,6 +1094,9 @@
 
     STATE.linkLines = linkSel;
 
+    // Draw flow path polylines (before particles, after links)
+    drawFlowPaths(model, result, zoomLayer, positions);
+
     // Draw flow particles after solve
     if (result) {
       const particleG = zoomLayer.append('g').attr('class', 'particles-layer');
@@ -1202,11 +1299,16 @@
       clearTimeout(longPressTimer);
     });
 
-    // Double-tap on nodes handled via dblclick
-    STATE.nodeGroups.on('dblclick', function(event, d) {
+    // Single-click on nodes → edit popover (with drag guard)
+    let nodeDragOccurred = false;
+    STATE.nodeGroups.on('click.edit', function(event, d) {
+      if (nodeDragOccurred) { nodeDragOccurred = false; return; }
       event.stopPropagation();
       showNodePopover(d.id, { x: event.clientX, y: event.clientY });
     });
+    // Track if a drag happened to suppress click
+    STATE.nodeGroups.on('mousedown.dragguard', () => { nodeDragOccurred = false; });
+    STATE.nodeGroups.on('mousemove.dragguard', () => { nodeDragOccurred = true; });
 
     // Long-press on node → start rubber-band link creation
     STATE.nodeGroups.on('pointerdown.rubberband', function(event, d) {
@@ -2304,17 +2406,34 @@
   function selectFlow(flowId) {
     STATE.selectedFlow = flowId;
     applyFlowHighlight();
-    // Update flow cards
+    // Update flow cards in drawer
     document.querySelectorAll('.flow-card').forEach(c => {
       c.classList.toggle('selected', c.dataset.flowId === flowId);
     });
+    // Update sidebar
+    document.querySelectorAll('.fs-flow').forEach(el => {
+      el.classList.toggle('active', el.dataset.fid === flowId);
+    });
+    // Update flow path polylines
+    if (STATE.zoomLayer) {
+      STATE.zoomLayer.selectAll('.flow-path-line')
+        .classed('active', function() { return this.getAttribute('data-flow-id') === flowId; })
+        .classed('dimmed', function() { return this.getAttribute('data-flow-id') !== flowId; });
+    }
     SelectionBus.emit('flow:highlight', { flowId });
   }
 
   function deselectFlow() {
     STATE.selectedFlow = null;
     clearFlowHighlight();
+    closePopovers();
     document.querySelectorAll('.flow-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.fs-flow').forEach(el => el.classList.remove('active'));
+    // Reset flow path polylines
+    if (STATE.zoomLayer) {
+      STATE.zoomLayer.selectAll('.flow-path-line')
+        .classed('active', false).classed('dimmed', false);
+    }
     SelectionBus.emit('flow:highlight', { flowId: null });
   }
 
@@ -2376,6 +2495,209 @@
   }
 
   /* ═══════════════════════════════════════════════
+     FLOATING FLOW SIDEBAR (on topology)
+     ═══════════════════════════════════════════════ */
+  function renderFlowSidebar() {
+    const sb = document.getElementById('flowSidebar');
+    const m = STATE.model;
+    if (!sb || !m) return;
+
+    let html = '<div class="fs-title">Flows</div>';
+    m.flows.forEach((f, i) => {
+      const color = realFlowColor(f.id);
+      const active = STATE.selectedFlow === f.id ? ' active' : '';
+      const short = f.id.length > 18 ? f.id.slice(0, 16) + '..' : f.id;
+      html += `<div class="fs-flow${active}" data-fid="${f.id}">
+        <div class="fs-dot" style="background:${color};"></div>
+        <span class="fs-name" title="${f.id}">${short}</span>
+        <span class="fs-info">${f.src.slice(-3)}&rarr;${f.dst.slice(-3)}</span>
+      </div>`;
+    });
+    html += '<button class="fs-add" id="fsAddFlow">+ Flow</button>';
+    sb.innerHTML = html;
+
+    // Click on flow → select + show popover on topology
+    sb.querySelectorAll('.fs-flow').forEach(el => {
+      el.addEventListener('click', () => {
+        const fid = el.dataset.fid;
+        if (STATE.selectedFlow === fid) {
+          deselectFlow();
+        } else {
+          selectFlow(fid);
+          // Position the popover near the flow's source node
+          const flow = m.flows.find(f => f.id === fid);
+          if (flow) {
+            const pos = STATE.nodePositions[flow.src];
+            if (pos) {
+              const t = STATE.zoomTransform;
+              const sx = pos.x * t.k + t.x + 40;
+              const sy = pos.y * t.k + t.y - 20;
+              showFlowPopover(fid, { x: sx, y: sy });
+            }
+          }
+        }
+      });
+    });
+
+    sb.querySelector('#fsAddFlow')?.addEventListener('click', () => {
+      addFlow();
+      renderFlowSidebar();
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     FLOW PATH POLYLINES ON TOPOLOGY
+     ═══════════════════════════════════════════════ */
+  function drawFlowPaths(model, result, zoomLayer, positions) {
+    if (!result) return;
+    // Remove old flow paths
+    zoomLayer.selectAll('.flow-paths-layer').remove();
+    const nodesLayer = zoomLayer.select('.nodes-layer');
+    const pathG = nodesLayer.node()
+      ? zoomLayer.insert('g', '.nodes-layer').attr('class', 'flow-paths-layer')
+      : zoomLayer.append('g').attr('class', 'flow-paths-layer');
+
+    const seenFlows = new Set();
+    const flowPaths = [];
+    result.packetRows.forEach(p => {
+      if (seenFlows.has(p.flow_id)) return;
+      seenFlows.add(p.flow_id);
+      const pathNodes = [];
+      p.hops.forEach(h => {
+        const link = model.links.find(l => l.id === h.link_id);
+        if (link) {
+          if (pathNodes.length === 0) pathNodes.push(link.from);
+          pathNodes.push(link.to);
+        }
+      });
+      if (pathNodes.length < 2) return;
+      const points = pathNodes.map(id => positions[id]).filter(Boolean);
+      if (points.length < 2) return;
+      flowPaths.push({ flowId: p.flow_id, points, pathNodes });
+    });
+
+    // Draw each flow path as a polyline with slight offset to avoid overlap
+    flowPaths.forEach((fp, idx) => {
+      const color = realFlowColor(fp.flowId);
+      const offset = (idx - flowPaths.length / 2) * 3; // slight perpendicular offset
+
+      const lineData = fp.points.map((pt, i) => {
+        if (i === 0 || i === fp.points.length - 1) return `${pt.x},${pt.y}`;
+        // Add perpendicular offset for middle segments
+        const prev = fp.points[i - 1];
+        const next = fp.points[Math.min(i + 1, fp.points.length - 1)];
+        const dx = next.x - prev.x, dy = next.y - prev.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len * offset, ny = dx / len * offset;
+        return `${pt.x + nx},${pt.y + ny}`;
+      });
+
+      const isActive = STATE.selectedFlow === fp.flowId;
+      const isDimmed = STATE.selectedFlow && STATE.selectedFlow !== fp.flowId;
+
+      pathG.append('polyline')
+        .attr('class', 'flow-path-line' + (isActive ? ' active' : '') + (isDimmed ? ' dimmed' : ''))
+        .attr('points', lineData.join(' '))
+        .attr('stroke', color)
+        .attr('data-flow-id', fp.flowId)
+        .on('click', (event) => {
+          event.stopPropagation();
+          selectFlow(fp.flowId);
+          showFlowPopover(fp.flowId, { x: event.clientX, y: event.clientY });
+        });
+    });
+
+    STATE._flowPaths = flowPaths; // store for drag updates
+  }
+
+  /* ═══════════════════════════════════════════════
+     FLOW EDIT POPOVER (on canvas)
+     ═══════════════════════════════════════════════ */
+  function showFlowPopover(flowId, screenPos) {
+    closePopovers();
+    const m = STATE.model;
+    const flow = m.flows.find(f => f.id === flowId);
+    if (!flow) return;
+
+    const nodeIds = m.nodes.map(n => n.id);
+    const color = realFlowColor(flowId);
+    const linkRate = m.links.length ? m.links[0].rate_mbps : 1000;
+    const tx = txTimeUs(flow.payload_bytes, linkRate).toFixed(1);
+    const pkts = pktsPerCycle(flow, m);
+
+    const div = document.createElement('div');
+    div.className = 'flow-popover';
+    div.style.left = Math.min(screenPos.x, window.innerWidth - 280) + 'px';
+    div.style.top = Math.min(screenPos.y, window.innerHeight - 380) + 'px';
+
+    div.innerHTML = `
+      <div class="fp-header">
+        <div class="fp-tag" style="background:${color};"></div>
+        <span class="fp-id">${flowId}</span>
+        <button class="flow-card-del" id="fpDel" title="Delete flow">&times;</button>
+      </div>
+      <div class="fp-grid">
+        <label>Source</label>
+        <select data-fp="src">${nodeIds.map(n => `<option value="${n}"${n===flow.src?' selected':''}>${n}</option>`).join('')}</select>
+        <label>Destination</label>
+        <select data-fp="dst">${nodeIds.map(n => `<option value="${n}"${n===flow.dst?' selected':''}>${n}</option>`).join('')}</select>
+        <label>Priority</label>
+        <select data-fp="priority">${[0,1,2,3,4,5,6,7].map(p => `<option value="${p}"${p===flow.priority?' selected':''}>P${p}</option>`).join('')}</select>
+        <label>k_paths</label>
+        <select data-fp="k_paths">${[1,2,3,4].map(k => `<option value="${k}"${k===flow.k_paths?' selected':''}>${k}</option>`).join('')}</select>
+        <label>Payload (B)</label>
+        <input type="number" data-fp="payload_bytes" value="${flow.payload_bytes}" min="64" max="1048576" step="64">
+        <label>Period (us)</label>
+        <input type="number" data-fp="period_us" value="${flow.period_us}" min="100" max="1000000" step="100">
+        <label>Deadline (us)</label>
+        <input type="number" data-fp="deadline_us" value="${flow.deadline_us}" min="100" max="1000000" step="100">
+      </div>
+      <div class="fp-computed" id="fpComputed">tx=${tx}us &middot; ${pkts} pkt/cycle</div>
+      <div class="popover-actions">
+        <button class="popover-btn primary" id="fpClose">Done</button>
+      </div>
+    `;
+    document.getElementById('popoverContainer').appendChild(div);
+
+    // Wire up change events → live update
+    div.querySelectorAll('[data-fp]').forEach(el => {
+      const handler = () => {
+        const field = el.dataset.fp;
+        if (field === 'priority' || field === 'k_paths') flow[field] = parseInt(el.value);
+        else if (field === 'payload_bytes' || field === 'period_us' || field === 'deadline_us') flow[field] = parseInt(el.value) || flow[field];
+        else flow[field] = el.value;
+        // Update computed
+        const rate = m.links.length ? m.links[0].rate_mbps : 1000;
+        const comp = div.querySelector('#fpComputed');
+        if (comp) comp.textContent = `tx=${txTimeUs(flow.payload_bytes, rate).toFixed(1)}us \u00b7 ${pktsPerCycle(flow, m)} pkt/cycle`;
+        scheduleAutoSolve();
+        renderFlowSidebar();
+      };
+      el.addEventListener('change', handler);
+      if (el.tagName === 'INPUT') el.addEventListener('input', handler);
+    });
+
+    div.querySelector('#fpDel').onclick = () => {
+      const idx = m.flows.findIndex(f => f.id === flowId);
+      if (idx >= 0) m.flows.splice(idx, 1);
+      if (STATE.selectedFlow === flowId) STATE.selectedFlow = null;
+      closePopovers();
+      scheduleAutoSolve();
+      renderFlowSidebar();
+      showToast(`Deleted flow ${flowId}`, 'info');
+    };
+
+    div.querySelector('#fpClose').onclick = closePopovers;
+
+    // Click-away dismiss
+    setTimeout(() => {
+      document.addEventListener('pointerdown', function dismiss(e) {
+        if (!div.contains(e.target)) { closePopovers(); document.removeEventListener('pointerdown', dismiss); }
+      });
+    }, 50);
+  }
+
+  /* ═══════════════════════════════════════════════
      SOLUTION HISTORY DISPLAY
      ═══════════════════════════════════════════════ */
   function renderHistory() {
@@ -2408,6 +2730,7 @@
     if (!STATE.model) return;
     renderCustomTopology(STATE.model, STATE.currentResult);
     renderMetricsRibbon(STATE.model, STATE.currentResult);
+    renderFlowSidebar();
     if (STATE.drawerState !== 'collapsed') renderActiveDrawerTab();
     // Re-apply flow highlight after topology re-render
     if (STATE.selectedFlow) setTimeout(() => applyFlowHighlight(), 50);
@@ -2427,6 +2750,7 @@
     // Rebuild editor tabs if active
     if (STATE.drawerTab === 'flows') buildFlowEditor();
     if (STATE.drawerTab === 'model') buildModelEditor();
+    renderFlowSidebar();
     scheduleAutoSolve();
     showToast(`Loaded: ${key}`, 'info');
   }
