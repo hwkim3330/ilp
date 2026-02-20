@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>TSN/GCL Custom Playground</title>
-  <link rel="stylesheet" href="style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     /* ═══════════════════════════════════════════════
-       Light Theme Override
+       CSS Architecture — Full-Viewport Canvas-First
        ═══════════════════════════════════════════════ */
     :root {
       --bg: #f8f9fa; --bg2: #f0f2f5;
@@ -21,624 +20,529 @@
       --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
       --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
       --guard: #d97706; --be: #e2e8f0;
-      --sidebar-w: 380px;
+      --radius: 14px;
+      --drawer-collapsed: 48px;
+      --drawer-half: 40vh;
+      --drawer-full: 85vh;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
-      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f0f2f5;
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
     }
-    .bg-grid {
+
+    /* Dot-grid background */
+    .bg-dots {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
-        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
-        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
-      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+        radial-gradient(circle at 1px 1px, rgba(59,130,246,0.08) 1px, transparent 0);
+      background-size: 24px 24px;
     }
-    .card {
-      background: rgba(255,255,255,0.95);
-      border: 1px solid rgba(59,130,246,0.15);
+
+    /* ── Full-Viewport Topology SVG ── */
+    #topoSvg {
+      position: fixed; inset: 0; z-index: 1;
+      width: 100vw; height: 100vh;
+      touch-action: none;
+      cursor: grab;
+    }
+    #topoSvg:active { cursor: grabbing; }
+
+    /* ── Glassmorphism base ── */
+    .glass {
       backdrop-filter: blur(20px);
-      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-    }
-    .card:hover { border-color: rgba(59,130,246,0.3); }
-    .card-title { color: var(--text2); }
-    .card-title::before { background: var(--blue); }
-    .metric-card {
-      background: rgba(255,255,255,0.95);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(255,255,255,0.88);
       border: 1px solid rgba(59,130,246,0.15);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
-    .metric-val { color: var(--blue); }
-    .svg-container { background: rgba(248,250,252,0.8); }
-    .tooltip {
-      background: rgba(255,255,255,0.97);
-      border: 1px solid rgba(59,130,246,0.25);
-      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-    }
-    .tooltip .tt-title { color: var(--blue); }
-    .tooltip .tt-k { color: var(--text3); }
-    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
-    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
-    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
-    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
-    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
-    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
-    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
-    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
-    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
-    .topo-link { stroke: rgba(59,130,246,0.25); }
-    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
-    textarea { background: rgba(248,250,252,0.9); color: var(--text); border-color: rgba(59,130,246,0.2); }
-
-    /* ═══════════════════════════════════════════════
-       SIDEBAR + MAIN LAYOUT
-       ═══════════════════════════════════════════════ */
-    .app-layout {
-      display: flex;
-      min-height: 100vh;
-      position: relative;
-      z-index: 1;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
 
-    /* Sidebar */
-    .sidebar {
-      width: var(--sidebar-w);
-      min-width: var(--sidebar-w);
-      max-height: 100vh;
-      overflow-y: auto;
-      position: sticky;
-      top: 0;
-      padding: 16px 14px;
-      border-right: 1px solid rgba(59,130,246,0.15);
-      background: rgba(255,255,255,0.7);
-      backdrop-filter: blur(24px);
-      transition: transform 0.3s ease;
-      z-index: 20;
+    /* ── Top Bar ── */
+    .top-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; height: 48px;
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(59,130,246,0.1);
     }
-    .sidebar::-webkit-scrollbar { width: 5px; }
-    .sidebar::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.2); border-radius: 4px; }
-    .sidebar-header {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 14px; padding-bottom: 10px;
-      border-bottom: 1px solid rgba(59,130,246,0.15);
-    }
-    .sidebar-header img { height: 28px; }
-    .sidebar-header h2 {
-      font-size: 1.05rem; font-weight: 800;
+    .top-bar .logo {
+      font-size: 0.9rem; font-weight: 800;
       background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      white-space: nowrap;
     }
-    .sidebar-close {
-      display: none; margin-left: auto; background: none; border: none;
-      font-size: 1.4rem; color: var(--text3); cursor: pointer;
+    .preset-pills {
+      display: flex; gap: 4px; margin-left: 8px;
+    }
+    .preset-pill {
+      padding: 4px 12px; border-radius: 20px; font-size: 0.72rem;
+      font-weight: 600; cursor: pointer;
+      border: 1px solid rgba(59,130,246,0.2);
+      background: rgba(255,255,255,0.6); color: var(--text2);
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .preset-pill.active {
+      background: var(--blue); color: #fff; border-color: var(--blue);
+    }
+    .preset-pill:hover:not(.active) {
+      border-color: var(--blue); color: var(--blue);
+    }
+    .top-spacer { flex: 1; }
+    .top-btn {
+      padding: 5px 14px; border-radius: 8px; font-size: 0.75rem;
+      font-weight: 700; cursor: pointer; border: 1px solid rgba(59,130,246,0.2);
+      background: rgba(255,255,255,0.6); color: var(--text2);
+      transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+    }
+    .top-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .top-btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .top-btn.primary:hover { filter: brightness(1.1); }
+    .solve-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); display: inline-block;
+    }
+    .solve-dot.solving { background: var(--orange); animation: pulse-dot 0.6s infinite; }
+    @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    .engine-badge {
+      font-size: 0.65rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 10px; white-space: nowrap;
+    }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner {
+      display: inline-block; width: 10px; height: 10px;
+      border: 2px solid rgba(217,119,6,0.2); border-top-color: var(--orange);
+      border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 4px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .kbd-hint {
+      font-size: 0.65rem; color: var(--text3); padding: 2px 6px;
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 4px;
+      background: rgba(0,0,0,0.03); font-family: monospace;
     }
 
-    /* Accordion Panel */
-    .acc-panel { margin-bottom: 6px; }
-    .acc-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px; border-radius: 10px; cursor: pointer;
-      background: rgba(59,130,246,0.04);
-      border: 1px solid transparent;
-      transition: all 0.15s; user-select: none;
+    /* ── Metrics Ribbon ── */
+    .metrics-ribbon {
+      position: fixed; bottom: 56px; left: 12px; z-index: 40;
+      display: flex; gap: 4px; flex-wrap: wrap;
+      max-width: calc(100vw - 370px);
+      transition: bottom 0.3s ease;
     }
-    .acc-header:hover { border-color: rgba(59,130,246,0.2); background: rgba(59,130,246,0.08); }
-    .acc-header.active { border-color: rgba(59,130,246,0.25); background: rgba(59,130,246,0.08); }
-    .acc-arrow {
-      font-size: 0.65rem; color: var(--text3);
-      transition: transform 0.2s;
-      flex-shrink: 0;
+    .metrics-ribbon.drawer-half { bottom: calc(40vh + 8px); }
+    .metrics-ribbon.drawer-full { bottom: calc(85vh + 8px); }
+    .metric-pill {
+      padding: 4px 10px; border-radius: 8px; font-size: 0.7rem;
+      font-weight: 600; white-space: nowrap; cursor: default;
+      background: rgba(255,255,255,0.88); border: 1px solid rgba(59,130,246,0.12);
+      backdrop-filter: blur(10px); color: var(--text2);
+      transition: all 0.15s;
     }
-    .acc-header.active .acc-arrow { transform: rotate(90deg); }
-    .acc-title { font-size: 0.82rem; font-weight: 700; color: var(--text); }
-    .acc-badge {
-      margin-left: auto;
-      font-size: 0.65rem; font-weight: 700;
-      padding: 1px 7px; border-radius: 10px;
+    .metric-pill.ok { color: var(--green); border-color: rgba(5,150,105,0.25); }
+    .metric-pill.warn { color: var(--orange); border-color: rgba(217,119,6,0.25); }
+    .metric-pill.miss { color: var(--red); border-color: rgba(220,38,38,0.25); }
+
+    /* ── Three.js PiP Window ── */
+    .pip {
+      position: fixed; z-index: 45;
+      border-radius: 12px; overflow: hidden;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .pip.normal {
+      width: 340px; height: 260px;
+      right: 16px; bottom: 64px;
+    }
+    .pip.expanded {
+      width: 50vw; height: 50vh;
+      right: 16px; bottom: 64px;
+    }
+    .pip.minimized {
+      width: 48px; height: 48px;
+      right: 16px; bottom: 64px;
+      border-radius: 50%; cursor: pointer;
+    }
+    .pip-titlebar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 8px; height: 28px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid rgba(59,130,246,0.1);
+      cursor: grab; font-size: 0.7rem; font-weight: 600; color: var(--text2);
+      user-select: none;
+    }
+    .pip-titlebar:active { cursor: grabbing; }
+    .pip.minimized .pip-titlebar { display: none; }
+    .pip-btn {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: none; cursor: pointer; font-size: 0.6rem;
+      display: flex; align-items: center; justify-content: center;
       background: rgba(59,130,246,0.1); color: var(--blue);
+      transition: all 0.15s;
     }
-    .acc-body {
-      max-height: 0; overflow: hidden;
-      transition: max-height 0.3s ease;
-      padding: 0 4px;
+    .pip-btn:hover { background: rgba(59,130,246,0.2); }
+    .pip-canvas-wrap {
+      width: 100%; height: calc(100% - 28px);
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
     }
-    .acc-body.open { max-height: 2000px; padding: 8px 4px; }
+    .pip.minimized .pip-canvas-wrap {
+      height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--blue); color: #fff; font-size: 1.2rem; font-weight: 800;
+    }
+    .pip-resize-handle {
+      position: absolute; bottom: 0; right: 0;
+      width: 16px; height: 16px; cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(59,130,246,0.3) 50%);
+      border-radius: 0 0 12px 0;
+    }
+    .pip.minimized .pip-resize-handle { display: none; }
 
-    /* Sidebar Form Elements */
-    .sb-row {
+    /* ── Command Palette ── */
+    .cmd-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.25);
+      display: none; align-items: flex-start; justify-content: center;
+      padding-top: 15vh;
+    }
+    .cmd-overlay.open { display: flex; }
+    .cmd-palette {
+      width: 520px; max-width: 90vw; max-height: 60vh;
+      border-radius: 16px; overflow: hidden;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(59,130,246,0.2);
+      box-shadow: 0 12px 48px rgba(0,0,0,0.15);
+      display: flex; flex-direction: column;
+    }
+    .cmd-search {
+      padding: 14px 18px; border: none; outline: none;
+      font-size: 0.95rem; background: transparent;
+      color: var(--text); border-bottom: 1px solid rgba(59,130,246,0.1);
+      width: 100%;
+    }
+    .cmd-search::placeholder { color: var(--text3); }
+    .cmd-list {
+      overflow-y: auto; max-height: calc(60vh - 52px);
+      padding: 6px;
+    }
+    .cmd-list::-webkit-scrollbar { width: 4px; }
+    .cmd-list::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.15); border-radius: 3px; }
+    .cmd-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; color: var(--text);
+      transition: background 0.1s;
+    }
+    .cmd-item:hover, .cmd-item.active { background: rgba(59,130,246,0.08); }
+    .cmd-item .cmd-icon { width: 20px; text-align: center; font-size: 0.9rem; flex-shrink: 0; }
+    .cmd-item .cmd-label { flex: 1; font-weight: 500; }
+    .cmd-item .cmd-hint { font-size: 0.7rem; color: var(--text3); }
+    .cmd-group-title {
+      font-size: 0.68rem; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 8px 12px 4px;
+    }
+    .cmd-inline-form {
+      padding: 12px 16px; border-top: 1px solid rgba(59,130,246,0.1);
+      background: rgba(248,250,252,0.5);
+    }
+    .cmd-inline-form label { font-size: 0.75rem; font-weight: 600; color: var(--text2); display: block; margin-bottom: 4px; }
+    .cmd-inline-form input, .cmd-inline-form select {
+      width: 100%; padding: 6px 10px; font-size: 0.82rem;
+      border: 1px solid rgba(59,130,246,0.2); border-radius: 6px;
+      background: #fff; color: var(--text); margin-bottom: 8px;
+    }
+    .cmd-inline-form input[type="range"] { padding: 0; }
+    .cmd-inline-form .cmd-form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .cmd-inline-form .cmd-form-val { font-size: 0.78rem; font-weight: 700; color: var(--blue); min-width: 60px; text-align: right; }
+
+    /* ── Bottom Drawer ── */
+    .drawer {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 35;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.06);
+      transition: height 0.3s ease;
+      display: flex; flex-direction: column;
+    }
+    .drawer.collapsed { height: var(--drawer-collapsed); }
+    .drawer.half { height: var(--drawer-half); }
+    .drawer.full { height: var(--drawer-full); }
+    .drawer-handle {
+      display: flex; align-items: center; justify-content: center;
+      height: 20px; cursor: ns-resize; flex-shrink: 0;
+      touch-action: none;
+    }
+    .drawer-handle-bar {
+      width: 40px; height: 4px; border-radius: 2px;
+      background: rgba(59,130,246,0.25);
+    }
+    .drawer-tabs {
+      display: flex; gap: 2px; padding: 0 12px; flex-shrink: 0;
+      border-bottom: 1px solid rgba(59,130,246,0.1);
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .drawer-tabs::-webkit-scrollbar { display: none; }
+    .drawer-tab {
+      padding: 6px 14px; font-size: 0.72rem; font-weight: 600;
+      color: var(--text3); cursor: pointer; white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .drawer-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .drawer-tab:hover:not(.active) { color: var(--text2); }
+    .drawer-content {
+      flex: 1; overflow: auto; padding: 12px 16px;
+    }
+    .drawer-content::-webkit-scrollbar { width: 5px; }
+    .drawer-content::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.15); border-radius: 3px; }
+    .drawer-panel { display: none; }
+    .drawer-panel.active { display: block; }
+
+    /* Drawer panel containers */
+    .drawer-panel .svg-container { background: transparent; }
+    .drawer-panel .pkt-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .drawer-panel .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); text-align: left; padding: 6px 8px; font-weight: 600; }
+    .drawer-panel .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); padding: 6px 8px; }
+    .drawer-panel .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .drawer-panel pre { background: rgba(248,250,252,0.9); border: 1px solid rgba(59,130,246,0.15); color: var(--text2); padding: 12px; border-radius: 8px; font-size: 0.75rem; overflow: auto; max-height: 100%; }
+    .drawer-panel .gcl-switch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Switch GCL cards in drawer */
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(59,130,246,0.12);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .gcl-switch-card .sw-header {
       display: flex; align-items: center; gap: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(59,130,246,0.1);
     }
-    .sb-label {
-      font-size: 0.75rem; font-weight: 600; color: var(--text2);
-      min-width: 90px; flex-shrink: 0;
-    }
-    .sb-range { flex: 1; accent-color: var(--blue); }
-    .sb-val {
-      font-size: 0.75rem; font-weight: 700; color: var(--blue);
-      min-width: 60px; text-align: right; font-variant-numeric: tabular-nums;
-    }
-    .sb-input {
-      width: 80px; padding: 4px 8px; border-radius: 6px;
+    .sw-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.85rem; color: var(--text); }
+    .sw-chip { font-size: 0.65rem; padding: 2px 6px; border-radius: 6px; background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600; }
+    .sw-stats { margin-left: auto; font-size: 0.7rem; color: var(--text3); }
+    .link-label-dir { font-size: 0.75rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Node/Link Popovers ── */
+    .popover {
+      position: absolute; z-index: 60;
+      min-width: 200px; max-width: 320px;
+      border-radius: 12px; padding: 12px 16px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px);
       border: 1px solid rgba(59,130,246,0.2);
-      background: #fff; font-size: 0.78rem; color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      font-size: 0.78rem;
     }
-    .sb-input:focus { outline: none; border-color: var(--blue); }
-    .sb-select {
-      flex: 1; padding: 5px 8px; border-radius: 6px;
-      border: 1px solid rgba(59,130,246,0.2);
-      background: #fff; font-size: 0.78rem; color: var(--text);
-      cursor: pointer;
+    .popover-title { font-weight: 700; font-size: 0.85rem; color: var(--text); margin-bottom: 8px; }
+    .popover-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .popover-row label { font-size: 0.72rem; font-weight: 600; color: var(--text3); min-width: 60px; }
+    .popover-row input, .popover-row select {
+      flex: 1; padding: 4px 8px; font-size: 0.75rem;
+      border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; background: #fff;
     }
-    .sb-select:focus { outline: none; border-color: var(--blue); }
-    .sb-btn {
-      padding: 5px 12px; border-radius: 6px; font-size: 0.75rem;
+    .popover-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .popover-btn {
+      padding: 4px 12px; border-radius: 6px; font-size: 0.72rem;
       font-weight: 700; cursor: pointer; border: 1px solid rgba(59,130,246,0.2);
       background: #fff; color: var(--blue); transition: all 0.15s;
     }
-    .sb-btn:hover { background: rgba(59,130,246,0.08); border-color: var(--blue); }
-    .sb-btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-    .sb-btn.primary:hover { filter: brightness(1.1); }
-    .sb-btn.danger { color: var(--red); border-color: rgba(220,38,38,0.2); }
-    .sb-btn.danger:hover { background: rgba(220,38,38,0.08); }
+    .popover-btn:hover { background: rgba(59,130,246,0.08); }
+    .popover-btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .popover-btn.danger { color: var(--red); border-color: rgba(220,38,38,0.2); }
+    .popover-btn.danger:hover { background: rgba(220,38,38,0.08); }
 
-    /* Node/Link/Flow Editor Items */
-    .editor-item {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 8px; margin-bottom: 4px;
-      border-radius: 8px; background: rgba(255,255,255,0.6);
-      border: 1px solid rgba(59,130,246,0.1);
-      font-size: 0.75rem;
-    }
-    .editor-item:hover { border-color: rgba(59,130,246,0.25); }
-    .editor-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .editor-id {
-      font-weight: 700; color: var(--text);
-      min-width: 60px; flex-shrink: 0;
-    }
-    .editor-item select {
-      padding: 2px 4px; font-size: 0.72rem; border-radius: 4px;
-      border: 1px solid rgba(59,130,246,0.15); background: #fff;
-    }
-    .editor-item input[type="number"] {
-      width: 60px; padding: 2px 4px; font-size: 0.72rem;
-      border-radius: 4px; border: 1px solid rgba(59,130,246,0.15);
-    }
-    .editor-remove {
-      margin-left: auto; background: none; border: none;
-      color: var(--red); cursor: pointer; font-size: 0.85rem;
-      opacity: 0.5; transition: opacity 0.15s; flex-shrink: 0;
-    }
-    .editor-remove:hover { opacity: 1; }
-    .editor-list {
-      max-height: 280px; overflow-y: auto;
-      margin-bottom: 8px;
-    }
-    .editor-list::-webkit-scrollbar { width: 4px; }
-    .editor-list::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.15); border-radius: 3px; }
+    /* Link GCL popover mini gantt */
+    .link-popover-gantt { margin: 8px 0; height: 24px; background: rgba(0,0,0,0.03); border-radius: 6px; overflow: hidden; position: relative; }
+    .link-popover-util { font-size: 0.82rem; font-weight: 700; color: var(--blue); }
+    .link-popover-entries { font-size: 0.7rem; color: var(--text3); margin-top: 4px; }
 
-    /* Flow mini-card */
-    .flow-mini {
-      padding: 8px 10px; margin-bottom: 6px;
-      border-radius: 8px; background: rgba(255,255,255,0.7);
-      border: 1px solid rgba(59,130,246,0.1);
-    }
-    .flow-mini:hover { border-color: rgba(59,130,246,0.25); }
-    .flow-mini-header {
-      display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
-    }
-    .flow-mini-tag {
-      font-size: 0.68rem; font-weight: 700; padding: 1px 8px;
-      border-radius: 8px; color: #fff;
-    }
-    .flow-mini-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;
-      font-size: 0.72rem;
-    }
-    .flow-mini-grid label { color: var(--text3); font-weight: 600; }
-    .flow-mini-grid input, .flow-mini-grid select {
-      width: 100%; padding: 2px 4px; font-size: 0.72rem;
-      border-radius: 4px; border: 1px solid rgba(59,130,246,0.15);
-    }
-    .flow-computed {
-      font-size: 0.68rem; color: var(--text3); margin-top: 4px;
-      font-style: italic;
+    /* ── Solve Wave Animation ── */
+    .solve-wave {
+      pointer-events: none;
+      fill: none; stroke: var(--blue); stroke-width: 2;
+      opacity: 0.6;
     }
 
-    /* Solver Radio Group */
-    .radio-group { display: flex; gap: 4px; }
-    .radio-pill {
-      padding: 4px 12px; border-radius: 6px; font-size: 0.75rem;
-      font-weight: 700; cursor: pointer;
-      border: 1px solid rgba(59,130,246,0.2);
-      background: #fff; color: var(--text2);
-      transition: all 0.15s;
-    }
-    .radio-pill.active { background: var(--blue); color: #fff; border-color: var(--blue); }
-    .radio-pill:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
-
-    /* Auto-solve toggle */
-    .toggle-switch {
-      position: relative; width: 36px; height: 20px;
-      display: inline-block; flex-shrink: 0;
-    }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider {
-      position: absolute; cursor: pointer; inset: 0;
-      background: #ccc; border-radius: 20px; transition: 0.2s;
-    }
-    .toggle-slider::before {
-      content: ''; position: absolute; height: 14px; width: 14px;
-      left: 3px; bottom: 3px; background: #fff;
-      border-radius: 50%; transition: 0.2s;
-    }
-    .toggle-switch input:checked + .toggle-slider { background: var(--blue); }
-    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
-
-    /* Main Content */
-    .main-content {
-      flex: 1;
-      min-width: 0;
-      padding: 20px 24px 60px;
-      max-width: 1200px;
-    }
-    .main-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
-    }
-    .main-header h1 {
-      font-size: 1.8rem; font-weight: 800;
-      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .hamburger {
-      display: none; background: none; border: 1px solid rgba(59,130,246,0.2);
-      border-radius: 8px; padding: 6px 10px; cursor: pointer;
-      font-size: 1.2rem; color: var(--text2);
-    }
-
-    /* 3D Card */
-    .shuttle-3d-card {
-      position: relative; border-radius: var(--radius); overflow: hidden;
-      margin-bottom: 16px; background: rgba(255,255,255,0.95);
-      border: 1px solid rgba(59,130,246,0.15);
-      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
-    }
-    #canvas3d {
-      width: 100%; height: 420px; display: block; cursor: grab;
-      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
-    }
-    #canvas3d:active { cursor: grabbing; }
-    .shuttle-3d-label {
-      position: absolute; bottom: 12px; left: 16px;
-      font-size: 0.72rem; color: var(--text3);
-      background: rgba(255,255,255,0.85); padding: 4px 10px;
-      border-radius: 8px; backdrop-filter: blur(10px);
-      border: 1px solid rgba(59,130,246,0.1);
-    }
-
-    /* Per-Switch GCL Cards */
-    .gcl-switch-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
-    }
-    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
-    .gcl-switch-card {
-      background: rgba(255,255,255,0.95);
-      border: 1px solid rgba(59,130,246,0.15);
-      border-radius: var(--radius); padding: 16px 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    .gcl-switch-card .sw-header {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 12px; padding-bottom: 8px;
-      border-bottom: 1px solid rgba(59,130,246,0.15);
-    }
-    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
-    .sw-chip {
-      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
-      background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600;
-    }
-    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
-    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-    .gcl-entry-table th {
-      text-align: left; padding: 4px 8px; color: var(--text3);
-      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
-    }
-    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
-    .gate-mask { font-family: 'Courier New', monospace; font-size: 0.75rem; letter-spacing: 1px; font-weight: 700; }
-    .gate-open { color: var(--green); }
-    .gate-guard { color: var(--orange); }
-    .gate-closed { color: var(--text3); opacity: 0.5; }
-    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
-    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
-
-    /* Solution History */
-    .history-bar {
-      display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;
-      align-items: center;
-    }
-    .history-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 12px; border-radius: 8px; font-size: 0.72rem;
-      font-weight: 600; cursor: pointer;
-      background: rgba(255,255,255,0.8);
-      border: 1px solid rgba(59,130,246,0.15);
-      transition: all 0.15s; color: var(--text2);
-    }
-    .history-chip:hover { border-color: var(--blue); color: var(--blue); }
-    .history-chip.active { background: rgba(59,130,246,0.1); border-color: var(--blue); color: var(--blue); }
-    .history-chip .h-method {
-      font-size: 0.65rem; padding: 1px 6px; border-radius: 4px;
-      background: rgba(59,130,246,0.1); color: var(--blue);
-    }
-    .history-chip .h-method.ilp { background: rgba(124,58,237,0.1); color: var(--purple); }
-    .history-label { font-size: 0.72rem; color: var(--text3); font-weight: 600; }
-
-    /* Toast Notifications */
+    /* ── Toast Notifications ── */
     .toast-container {
-      position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+      position: fixed; bottom: 56px; right: 16px; z-index: 200;
       display: flex; flex-direction: column-reverse; gap: 8px;
       pointer-events: none;
     }
     .toast {
-      padding: 10px 18px; border-radius: 10px; font-size: 0.8rem;
+      padding: 8px 16px; border-radius: 10px; font-size: 0.78rem;
       font-weight: 600; backdrop-filter: blur(20px);
       box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-      animation: toastIn 0.3s ease;
-      pointer-events: auto;
+      animation: toastIn 0.3s ease; pointer-events: auto;
     }
     .toast.success { background: rgba(5,150,105,0.12); color: var(--green); border: 1px solid rgba(5,150,105,0.25); }
     .toast.error { background: rgba(220,38,38,0.12); color: var(--red); border: 1px solid rgba(220,38,38,0.25); }
     .toast.info { background: rgba(59,130,246,0.12); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
     .toast.fadeout { animation: toastOut 0.3s ease forwards; }
-    @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(10px); } }
+    @keyframes toastIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(10px); } }
 
-    /* Solve button in sidebar */
-    .solve-bar {
-      display: flex; gap: 6px; margin-top: 8px;
+    /* ── Tooltip ── */
+    .tooltip {
+      position: fixed; z-index: 150; pointer-events: none;
+      padding: 10px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      font-size: 0.78rem; max-width: 300px;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .tooltip.show { opacity: 1; }
+    .tooltip .tt-title { font-weight: 700; color: var(--blue); margin-bottom: 4px; }
+    .tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; }
+    .tooltip .tt-k { color: var(--text3); }
+    .tooltip .tt-v { font-weight: 600; }
+
+    /* ── D3 Topology Styles ── */
+    .topo-node-circle { cursor: pointer; transition: r 0.15s; }
+    .topo-node-circle:hover { filter: brightness(1.1); }
+    .topo-node-label {
+      font-size: 10px; font-weight: 700; text-anchor: middle;
+      fill: var(--text); pointer-events: none;
+    }
+    .topo-node-type {
+      font-size: 7.5px; font-weight: 600; text-anchor: middle;
+      fill: var(--text3); pointer-events: none;
+    }
+    .topo-link-line {
+      stroke: rgba(59,130,246,0.2); stroke-width: 2;
+      transition: stroke 0.3s, stroke-width 0.3s;
+    }
+    .topo-link-hit {
+      stroke: transparent; stroke-width: 14; cursor: pointer;
+      fill: none;
+    }
+    .flow-particle {
+      pointer-events: none;
+    }
+    .rubber-band-line {
+      stroke: var(--blue); stroke-width: 2; stroke-dasharray: 6,4;
+      pointer-events: none; fill: none;
+    }
+    .node-pulse-ring {
+      fill: none; stroke-width: 2; pointer-events: none;
+      animation: pulse-ring 1.5s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { r: 22; opacity: 0.5; }
+      100% { r: 36; opacity: 0; }
     }
 
-    /* Mobile Responsive */
-    .sidebar-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.3); z-index: 15;
+    /* animated dashes on high-util links */
+    .link-animated-dash {
+      animation: dash-flow 1s linear infinite;
     }
+    @keyframes dash-flow {
+      to { stroke-dashoffset: -16; }
+    }
+
+    /* ── Responsive ── */
     @media (max-width: 900px) {
-      .sidebar {
-        position: fixed; top: 0; left: 0; bottom: 0;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-      }
-      .sidebar.open { transform: translateX(0); }
-      .sidebar-overlay.open { display: block; }
-      .sidebar-close { display: block; }
-      .hamburger { display: flex; }
-      .main-content { padding: 16px 14px 60px; }
+      .pip.normal { width: 200px; height: 150px; right: 8px; bottom: 56px; }
+      .pip.expanded { width: 80vw; height: 40vh; right: 8px; bottom: 56px; }
+      .metrics-ribbon { max-width: calc(100vw - 220px); left: 8px; }
+      .preset-pills { display: none; }
+      .top-bar .logo { font-size: 0.78rem; }
+      .drawer-panel .gcl-switch-grid { grid-template-columns: 1fr; }
+      .cmd-palette { max-width: 95vw; }
+      .kbd-hint { display: none; }
     }
 
-    /* Scenario auto desc */
-    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .auto-desc h3 { color: var(--blue); }
-    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    /* Flow badge */
+    .flow-badge {
+      font-size: 0.7rem; font-weight: 600; padding: 1px 8px;
+      border-radius: 8px; display: inline-block;
+    }
+    .ok { color: var(--green); font-weight: 700; }
+    .miss { color: var(--red); font-weight: 700; }
+    .be { color: var(--text3); }
+
+    /* Legend in drawer */
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text2); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
   </style>
 </head>
 <body>
-  <div class="bg-grid"></div>
+  <div class="bg-dots"></div>
 
-  <!-- Mobile overlay -->
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <!-- Full-viewport D3 Topology SVG -->
+  <svg id="topoSvg"></svg>
 
-  <div class="app-layout">
-    <!-- ═══════════════ SIDEBAR ═══════════════ -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
-        <h2>Custom Playground</h2>
-        <button class="sidebar-close" id="sidebarClose">&times;</button>
-      </div>
+  <!-- Top Bar -->
+  <div class="top-bar glass">
+    <span class="logo">TSN Playground</span>
+    <div class="preset-pills" id="presetPills">
+      <span class="preset-pill active" data-preset="standard">Standard</span>
+      <span class="preset-pill" data-preset="reconf">Reconf</span>
+      <span class="preset-pill" data-preset="optimal">Optimal</span>
+    </div>
+    <button class="top-btn primary" id="solveBtn"><span class="solve-dot" id="solveDot"></span>Solve</button>
+    <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>GLPK</span>
+    <span class="top-spacer"></span>
+    <button class="top-btn" id="cmdBtn" title="Command Palette"><span class="kbd-hint">Ctrl+K</span></button>
+    <a href="index.html" class="top-btn" style="text-decoration:none;">Home</a>
+  </div>
 
-      <!-- Panel 1: Preset -->
-      <div class="acc-panel">
-        <div class="acc-header active" data-panel="preset">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Preset</span>
-        </div>
-        <div class="acc-body open" id="panelPreset">
-          <select class="sb-select" id="presetSelect" style="width:100%;margin-bottom:6px;">
-            <option value="standard">Standard (13N / 9F)</option>
-            <option value="reconf">Reconfigured (14N / 11F)</option>
-            <option value="optimal">Optimal Tri-Star (13N / 9F)</option>
-          </select>
-        </div>
-      </div>
+  <!-- Three.js PiP Window -->
+  <div class="pip normal glass" id="pip">
+    <div class="pip-titlebar" id="pipTitlebar">
+      <span>3D View</span>
+      <span style="flex:1;"></span>
+      <button class="pip-btn" id="pipExpand" title="Expand">&#x26F6;</button>
+      <button class="pip-btn" id="pipMinimize" title="Minimize">&minus;</button>
+    </div>
+    <div class="pip-canvas-wrap" id="pipCanvas"></div>
+    <div class="pip-resize-handle" id="pipResize"></div>
+  </div>
 
-      <!-- Panel 2: Global Parameters -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="globals">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Global Parameters</span>
-        </div>
-        <div class="acc-body" id="panelGlobals">
-          <div class="sb-row">
-            <span class="sb-label">Cycle Time</span>
-            <input type="range" class="sb-range" id="cycleRange" min="1000" max="50000" step="100">
-            <span class="sb-val" id="cycleVal"></span>
-            <span class="sb-label" style="min-width:auto;">&micro;s</span>
-          </div>
-          <div class="sb-row">
-            <span class="sb-label">Guard Band</span>
-            <input type="range" class="sb-range" id="guardRange" min="0" max="20" step="1">
-            <span class="sb-val" id="guardVal"></span>
-            <span class="sb-label" style="min-width:auto;">&micro;s</span>
-          </div>
-          <div class="sb-row">
-            <span class="sb-label">Proc. Delay</span>
-            <input type="range" class="sb-range" id="procRange" min="0" max="20" step="1">
-            <span class="sb-val" id="procVal"></span>
-            <span class="sb-label" style="min-width:auto;">&micro;s</span>
-          </div>
-        </div>
-      </div>
+  <!-- Metrics Ribbon -->
+  <div class="metrics-ribbon" id="metricsRibbon"></div>
 
-      <!-- Panel 3: Node Editor -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="nodes">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Nodes</span>
-          <span class="acc-badge" id="nodeBadge">0</span>
-        </div>
-        <div class="acc-body" id="panelNodes">
-          <div class="editor-list" id="nodeList"></div>
-          <button class="sb-btn" id="addNodeBtn">+ Add Node</button>
-        </div>
-      </div>
-
-      <!-- Panel 4: Link Editor -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="links">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Links</span>
-          <span class="acc-badge" id="linkBadge">0</span>
-        </div>
-        <div class="acc-body" id="panelLinks">
-          <div class="editor-list" id="linkList"></div>
-          <button class="sb-btn" id="addLinkBtn">+ Add Link</button>
-        </div>
-      </div>
-
-      <!-- Panel 5: Flow Editor -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="flows">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Flows</span>
-          <span class="acc-badge" id="flowBadge">0</span>
-        </div>
-        <div class="acc-body" id="panelFlows">
-          <div class="editor-list" id="flowList" style="max-height:400px;"></div>
-          <button class="sb-btn" id="addFlowBtn">+ Add Flow</button>
-        </div>
-      </div>
-
-      <!-- Panel 6: Solver Settings -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="solver">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Solver</span>
-          <span class="engine-badge loading" id="engineBadge" style="margin-left:auto;"><span class="spinner"></span>GLPK</span>
-        </div>
-        <div class="acc-body" id="panelSolver">
-          <div class="sb-row">
-            <span class="sb-label">Mode</span>
-            <div class="radio-group" id="solverModeGroup">
-              <span class="radio-pill active" data-mode="greedy">Greedy</span>
-              <span class="radio-pill" data-mode="ilp">ILP</span>
-              <span class="radio-pill" data-mode="both">Both</span>
-            </div>
-          </div>
-          <div class="sb-row">
-            <span class="sb-label">ILP Timeout</span>
-            <input type="range" class="sb-range" id="ilpTimeoutRange" min="5" max="120" step="5" value="15">
-            <span class="sb-val" id="ilpTimeoutVal">15s</span>
-          </div>
-          <div class="sb-row">
-            <span class="sb-label">Auto-solve</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="autoSolveToggle" checked>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="solve-bar">
-            <button class="sb-btn primary" id="solveBtn" style="flex:1;">Solve Now</button>
-            <button class="sb-btn" id="resetBtn">Reset</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Panel 7: Export/Import -->
-      <div class="acc-panel">
-        <div class="acc-header" data-panel="io">
-          <span class="acc-arrow">&#9654;</span>
-          <span class="acc-title">Export / Import</span>
-        </div>
-        <div class="acc-body" id="panelIO">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="sb-btn" id="exportBtn">Download JSON</button>
-            <button class="sb-btn" id="copyBtn">Copy</button>
-            <label class="sb-btn" style="cursor:pointer;">
-              Upload JSON
-              <input type="file" accept=".json" id="importFile" style="display:none;">
-            </label>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
-    <main class="main-content">
-      <div class="main-header">
-        <button class="hamburger" id="hamburgerBtn">&#9776;</button>
-        <h1>TSN / GCL Custom Playground</h1>
-        <a href="index.html" class="btn btn-secondary" style="font-size:0.78rem;">Home</a>
-      </div>
-
-      <!-- 3D Shuttle -->
-      <div class="shuttle-3d-card">
-        <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
-        <div id="canvas3d"></div>
-        <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
-      </div>
-
-      <!-- Solution History -->
-      <div class="history-bar" id="historyBar">
-        <span class="history-label">History:</span>
-      </div>
-
-      <!-- Metrics -->
-      <div class="metrics" id="metricsArea"></div>
-
-      <!-- Network Topology -->
-      <div class="card">
-        <div class="card-title">Network Topology</div>
-        <div class="legend" id="topoLegend"></div>
-        <div class="svg-container" id="topoContainer" style="height:480px;"></div>
-      </div>
-
-      <!-- Per-Switch GCL Detail -->
-      <div class="card">
-        <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
-      </div>
-      <div id="switchGclArea" class="gcl-switch-grid"></div>
-
-      <!-- GCL Gantt -->
-      <div class="card">
-        <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
+  <!-- Bottom Analysis Drawer -->
+  <div class="drawer collapsed" id="drawer">
+    <div class="drawer-handle" id="drawerHandle">
+      <div class="drawer-handle-bar"></div>
+    </div>
+    <div class="drawer-tabs" id="drawerTabs">
+      <span class="drawer-tab active" data-tab="gcl">GCL Gantt</span>
+      <span class="drawer-tab" data-tab="delay">Delay</span>
+      <span class="drawer-tab" data-tab="util">Utilization</span>
+      <span class="drawer-tab" data-tab="switchgcl">Switch GCL</span>
+      <span class="drawer-tab" data-tab="table">Table</span>
+      <span class="drawer-tab" data-tab="json">JSON</span>
+    </div>
+    <div class="drawer-content">
+      <div class="drawer-panel active" id="panel-gcl">
         <div class="legend" id="gclLegend"></div>
         <div class="svg-container" id="gclContainer"></div>
       </div>
-
-      <!-- Delay + Utilization -->
-      <div class="two-col">
-        <div class="card">
-          <div class="card-title">Packet E2E Delay</div>
-          <div class="svg-container" id="delayContainer" style="height:380px;"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Link Utilization</div>
-          <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
-        </div>
+      <div class="drawer-panel" id="panel-delay">
+        <div class="svg-container" id="delayContainer" style="min-height:350px;"></div>
       </div>
-
-      <!-- Table -->
-      <div class="card">
-        <div class="card-title">Packet Schedule Table</div>
+      <div class="drawer-panel" id="panel-util">
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+      <div class="drawer-panel" id="panel-switchgcl">
+        <div class="gcl-switch-grid" id="switchGclArea"></div>
+      </div>
+      <div class="drawer-panel" id="panel-table">
         <div style="overflow-x:auto;">
           <table class="pkt-table">
             <thead><tr>
@@ -648,27 +552,19 @@
           </table>
         </div>
       </div>
-
-      <!-- Collapsible JSON Editor -->
-      <div class="card">
-        <div class="card-title collapsible" id="jsonEditorToggle">
-          <span class="arrow">&#9654;</span> Model JSON
-        </div>
-        <div class="collapse-body">
-          <textarea id="input" style="min-height:300px;"></textarea>
-        </div>
+      <div class="drawer-panel" id="panel-json">
+        <pre id="jsonOut">-</pre>
       </div>
+    </div>
+  </div>
 
-      <!-- Raw GCL -->
-      <div class="card">
-        <div class="card-title collapsible" id="gclJsonToggle">
-          <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
-        </div>
-        <div class="collapse-body">
-          <pre id="jsonOut">-</pre>
-        </div>
-      </div>
-    </main>
+  <!-- Command Palette Overlay -->
+  <div class="cmd-overlay" id="cmdOverlay">
+    <div class="cmd-palette glass" id="cmdPalette">
+      <input class="cmd-search" id="cmdSearch" placeholder="Type a command..." autocomplete="off" spellcheck="false">
+      <div class="cmd-list" id="cmdList"></div>
+      <div class="cmd-inline-form" id="cmdInlineForm" style="display:none;"></div>
+    </div>
   </div>
 
   <!-- Toast Container -->
@@ -677,11 +573,14 @@
   <!-- Tooltip -->
   <div class="tooltip" id="tooltip"></div>
 
+  <!-- Popover Container (positioned absolutely in SVG space) -->
+  <div id="popoverContainer" style="position:fixed;inset:0;pointer-events:none;z-index:60;"></div>
+
   <script src="vendor/d3.min.js"></script>
   <script type="module">
   import {
-    initTooltip, solveGreedy, solveILP, renderMetrics, renderTopology,
-    renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
+    initTooltip, solveGreedy, solveILP, renderGCL, renderDelayChart,
+    renderUtilization, renderTable, renderSwitchGCL, showTip, hideTip
   } from './js/ilp-core.js';
   import {
     ROII_REAL_STANDARD, getRealPositions,
@@ -701,17 +600,22 @@
      STATE
      ═══════════════════════════════════════════════ */
   const STATE = {
-    model: null,
-    glpk: null,
-    solverMode: 'greedy',
-    autoSolve: true,
-    ilpTimeout: 15,
-    currentResult: null,
-    history: [],
+    model: null, glpk: null, solverMode: 'greedy', autoSolve: true,
+    ilpTimeout: 15, currentResult: null, history: [],
     // 3D
     scene3d: null, camera3d: null, renderer3d: null, controls3d: null,
-    dynamicGroup: null, nodeMeshes3d: {}, linkMeshes3d: {},
-    clock3d: null, glbModel: null
+    dynamicGroup: null, nodeMeshes3d: {}, linkMeshes3d: {}, clock3d: null, glbModel: null,
+    // Selection
+    selectedNode: null, selectedLink: null, selectedFlow: null,
+    // UI
+    drawerState: 'collapsed', drawerTab: 'gcl',
+    pipState: 'normal', // 'normal' | 'expanded' | 'minimized'
+    cmdPaletteOpen: false,
+    zoomTransform: d3.zoomIdentity,
+    // D3 references
+    topoSvg: null, topoZoom: null, zoomLayer: null,
+    nodeGroups: null, linkLines: null, nodePositions: {},
+    currentPreset: 'standard'
   };
 
   /* ── Presets Registry ── */
@@ -739,523 +643,68 @@
   const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
   /* ═══════════════════════════════════════════════
+     SELECTION BUS — D3 ↔ Three.js Bridge
+     ═══════════════════════════════════════════════ */
+  const SelectionBus = {
+    _listeners: {},
+    on(evt, fn) { (this._listeners[evt] = this._listeners[evt] || []).push(fn); },
+    off(evt, fn) { const l = this._listeners[evt]; if(l) this._listeners[evt] = l.filter(f => f !== fn); },
+    emit(evt, data) { (this._listeners[evt] || []).forEach(fn => fn(data)); }
+  };
+
+  // Cross-highlight handlers
+  SelectionBus.on('node:hover', ({ nodeId, source }) => {
+    if (source !== '3d') highlight3DNode(nodeId, true);
+    if (source !== 'd3') highlightD3Node(nodeId, true);
+  });
+  SelectionBus.on('node:unhover', ({ nodeId, source }) => {
+    if (source !== '3d') highlight3DNode(nodeId, false);
+    if (source !== 'd3') highlightD3Node(nodeId, false);
+  });
+
+  function highlightD3Node(nodeId, on) {
+    if (!STATE.zoomLayer) return;
+    STATE.zoomLayer.selectAll('.topo-node-g').each(function(d) {
+      if (d.id === nodeId) {
+        d3.select(this).select('.topo-node-circle')
+          .transition().duration(150)
+          .attr('r', on ? 28 : 22);
+      }
+    });
+  }
+
+  function highlight3DNode(nodeId, on) {
+    const mesh = STATE.nodeMeshes3d[nodeId];
+    if (!mesh) return;
+    if (on) {
+      mesh.material.emissiveIntensity = 0.8;
+      mesh.scale.set(1.3, 1.3, 1.3);
+    } else {
+      mesh.material.emissiveIntensity = 0.2;
+      mesh.scale.set(1, 1, 1);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════
      TOAST NOTIFICATIONS
      ═══════════════════════════════════════════════ */
   function showToast(msg, type = 'info', duration = 3000) {
-    const container = document.getElementById('toastContainer');
+    const c = document.getElementById('toastContainer');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
     el.textContent = msg;
-    container.appendChild(el);
-    setTimeout(() => {
-      el.classList.add('fadeout');
-      setTimeout(() => el.remove(), 300);
-    }, duration);
+    c.appendChild(el);
+    setTimeout(() => { el.classList.add('fadeout'); setTimeout(() => el.remove(), 300); }, duration);
   }
 
   /* ═══════════════════════════════════════════════
-     SIDEBAR UI
+     HELPERS
      ═══════════════════════════════════════════════ */
-
-  /* Accordion toggle */
-  document.querySelectorAll('.acc-header').forEach(hdr => {
-    hdr.addEventListener('click', () => {
-      const wasActive = hdr.classList.contains('active');
-      // Close all
-      document.querySelectorAll('.acc-header').forEach(h => h.classList.remove('active'));
-      document.querySelectorAll('.acc-body').forEach(b => b.classList.remove('open'));
-      // Toggle clicked
-      if (!wasActive) {
-        hdr.classList.add('active');
-        hdr.nextElementSibling.classList.add('open');
-      }
-    });
-  });
-
-  /* Sidebar mobile toggle */
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  document.getElementById('hamburgerBtn').addEventListener('click', () => {
-    sidebar.classList.add('open');
-    overlay.classList.add('open');
-  });
-  function closeSidebar() {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('open');
-  }
-  document.getElementById('sidebarClose').addEventListener('click', closeSidebar);
-  overlay.addEventListener('click', closeSidebar);
-
-  /* Collapsibles */
-  document.getElementById("jsonEditorToggle").addEventListener("click", function() {
-    this.classList.toggle("open");
-    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
-  });
-  document.getElementById("gclJsonToggle").addEventListener("click", function() {
-    this.classList.toggle("open");
-    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
-  });
-
-  /* ═══════════════════════════════════════════════
-     MODEL MANAGEMENT
-     ═══════════════════════════════════════════════ */
-
   function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
-  function loadPreset(key) {
-    const p = PRESETS[key];
-    STATE.model = deepClone(p.model);
-    syncUIFromModel();
-    rebuild3D(p);
-    scheduleAutoSolve();
-    showToast(`Loaded preset: ${key}`, 'info');
-  }
-
-  function syncUIFromModel() {
-    const m = STATE.model;
-    document.getElementById('cycleRange').value = m.cycle_time_us;
-    document.getElementById('cycleVal').textContent = m.cycle_time_us.toLocaleString();
-    document.getElementById('guardRange').value = m.guard_band_us;
-    document.getElementById('guardVal').textContent = m.guard_band_us;
-    document.getElementById('procRange').value = m.processing_delay_us;
-    document.getElementById('procVal').textContent = m.processing_delay_us;
-    buildNodeEditor();
-    buildLinkEditor();
-    buildFlowEditor();
-    document.getElementById('input').value = JSON.stringify(m, null, 2);
-  }
-
-  /* ── Global Parameters ── */
-  function setupRangeSync(rangeId, valId, field, suffix = '') {
-    const range = document.getElementById(rangeId);
-    const val = document.getElementById(valId);
-    range.addEventListener('input', () => {
-      const v = parseInt(range.value);
-      val.textContent = (field === 'cycle_time_us' ? v.toLocaleString() : v) + suffix;
-      if (STATE.model) {
-        STATE.model[field] = v;
-        scheduleAutoSolve();
-      }
-    });
-  }
-  setupRangeSync('cycleRange', 'cycleVal', 'cycle_time_us');
-  setupRangeSync('guardRange', 'guardVal', 'guard_band_us');
-  setupRangeSync('procRange', 'procVal', 'processing_delay_us');
-
-  document.getElementById('ilpTimeoutRange').addEventListener('input', function() {
-    STATE.ilpTimeout = parseInt(this.value);
-    document.getElementById('ilpTimeoutVal').textContent = this.value + 's';
-  });
-
-  /* ── Node Editor ── */
-  function buildNodeEditor() {
-    const list = document.getElementById('nodeList');
-    const m = STATE.model;
-    document.getElementById('nodeBadge').textContent = m.nodes.length;
-    list.innerHTML = '';
-    m.nodes.forEach((n, i) => {
-      const color = getNodeColor(n.id);
-      const el = document.createElement('div');
-      el.className = 'editor-item';
-      el.innerHTML = `
-        <span class="editor-dot" style="background:${color}"></span>
-        <input class="sb-input" style="width:80px;font-size:0.72rem;" value="${n.id}" data-idx="${i}" data-field="node-id">
-        <select data-idx="${i}" data-field="node-type" style="font-size:0.72rem;padding:2px 4px;border-radius:4px;border:1px solid rgba(59,130,246,0.15);">
-          <option value="switch" ${n.type==='switch'?'selected':''}>switch</option>
-          <option value="endstation" ${n.type==='endstation'?'selected':''}>endstation</option>
-        </select>
-        <button class="editor-remove" data-idx="${i}">&times;</button>
-      `;
-      list.appendChild(el);
-    });
-    // Event delegation
-    list.querySelectorAll('[data-field="node-id"]').forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        const oldId = m.nodes[idx].id;
-        const newId = e.target.value.trim();
-        if (!newId) { e.target.value = oldId; return; }
-        m.nodes[idx].id = newId;
-        // Update links/flows referencing old id
-        m.links.forEach(l => { if (l.from === oldId) l.from = newId; if (l.to === oldId) l.to = newId; });
-        m.flows.forEach(f => { if (f.src === oldId) f.src = newId; if (f.dst === oldId) f.dst = newId; });
-        buildLinkEditor(); buildFlowEditor();
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="node-type"]').forEach(sel => {
-      sel.addEventListener('change', (e) => {
-        m.nodes[parseInt(e.target.dataset.idx)].type = e.target.value;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('.editor-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        removeNode(idx);
-      });
-    });
-  }
-
-  function removeNode(idx) {
-    const m = STATE.model;
-    const nodeId = m.nodes[idx].id;
-    m.nodes.splice(idx, 1);
-    // Cascade: remove links referencing this node
-    m.links = m.links.filter(l => l.from !== nodeId && l.to !== nodeId);
-    // Cascade: remove flows referencing this node
-    m.flows = m.flows.filter(f => f.src !== nodeId && f.dst !== nodeId);
-    buildNodeEditor(); buildLinkEditor(); buildFlowEditor();
-    scheduleAutoSolve();
-    showToast(`Removed node ${nodeId} (cascading)`, 'info');
-  }
-
-  document.getElementById('addNodeBtn').addEventListener('click', () => {
-    const m = STATE.model;
-    let newId = 'NODE_' + (m.nodes.length + 1);
-    while (m.nodes.some(n => n.id === newId)) newId += '_';
-    m.nodes.push({ id: newId, type: 'endstation' });
-    buildNodeEditor();
-    showToast(`Added node ${newId}`, 'info');
-  });
-
-  /* ── Link Editor ── */
-  function buildLinkEditor() {
-    const list = document.getElementById('linkList');
-    const m = STATE.model;
-    document.getElementById('linkBadge').textContent = m.links.length;
-    list.innerHTML = '';
-    const nodeOpts = m.nodes.map(n => `<option value="${n.id}">${n.id}</option>`).join('');
-    m.links.forEach((l, i) => {
-      const el = document.createElement('div');
-      el.className = 'editor-item';
-      el.style.flexWrap = 'wrap';
-      el.innerHTML = `
-        <select data-idx="${i}" data-field="link-from" style="font-size:0.7rem;padding:2px;border-radius:4px;border:1px solid rgba(59,130,246,0.15);max-width:80px;">${nodeOpts}</select>
-        <span style="font-size:0.7rem;color:var(--text3);">&rarr;</span>
-        <select data-idx="${i}" data-field="link-to" style="font-size:0.7rem;padding:2px;border-radius:4px;border:1px solid rgba(59,130,246,0.15);max-width:80px;">${nodeOpts}</select>
-        <input type="number" data-idx="${i}" data-field="link-rate" value="${l.rate_mbps}" title="Mbps" style="width:55px;">
-        <input type="number" data-idx="${i}" data-field="link-prop" value="${l.prop_delay_us}" step="0.1" title="Prop delay (us)" style="width:50px;">
-        <button class="editor-remove" data-idx="${i}">&times;</button>
-      `;
-      list.appendChild(el);
-      el.querySelector('[data-field="link-from"]').value = l.from;
-      el.querySelector('[data-field="link-to"]').value = l.to;
-    });
-    list.querySelectorAll('[data-field="link-from"]').forEach(sel => {
-      sel.addEventListener('change', (e) => {
-        m.links[parseInt(e.target.dataset.idx)].from = e.target.value;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="link-to"]').forEach(sel => {
-      sel.addEventListener('change', (e) => {
-        m.links[parseInt(e.target.dataset.idx)].to = e.target.value;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="link-rate"]').forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        m.links[parseInt(e.target.dataset.idx)].rate_mbps = parseFloat(e.target.value) || 1000;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="link-prop"]').forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        m.links[parseInt(e.target.dataset.idx)].prop_delay_us = parseFloat(e.target.value) || 0.5;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('.editor-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        m.links.splice(idx, 1);
-        buildLinkEditor();
-        scheduleAutoSolve();
-      });
-    });
-  }
-
-  document.getElementById('addLinkBtn').addEventListener('click', () => {
-    const m = STATE.model;
-    if (m.nodes.length < 2) { showToast('Need at least 2 nodes', 'error'); return; }
-    const from = m.nodes[0].id, to = m.nodes[1].id;
-    const newId = 'l_' + from.toLowerCase() + '_' + to.toLowerCase() + '_' + Date.now().toString(36).slice(-4);
-    m.links.push({ id: newId, from, to, rate_mbps: 1000, prop_delay_us: 0.5 });
-    buildLinkEditor();
-    showToast('Added link', 'info');
-  });
-
-  /* ── Flow Editor ── */
-  function buildFlowEditor() {
-    const list = document.getElementById('flowList');
-    const m = STATE.model;
-    document.getElementById('flowBadge').textContent = m.flows.length;
-    list.innerHTML = '';
-    const nodeOpts = m.nodes.map(n => `<option value="${n.id}">${n.id}</option>`).join('');
-    m.flows.forEach((f, i) => {
-      const color = realFlowColor(f.id);
-      const txTime = ((f.payload_bytes + 38) * 8) / (m.links[0]?.rate_mbps || 1000);
-      const pktsPerCycle = Math.round(m.cycle_time_us / (f.period_us || m.cycle_time_us));
-      const el = document.createElement('div');
-      el.className = 'flow-mini';
-      el.innerHTML = `
-        <div class="flow-mini-header">
-          <span class="flow-mini-tag" style="background:${color};">${f.id}</span>
-          <button class="editor-remove" data-idx="${i}">&times;</button>
-        </div>
-        <div class="flow-mini-grid">
-          <label>Src</label>
-          <select data-idx="${i}" data-field="flow-src">${nodeOpts}</select>
-          <label>Dst</label>
-          <select data-idx="${i}" data-field="flow-dst">${nodeOpts}</select>
-          <label>Priority</label>
-          <select data-idx="${i}" data-field="flow-pri">
-            ${[0,1,2,3,4,5,6,7].map(p => `<option value="${p}" ${f.priority===p?'selected':''}>P${p}</option>`).join('')}
-          </select>
-          <label>Payload (B)</label>
-          <input type="number" data-idx="${i}" data-field="flow-payload" value="${f.payload_bytes}" min="1">
-          <label>Period (&micro;s)</label>
-          <input type="number" data-idx="${i}" data-field="flow-period" value="${f.period_us}" min="1">
-          <label>Deadline (&micro;s)</label>
-          <input type="number" data-idx="${i}" data-field="flow-deadline" value="${f.deadline_us}" min="1">
-          <label>k_paths</label>
-          <select data-idx="${i}" data-field="flow-kpaths">
-            ${[1,2,3,4].map(k => `<option value="${k}" ${(f.k_paths||2)===k?'selected':''}>k=${k}</option>`).join('')}
-          </select>
-        </div>
-        <div class="flow-computed">tx=${txTime.toFixed(1)}&micro;s &middot; ${pktsPerCycle} pkt/cycle</div>
-      `;
-      list.appendChild(el);
-      el.querySelector('[data-field="flow-src"]').value = f.src;
-      el.querySelector('[data-field="flow-dst"]').value = f.dst;
-    });
-
-    // Event listeners
-    list.querySelectorAll('[data-field="flow-src"]').forEach(sel => {
-      sel.addEventListener('change', e => { m.flows[parseInt(e.target.dataset.idx)].src = e.target.value; scheduleAutoSolve(); });
-    });
-    list.querySelectorAll('[data-field="flow-dst"]').forEach(sel => {
-      sel.addEventListener('change', e => { m.flows[parseInt(e.target.dataset.idx)].dst = e.target.value; scheduleAutoSolve(); });
-    });
-    list.querySelectorAll('[data-field="flow-pri"]').forEach(sel => {
-      sel.addEventListener('change', e => { m.flows[parseInt(e.target.dataset.idx)].priority = parseInt(e.target.value); scheduleAutoSolve(); });
-    });
-    list.querySelectorAll('[data-field="flow-payload"]').forEach(inp => {
-      inp.addEventListener('change', e => {
-        m.flows[parseInt(e.target.dataset.idx)].payload_bytes = parseInt(e.target.value) || 64;
-        buildFlowEditor(); scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="flow-period"]').forEach(inp => {
-      inp.addEventListener('change', e => {
-        m.flows[parseInt(e.target.dataset.idx)].period_us = parseInt(e.target.value) || 10000;
-        buildFlowEditor(); scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="flow-deadline"]').forEach(inp => {
-      inp.addEventListener('change', e => {
-        m.flows[parseInt(e.target.dataset.idx)].deadline_us = parseInt(e.target.value) || 5000;
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('[data-field="flow-kpaths"]').forEach(sel => {
-      sel.addEventListener('change', e => {
-        m.flows[parseInt(e.target.dataset.idx)].k_paths = parseInt(e.target.value);
-        scheduleAutoSolve();
-      });
-    });
-    list.querySelectorAll('.editor-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        m.flows.splice(idx, 1);
-        buildFlowEditor();
-        scheduleAutoSolve();
-      });
-    });
-  }
-
-  document.getElementById('addFlowBtn').addEventListener('click', () => {
-    const m = STATE.model;
-    if (m.nodes.length < 2) { showToast('Need at least 2 nodes', 'error'); return; }
-    const src = m.nodes[0].id;
-    const dst = m.nodes[m.nodes.length - 1].id;
-    const newId = 'f_custom_' + (m.flows.length + 1);
-    m.flows.push({
-      id: newId, priority: 6, payload_bytes: 4096, period_us: 10000,
-      deadline_us: 5000, traffic_type: 'custom', src, dst, k_paths: 2
-    });
-    buildFlowEditor();
-    showToast(`Added flow ${newId}`, 'info');
-  });
-
-  /* ── Node Color Helper ── */
   function getNodeColor(nodeId) {
     const colors = { ...ROII_REAL_NODE_COLORS, ...ROII_RECONF_NODE_COLORS, ...ROII_OPTIMAL_NODE_COLORS };
     return colors[nodeId]?.stroke || '#3B82F6';
-  }
-
-  /* ═══════════════════════════════════════════════
-     SOLVER
-     ═══════════════════════════════════════════════ */
-  let solveTimer = null;
-
-  function scheduleAutoSolve() {
-    if (!STATE.autoSolve) return;
-    clearTimeout(solveTimer);
-    solveTimer = setTimeout(() => solve(), 500);
-  }
-
-  async function solve() {
-    if (!STATE.model) return;
-    // Sync JSON editor
-    document.getElementById('input').value = JSON.stringify(STATE.model, null, 2);
-
-    const mode = STATE.solverMode;
-    const t0 = performance.now();
-
-    try {
-      // Validate
-      const warnings = validateModel(STATE.model);
-      warnings.forEach(w => showToast(w, 'error', 5000));
-
-      if (mode === 'greedy' || mode === 'both') {
-        const greedyResult = solveGreedy(STATE.model);
-        const wallMs = Math.round(performance.now() - t0);
-        STATE.currentResult = greedyResult;
-        renderAll();
-        pushHistory('greedy', greedyResult, wallMs);
-        showToast(`Greedy solved in ${wallMs}ms (${greedyResult.packetRows.length} pkts)`, 'success');
-      }
-
-      if ((mode === 'ilp' || mode === 'both') && STATE.glpk) {
-        const t1 = performance.now();
-        const ilpResult = await solveILP(STATE.model, STATE.glpk, { tmlim: STATE.ilpTimeout });
-        const wallMs = Math.round(performance.now() - t1);
-        STATE.currentResult = ilpResult;
-        renderAll();
-        pushHistory('ilp', ilpResult, wallMs);
-        showToast(`ILP solved in ${wallMs}ms (${ilpResult.stats.variables} vars)`, 'success');
-      } else if (mode === 'ilp' && !STATE.glpk) {
-        showToast('GLPK not loaded, falling back to Greedy', 'error');
-        const greedyResult = solveGreedy(STATE.model);
-        STATE.currentResult = greedyResult;
-        renderAll();
-        pushHistory('greedy', greedyResult, 0);
-      }
-    } catch (e) {
-      showToast('Solve error: ' + e.message, 'error', 5000);
-      console.error(e);
-    }
-  }
-
-  function validateModel(m) {
-    const warnings = [];
-    for (const f of m.flows) {
-      if (m.cycle_time_us % f.period_us !== 0) {
-        warnings.push(`Warning: cycle_time ${m.cycle_time_us} not divisible by ${f.id} period ${f.period_us}`);
-      }
-    }
-    // Count total packets
-    let totalPkts = 0;
-    for (const f of m.flows) {
-      totalPkts += Math.round(m.cycle_time_us / f.period_us);
-    }
-    if (totalPkts > 70) {
-      warnings.push(`Warning: ${totalPkts} total packets may be slow for ILP`);
-    }
-    return warnings;
-  }
-
-  /* ── Solver Mode ── */
-  document.querySelectorAll('#solverModeGroup .radio-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('#solverModeGroup .radio-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      STATE.solverMode = pill.dataset.mode;
-    });
-  });
-
-  document.getElementById('autoSolveToggle').addEventListener('change', function() {
-    STATE.autoSolve = this.checked;
-  });
-
-  document.getElementById('solveBtn').addEventListener('click', () => solve());
-  document.getElementById('resetBtn').addEventListener('click', () => {
-    const key = document.getElementById('presetSelect').value;
-    loadPreset(key);
-  });
-
-  /* ═══════════════════════════════════════════════
-     RENDER ALL
-     ═══════════════════════════════════════════════ */
-  function renderAll() {
-    if (!STATE.currentResult || !STATE.model) return;
-    const m = STATE.model;
-    const result = STATE.currentResult;
-
-    // Choose best available position function or generate simple layout
-    const container = document.getElementById("topoContainer");
-    const W = container.clientWidth;
-    const H = 480;
-    const positions = generatePositions(m, W, H);
-
-    // Build node colors from model
-    const nodeColors = buildNodeColors(m);
-
-    // Detect switches for GCL
-    const switches = m.nodes.filter(n => n.type === 'switch').map(n => ({
-      id: n.id, label: n.id, chip: 'Switch', color: getNodeColor(n.id)
-    }));
-
-    renderMetrics(m, result);
-    renderTopology(m, result, { nodePositions: positions, nodeColors, height: H });
-    renderSwitchGCL(m, result, { switches, flowColorFn: realFlowColor });
-    renderGCL(m, result, fcopts);
-    renderDelayChart(m, result, fcopts);
-    renderUtilization(m, result, { beColor: '#e2e8f0' });
-    renderTable(result, fcopts);
-    document.getElementById("jsonOut").textContent = JSON.stringify(result.gcl, null, 2);
-  }
-
-  function generatePositions(m, W, H) {
-    // Try preset positions first
-    const key = document.getElementById('presetSelect').value;
-    const preset = PRESETS[key];
-    if (preset) {
-      const presetNodes = new Set(preset.model.nodes.map(n => n.id));
-      const modelNodes = new Set(m.nodes.map(n => n.id));
-      const allMatch = [...modelNodes].every(id => presetNodes.has(id));
-      if (allMatch && modelNodes.size === presetNodes.size) {
-        return preset.getPositions(W, H);
-      }
-    }
-    // Fallback: auto-layout
-    return autoLayout(m, W, H);
-  }
-
-  function autoLayout(m, W, H) {
-    const pos = {};
-    const switches = m.nodes.filter(n => n.type === 'switch');
-    const endpoints = m.nodes.filter(n => n.type !== 'switch');
-    const totalSw = switches.length || 1;
-    const totalEp = endpoints.length || 1;
-
-    // Endstations on top row
-    endpoints.forEach((n, i) => {
-      pos[n.id] = { x: W * ((i + 0.5) / totalEp), y: H * 0.12 };
-    });
-    // Switches in middle
-    switches.forEach((n, i) => {
-      pos[n.id] = { x: W * ((i + 0.5) / totalSw), y: H * 0.5 };
-    });
-    // If there's an ACU_IT or node named with 'ACU', put at bottom
-    m.nodes.forEach(n => {
-      if (n.id.includes('ACU')) {
-        pos[n.id] = { x: W * 0.5, y: H * 0.88 };
-      }
-    });
-    return pos;
   }
 
   function buildNodeColors(m) {
@@ -1265,7 +714,6 @@
       if (allColors[n.id]) {
         colors[n.id] = allColors[n.id];
       } else {
-        // Auto-assign color
         const c = n.type === 'switch' ? '#3B82F6' : '#059669';
         colors[n.id] = { fill: c + '22', stroke: c, label: n.id, shortLabel: n.id.slice(0, 4) };
       }
@@ -1273,114 +721,539 @@
     return colors;
   }
 
-  /* Responsive */
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(renderAll, 300);
-  });
-
   /* ═══════════════════════════════════════════════
-     SOLUTION HISTORY
+     CUSTOM D3 TOPOLOGY — Full-Viewport
      ═══════════════════════════════════════════════ */
-  function pushHistory(method, result, wallMs) {
-    const entry = {
-      timestamp: new Date().toLocaleTimeString(),
-      method,
-      objective: result.objective || 0,
-      model: deepClone(STATE.model),
-      result: deepClone(result),
-      wallMs
-    };
-    STATE.history.push(entry);
-    if (STATE.history.length > 5) STATE.history.shift();
-    renderHistory();
-  }
+  function renderCustomTopology(model, result) {
+    const svg = d3.select('#topoSvg');
+    svg.selectAll('*').remove();
 
-  function renderHistory() {
-    const bar = document.getElementById('historyBar');
-    bar.innerHTML = '<span class="history-label">History:</span>';
-    STATE.history.forEach((entry, i) => {
-      const chip = document.createElement('span');
-      chip.className = 'history-chip' + (i === STATE.history.length - 1 ? ' active' : '');
-      chip.innerHTML = `
-        <span>${entry.timestamp}</span>
-        <span class="h-method ${entry.method === 'ilp' ? 'ilp' : ''}">${entry.method.toUpperCase()}</span>
-        <span>${entry.objective}&micro;s</span>
-      `;
-      chip.addEventListener('click', () => loadHistoryEntry(i));
-      bar.appendChild(chip);
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    svg.attr('width', W).attr('height', H);
+
+    // Defs
+    const defs = svg.append('defs');
+    const glow = defs.append('filter').attr('id', 'glow');
+    glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
+    glow.append('feMerge').selectAll('feMergeNode')
+      .data(['blur', 'SourceGraphic']).enter()
+      .append('feMergeNode').attr('in', d => d);
+
+    defs.append('marker').attr('id', 'arr')
+      .attr('viewBox', '0 0 10 7').attr('refX', 35).attr('refY', 3.5)
+      .attr('markerWidth', 8).attr('markerHeight', 6).attr('orient', 'auto')
+      .append('polygon').attr('points', '0 0, 10 3.5, 0 7').attr('fill', '#94a3b8');
+
+    // Zoom layer
+    const zoomLayer = svg.append('g').attr('class', 'zoom-layer');
+    STATE.zoomLayer = zoomLayer;
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.3, 5])
+      .on('zoom', (event) => {
+        STATE.zoomTransform = event.transform;
+        zoomLayer.attr('transform', event.transform);
+      });
+    svg.call(zoom);
+    STATE.topoZoom = zoom;
+
+    // Get positions from preset or auto-layout
+    const nodeColors = buildNodeColors(model);
+    const positions = getPositions(model, W, H);
+    STATE.nodePositions = positions;
+
+    // Build unique link pairs
+    const linkPairs = new Map();
+    model.links.forEach(l => {
+      const key = [l.from, l.to].sort().join('-');
+      if (!linkPairs.has(key)) linkPairs.set(key, []);
+      linkPairs.get(key).push(l);
     });
-  }
 
-  function loadHistoryEntry(idx) {
-    const entry = STATE.history[idx];
-    STATE.model = deepClone(entry.model);
-    STATE.currentResult = deepClone(entry.result);
-    syncUIFromModel();
-    renderAll();
-    renderHistory();
-    // Update active chip
-    document.querySelectorAll('.history-chip').forEach((c, i) => {
-      c.classList.toggle('active', i === idx);
+    const uniqueLinks = [];
+    linkPairs.forEach((links, key) => {
+      uniqueLinks.push({
+        source: links[0].from, target: links[0].to,
+        bidir: links.length > 1, ids: links.map(l => l.id), key
+      });
     });
-    showToast(`Restored: ${entry.method.toUpperCase()} @ ${entry.timestamp}`, 'info');
-  }
 
-  /* ═══════════════════════════════════════════════
-     EXPORT / IMPORT
-     ═══════════════════════════════════════════════ */
-  document.getElementById('exportBtn').addEventListener('click', () => {
-    if (!STATE.model) return;
-    const blob = new Blob([JSON.stringify(STATE.model, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'tsn-model-' + Date.now() + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Model exported', 'success');
-  });
+    // Compute utilization per link pair
+    const linkUtils = {};
+    if (result) {
+      model.links.forEach(l => {
+        const entries = result.gcl.links[l.id]?.entries || [];
+        let flowTime = 0, guardTime = 0;
+        entries.forEach(e => {
+          if (e.note.includes('guard')) guardTime += e.duration_us;
+          else if (!e.note.includes('best-effort')) flowTime += e.duration_us;
+        });
+        const util = (flowTime + guardTime) / model.cycle_time_us * 100;
+        const pairKey = [l.from, l.to].sort().join('-');
+        linkUtils[pairKey] = Math.max(linkUtils[pairKey] || 0, util);
+      });
+    }
 
-  document.getElementById('copyBtn').addEventListener('click', () => {
-    if (!STATE.model) return;
-    navigator.clipboard.writeText(JSON.stringify(STATE.model, null, 2)).then(() => {
-      showToast('Copied to clipboard', 'success');
-    });
-  });
+    // Draw links
+    const linkG = zoomLayer.append('g').attr('class', 'links-layer');
+    const linkSel = linkG.selectAll('g.link-g')
+      .data(uniqueLinks).enter().append('g').attr('class', 'link-g');
 
-  document.getElementById('importFile').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const imported = JSON.parse(evt.target.result);
-        if (!imported.nodes || !imported.links || !imported.flows) {
-          showToast('Invalid model: missing nodes/links/flows', 'error');
-          return;
+    // Visible link line
+    linkSel.append('line')
+      .attr('class', 'topo-link-line')
+      .attr('x1', d => positions[d.source]?.x || 0)
+      .attr('y1', d => positions[d.source]?.y || 0)
+      .attr('x2', d => positions[d.target]?.x || 0)
+      .attr('y2', d => positions[d.target]?.y || 0)
+      .attr('marker-end', 'url(#arr)')
+      .each(function(d) {
+        const util = linkUtils[d.key] || 0;
+        if (result && util > 0) {
+          const t = Math.min(util / 60, 1);
+          const color = d3.interpolateRgb('#059669', '#dc2626')(t);
+          const width = 2 + t * 8;
+          d3.select(this)
+            .attr('stroke', color)
+            .attr('stroke-width', width);
+          if (util > 50) {
+            d3.select(this)
+              .attr('stroke-dasharray', '8,4')
+              .classed('link-animated-dash', true);
+          }
         }
-        STATE.model = imported;
-        syncUIFromModel();
-        scheduleAutoSolve();
-        showToast('Model imported successfully', 'success');
-      } catch (err) {
-        showToast('Import error: ' + err.message, 'error');
+      });
+
+    // Invisible fat hit area for clicks
+    linkSel.append('line')
+      .attr('class', 'topo-link-hit')
+      .attr('x1', d => positions[d.source]?.x || 0)
+      .attr('y1', d => positions[d.source]?.y || 0)
+      .attr('x2', d => positions[d.target]?.x || 0)
+      .attr('y2', d => positions[d.target]?.y || 0)
+      .on('click', (event, d) => showLinkPopover(d, event));
+
+    STATE.linkLines = linkSel;
+
+    // Draw flow particles after solve
+    if (result) {
+      const particleG = zoomLayer.append('g').attr('class', 'particles-layer');
+      spawnFlowParticles(model, result, particleG, positions);
+    }
+
+    // Draw nodes
+    const nodeG = zoomLayer.append('g').attr('class', 'nodes-layer');
+    const nodeSel = nodeG.selectAll('g.topo-node-g')
+      .data(model.nodes.map(n => ({
+        ...n,
+        x: positions[n.id]?.x || W/2,
+        y: positions[n.id]?.y || H/2,
+        color: nodeColors[n.id]?.fill || '#dbeafe',
+        stroke: nodeColors[n.id]?.stroke || '#3B82F6',
+        label: nodeColors[n.id]?.label || n.id,
+        shortLabel: nodeColors[n.id]?.shortLabel || (n.type === 'switch' ? 'SW' : 'ES')
+      })))
+      .enter().append('g')
+      .attr('class', 'topo-node-g')
+      .attr('transform', d => `translate(${d.x},${d.y})`);
+
+    // Outer ring
+    nodeSel.append('circle')
+      .attr('r', 30).attr('fill', 'none')
+      .attr('stroke', d => d.stroke).attr('stroke-width', 1).attr('opacity', 0.12);
+
+    // Main circle
+    nodeSel.append('circle')
+      .attr('class', 'topo-node-circle')
+      .attr('r', 22).attr('fill', d => d.color)
+      .attr('stroke', d => d.stroke).attr('stroke-width', 2);
+
+    // Labels
+    nodeSel.append('text').attr('class', 'topo-node-label')
+      .attr('dy', -1).text(d => d.label);
+    nodeSel.append('text').attr('class', 'topo-node-type')
+      .attr('dy', 12).text(d => d.shortLabel);
+
+    // Show util badge on switch nodes after solve
+    if (result) {
+      nodeSel.filter(d => d.type === 'switch').each(function(d) {
+        // Compute max util on egress links
+        let maxUtil = 0;
+        model.links.filter(l => l.from === d.id).forEach(l => {
+          const entries = result.gcl.links[l.id]?.entries || [];
+          let active = 0;
+          entries.forEach(e => { if (!e.note.includes('best-effort')) active += e.duration_us; });
+          maxUtil = Math.max(maxUtil, active / model.cycle_time_us * 100);
+        });
+        if (maxUtil > 0) {
+          d3.select(this).append('text')
+            .attr('dy', 38).attr('text-anchor', 'middle')
+            .attr('font-size', '8px').attr('font-weight', '700')
+            .attr('fill', maxUtil > 50 ? '#dc2626' : maxUtil > 30 ? '#d97706' : '#059669')
+            .text(maxUtil.toFixed(1) + '%');
+        }
+      });
+    }
+
+    // Node interactions
+    nodeSel
+      .on('mouseenter', (event, d) => {
+        SelectionBus.emit('node:hover', { nodeId: d.id, source: 'd3' });
+      })
+      .on('mouseleave', (event, d) => {
+        SelectionBus.emit('node:unhover', { nodeId: d.id, source: 'd3' });
+      })
+      .call(d3.drag()
+        .on('start', function(event, d) {
+          d3.select(this).raise();
+          if (navigator.vibrate) navigator.vibrate(10);
+        })
+        .on('drag', function(event, d) {
+          d.x = event.x; d.y = event.y;
+          d3.select(this).attr('transform', `translate(${d.x},${d.y})`);
+          positions[d.id] = { x: d.x, y: d.y };
+          // Update links
+          linkSel.select('.topo-link-line')
+            .attr('x1', dd => positions[dd.source]?.x || 0)
+            .attr('y1', dd => positions[dd.source]?.y || 0)
+            .attr('x2', dd => positions[dd.target]?.x || 0)
+            .attr('y2', dd => positions[dd.target]?.y || 0);
+          linkSel.select('.topo-link-hit')
+            .attr('x1', dd => positions[dd.source]?.x || 0)
+            .attr('y1', dd => positions[dd.source]?.y || 0)
+            .attr('x2', dd => positions[dd.target]?.x || 0)
+            .attr('y2', dd => positions[dd.target]?.y || 0);
+        })
+        .on('end', (event, d) => {
+          scheduleAutoSolve();
+        })
+      );
+
+    STATE.nodeGroups = nodeSel;
+
+    // Setup touch gestures
+    setupGestures(svg, zoomLayer, model, positions, nodeColors);
+
+    // Solve wave animation
+    if (result) {
+      const cx = W / 2, cy = H / 2;
+      const wave = svg.append('circle')
+        .attr('class', 'solve-wave')
+        .attr('cx', cx).attr('cy', cy).attr('r', 10);
+      wave.transition().duration(600).ease(d3.easeQuadOut)
+        .attr('r', Math.max(W, H) * 0.4)
+        .attr('opacity', 0)
+        .remove();
+    }
+  }
+
+  function getPositions(m, W, H) {
+    const key = STATE.currentPreset;
+    const preset = PRESETS[key];
+    if (preset) {
+      const presetNodes = new Set(preset.model.nodes.map(n => n.id));
+      const modelNodes = new Set(m.nodes.map(n => n.id));
+      if ([...modelNodes].every(id => presetNodes.has(id)) && modelNodes.size === presetNodes.size) {
+        return preset.getPositions(W, H);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  });
+    }
+    return autoLayout(m, W, H);
+  }
+
+  function autoLayout(m, W, H) {
+    const pos = {};
+    const switches = m.nodes.filter(n => n.type === 'switch');
+    const endpoints = m.nodes.filter(n => n.type !== 'switch');
+    const totalSw = switches.length || 1;
+    const totalEp = endpoints.length || 1;
+    endpoints.forEach((n, i) => { pos[n.id] = { x: W * ((i + 0.5) / totalEp), y: H * 0.15 }; });
+    switches.forEach((n, i) => { pos[n.id] = { x: W * ((i + 0.5) / totalSw), y: H * 0.5 }; });
+    m.nodes.forEach(n => { if (n.id.includes('ACU')) pos[n.id] = { x: W * 0.5, y: H * 0.85 }; });
+    return pos;
+  }
+
+  /* ── Flow Particles ── */
+  function spawnFlowParticles(model, result, particleG, positions) {
+    const seenFlows = new Set();
+    result.packetRows.forEach(p => {
+      if (seenFlows.has(p.flow_id)) return;
+      seenFlows.add(p.flow_id);
+      const pathNodes = [];
+      p.hops.forEach(h => {
+        const link = model.links.find(l => l.id === h.link_id);
+        if (link) {
+          if (pathNodes.length === 0) pathNodes.push(link.from);
+          pathNodes.push(link.to);
+        }
+      });
+      if (pathNodes.length < 2) return;
+      const color = realFlowColor(p.flow_id);
+      const points = pathNodes.map(id => positions[id]).filter(Boolean);
+      if (points.length < 2) return;
+
+      function animateOne() {
+        const particle = particleG.append('circle')
+          .attr('class', 'flow-particle')
+          .attr('r', 4).attr('fill', color).attr('opacity', 0.85)
+          .attr('filter', 'url(#glow)')
+          .attr('cx', points[0].x).attr('cy', points[0].y);
+        let chain = particle;
+        for (let i = 1; i < points.length; i++) {
+          chain = chain.transition().duration(500).ease(d3.easeLinear)
+            .attr('cx', points[i].x).attr('cy', points[i].y);
+        }
+        chain.transition().duration(200).attr('opacity', 0)
+          .remove()
+          .transition().delay(800 + Math.random() * 1500)
+          .on('end', animateOne);
+      }
+      setTimeout(animateOne, Math.random() * 2000);
+    });
+  }
 
   /* ═══════════════════════════════════════════════
-     PRESET SELECTOR
+     TOUCH GESTURE SYSTEM
      ═══════════════════════════════════════════════ */
-  document.getElementById('presetSelect').addEventListener('change', function() {
-    loadPreset(this.value);
-  });
+  let longPressTimer = null;
+  let lastTapTime = 0;
+  let lastTapTarget = null;
+  let rubberBandLine = null;
+  let rubberBandSource = null;
+
+  function setupGestures(svg, zoomLayer, model, positions, nodeColors) {
+    const svgNode = svg.node();
+
+    // Long-press on empty space → add node
+    svg.on('pointerdown.gesture', function(event) {
+      if (event.target !== svgNode && !event.target.classList.contains('zoom-layer')) return;
+      clearTimeout(longPressTimer);
+      const pt = getTransformedPoint(event, svg);
+      longPressTimer = setTimeout(() => {
+        addNodeAt(pt.x, pt.y);
+      }, 400);
+    });
+
+    svg.on('pointerup.gesture pointermove.gesture pointercancel.gesture', () => {
+      clearTimeout(longPressTimer);
+    });
+
+    // Double-tap on nodes handled via dblclick
+    STATE.nodeGroups.on('dblclick', function(event, d) {
+      event.stopPropagation();
+      showNodePopover(d.id, { x: event.clientX, y: event.clientY });
+    });
+
+    // Long-press on node → start rubber-band link creation
+    STATE.nodeGroups.on('pointerdown.rubberband', function(event, d) {
+      event.stopPropagation();
+      const nodeId = d.id;
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        // Start rubber-band
+        rubberBandSource = nodeId;
+        const pos = positions[nodeId];
+        rubberBandLine = zoomLayer.append('line')
+          .attr('class', 'rubber-band-line')
+          .attr('x1', pos.x).attr('y1', pos.y)
+          .attr('x2', pos.x).attr('y2', pos.y);
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 350);
+    });
+
+    svg.on('pointermove.rubberband', function(event) {
+      if (!rubberBandLine) return;
+      const pt = getTransformedPoint(event, svg);
+      rubberBandLine.attr('x2', pt.x).attr('y2', pt.y);
+    });
+
+    svg.on('pointerup.rubberband', function(event) {
+      clearTimeout(longPressTimer);
+      if (!rubberBandLine || !rubberBandSource) return;
+      const pt = getTransformedPoint(event, svg);
+      // Find closest node to drop point
+      let closestNode = null, closestDist = 50;
+      model.nodes.forEach(n => {
+        const p = positions[n.id];
+        if (!p) return;
+        const dist = Math.hypot(p.x - pt.x, p.y - pt.y);
+        if (dist < closestDist && n.id !== rubberBandSource) {
+          closestDist = dist; closestNode = n.id;
+        }
+      });
+      if (closestNode) {
+        addLinkBetween(rubberBandSource, closestNode);
+      }
+      rubberBandLine.remove();
+      rubberBandLine = null;
+      rubberBandSource = null;
+    });
+  }
+
+  function getTransformedPoint(event, svg) {
+    const rect = svg.node().getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    // Invert zoom transform
+    const t = STATE.zoomTransform;
+    return { x: (x - t.x) / t.k, y: (y - t.y) / t.k };
+  }
+
+  function addNodeAt(x, y) {
+    const m = STATE.model;
+    let newId = 'NODE_' + (m.nodes.length + 1);
+    while (m.nodes.some(n => n.id === newId)) newId += '_';
+    m.nodes.push({ id: newId, type: 'endstation' });
+    STATE.nodePositions[newId] = { x, y };
+    renderCustomTopology(m, STATE.currentResult);
+    showToast(`Added node ${newId}`, 'info');
+  }
+
+  function addLinkBetween(fromId, toId) {
+    const m = STATE.model;
+    const newId = 'l_' + fromId.toLowerCase() + '_' + toId.toLowerCase() + '_' + Date.now().toString(36).slice(-4);
+    m.links.push({ id: newId, from: fromId, to: toId, rate_mbps: 1000, prop_delay_us: 0.5 });
+    scheduleAutoSolve();
+    showToast(`Added link ${fromId} -> ${toId}`, 'info');
+  }
 
   /* ═══════════════════════════════════════════════
-     3D VISUALIZATION
+     POPOVERS
+     ═══════════════════════════════════════════════ */
+  function closePopovers() {
+    document.getElementById('popoverContainer').innerHTML = '';
+  }
+
+  function showNodePopover(nodeId, screenPos) {
+    closePopovers();
+    const m = STATE.model;
+    const nodeIdx = m.nodes.findIndex(n => n.id === nodeId);
+    if (nodeIdx < 0) return;
+    const node = m.nodes[nodeIdx];
+    const linkCount = m.links.filter(l => l.from === nodeId || l.to === nodeId).length;
+
+    const div = document.createElement('div');
+    div.className = 'popover';
+    div.style.pointerEvents = 'auto';
+    div.style.left = Math.min(screenPos.x, window.innerWidth - 250) + 'px';
+    div.style.top = Math.min(screenPos.y, window.innerHeight - 260) + 'px';
+    div.innerHTML = `
+      <div class="popover-title">Node: ${nodeId}</div>
+      <div class="popover-row">
+        <label>ID</label>
+        <input type="text" id="popNodeId" value="${node.id}">
+      </div>
+      <div class="popover-row">
+        <label>Type</label>
+        <select id="popNodeType">
+          <option value="switch" ${node.type==='switch'?'selected':''}>switch</option>
+          <option value="endstation" ${node.type==='endstation'?'selected':''}>endstation</option>
+        </select>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:4px;">${linkCount} connected links</div>
+      <div class="popover-actions">
+        <button class="popover-btn primary" id="popNodeSave">Save</button>
+        <button class="popover-btn danger" id="popNodeDelete">Delete</button>
+        <button class="popover-btn" id="popNodeClose">Close</button>
+      </div>
+    `;
+    document.getElementById('popoverContainer').appendChild(div);
+
+    div.querySelector('#popNodeSave').onclick = () => {
+      const newId = div.querySelector('#popNodeId').value.trim();
+      const newType = div.querySelector('#popNodeType').value;
+      if (newId && newId !== node.id) {
+        const oldId = node.id;
+        node.id = newId;
+        m.links.forEach(l => { if (l.from === oldId) l.from = newId; if (l.to === oldId) l.to = newId; });
+        m.flows.forEach(f => { if (f.src === oldId) f.src = newId; if (f.dst === oldId) f.dst = newId; });
+      }
+      node.type = newType;
+      closePopovers();
+      scheduleAutoSolve();
+    };
+    div.querySelector('#popNodeDelete').onclick = () => {
+      m.nodes.splice(nodeIdx, 1);
+      m.links = m.links.filter(l => l.from !== nodeId && l.to !== nodeId);
+      m.flows = m.flows.filter(f => f.src !== nodeId && f.dst !== nodeId);
+      closePopovers();
+      scheduleAutoSolve();
+      showToast(`Deleted node ${nodeId}`, 'info');
+    };
+    div.querySelector('#popNodeClose').onclick = closePopovers;
+
+    // Click-away dismiss
+    setTimeout(() => {
+      document.addEventListener('pointerdown', function dismiss(e) {
+        if (!div.contains(e.target)) { closePopovers(); document.removeEventListener('pointerdown', dismiss); }
+      });
+    }, 50);
+  }
+
+  function showLinkPopover(linkData, event) {
+    closePopovers();
+    const m = STATE.model;
+    const result = STATE.currentResult;
+    const linkIds = linkData.ids;
+
+    let utilPercent = 0, entries = [];
+    if (result) {
+      linkIds.forEach(lid => {
+        const le = result.gcl.links[lid]?.entries || [];
+        let flowTime = 0, guardTime = 0;
+        le.forEach(e => {
+          if (e.note.includes('guard')) guardTime += e.duration_us;
+          else if (!e.note.includes('best-effort')) flowTime += e.duration_us;
+        });
+        const u = (flowTime + guardTime) / m.cycle_time_us * 100;
+        if (u > utilPercent) { utilPercent = u; entries = le; }
+      });
+    }
+
+    const div = document.createElement('div');
+    div.className = 'popover';
+    div.style.pointerEvents = 'auto';
+    div.style.left = Math.min(event.clientX, window.innerWidth - 320) + 'px';
+    div.style.top = Math.min(event.clientY - 30, window.innerHeight - 300) + 'px';
+
+    // Build mini gantt
+    let ganttHtml = '';
+    if (entries.length) {
+      ganttHtml = '<div class="link-popover-gantt">';
+      entries.forEach(e => {
+        const isBE = e.note.includes('best-effort');
+        const isGuard = e.note.includes('guard');
+        const sx = (e.start_us / m.cycle_time_us) * 100;
+        const ew = Math.max((e.duration_us / m.cycle_time_us) * 100, 0.5);
+        const fill = isGuard ? '#f9a825' : isBE ? 'rgba(0,0,0,0.04)' : realFlowColor(e.note);
+        ganttHtml += `<div style="position:absolute;left:${sx}%;width:${ew}%;height:100%;background:${fill};opacity:${isBE?0.2:0.85};"></div>`;
+      });
+      ganttHtml += '</div>';
+    }
+
+    const flowEntries = entries.filter(e => !e.note.includes('best-effort') && !e.note.includes('guard'));
+
+    div.innerHTML = `
+      <div class="popover-title">${linkData.source} &rarr; ${linkData.target}</div>
+      <div class="link-popover-util">${utilPercent.toFixed(1)}% utilization</div>
+      ${ganttHtml}
+      <div class="link-popover-entries">${flowEntries.length} flow entries, ${linkIds.length > 1 ? 'bidirectional' : 'unidirectional'}</div>
+      <div class="popover-actions">
+        <button class="popover-btn" id="popLinkClose">Close</button>
+      </div>
+    `;
+    document.getElementById('popoverContainer').appendChild(div);
+    div.querySelector('#popLinkClose').onclick = closePopovers;
+
+    setTimeout(() => {
+      document.addEventListener('pointerdown', function dismiss(e) {
+        if (!div.contains(e.target)) { closePopovers(); document.removeEventListener('pointerdown', dismiss); }
+      });
+    }, 50);
+  }
+
+  /* ═══════════════════════════════════════════════
+     THREE.JS PIP WINDOW
      ═══════════════════════════════════════════════ */
   const TMPL = {
     lidar_g32:    { w: 1, h: 1, d: 1, color: 0x10B981 },
@@ -1404,43 +1277,25 @@
     const t = TMPL[type] || TMPL.lidar_g32;
     const group = new THREE.Group();
     const { w, h, d } = t;
-
     let geometry;
     if (type === 'lidar_pandar') geometry = new THREE.CylinderGeometry(w * 0.6, w * 0.6, h * 0.8, 16);
     else if (type === 'replicator') geometry = new THREE.OctahedronGeometry(w * 0.7);
     else geometry = new THREE.BoxGeometry(w, h, d);
-
-    const mat = new THREE.MeshPhongMaterial({
-      color: t.color, emissive: t.color, emissiveIntensity: 0.5,
-      specular: 0x888888, shininess: 30
-    });
+    const mat = new THREE.MeshPhongMaterial({ color: t.color, emissive: t.color, emissiveIntensity: 0.5, specular: 0x888888, shininess: 30 });
     const mesh = new THREE.Mesh(geometry, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
-
-    group.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 })
-    ));
-
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 })));
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 512; canvas.height = 128;
-    ctx.fillStyle = 'rgba(26, 26, 46, 0.9)';
-    ctx.fillRect(0, 0, 512, 128);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 48px Arial';
-    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.9)'; ctx.fillRect(0, 0, 512, 128);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
     ctx.fillText(label, 256, 75);
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) })
-    );
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
     const ls = Math.max(w, d) * 1.2;
-    sprite.scale.set(ls, ls * 0.25, 1);
-    sprite.position.y = h + 1;
+    sprite.scale.set(ls, ls * 0.25, 1); sprite.position.y = h + 1;
     group.add(sprite);
-
     group.position.copy(position);
     if (tilt) {
       if (tilt.x !== undefined) group.rotation.x = tilt.x;
@@ -1451,119 +1306,84 @@
   }
 
   function init3D() {
-    const container = document.getElementById('canvas3d');
+    const container = document.getElementById('pipCanvas');
     if (!container || typeof THREE === 'undefined') return;
-
     STATE.scene3d = new THREE.Scene();
     STATE.scene3d.background = new THREE.Color(0xf0f0f0);
     STATE.scene3d.fog = new THREE.Fog(0xf0f0f0, 80, 250);
-
     STATE.camera3d = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
     STATE.camera3d.position.set(50, 35, 70);
-
     STATE.renderer3d = new THREE.WebGLRenderer({ antialias: true });
     STATE.renderer3d.shadowMap.enabled = true;
     STATE.renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
 
     function updateSize() {
       const w = container.clientWidth, h = container.clientHeight;
+      if (w === 0 || h === 0) return;
       STATE.camera3d.aspect = w / h;
       STATE.camera3d.updateProjectionMatrix();
       STATE.renderer3d.setSize(w, h);
     }
     updateSize();
     container.appendChild(STATE.renderer3d.domElement);
-    window.addEventListener('resize', updateSize);
+    new ResizeObserver(updateSize).observe(container);
 
     STATE.controls3d = new THREE.OrbitControls(STATE.camera3d, STATE.renderer3d.domElement);
-    STATE.controls3d.enableDamping = true;
-    STATE.controls3d.dampingFactor = 0.05;
-    STATE.controls3d.autoRotate = true;
-    STATE.controls3d.autoRotateSpeed = 1.2;
-    STATE.controls3d.minDistance = 20;
-    STATE.controls3d.maxDistance = 120;
+    STATE.controls3d.enableDamping = true; STATE.controls3d.dampingFactor = 0.05;
+    STATE.controls3d.autoRotate = true; STATE.controls3d.autoRotateSpeed = 1.2;
+    STATE.controls3d.minDistance = 20; STATE.controls3d.maxDistance = 120;
     STATE.controls3d.target.set(0, 0, 0);
 
     STATE.scene3d.add(new THREE.AmbientLight(0xffffff, 1.2));
     const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    mainLight.position.set(30, 50, 30);
-    mainLight.castShadow = true;
+    mainLight.position.set(30, 50, 30); mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(2048, 2048);
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 200;
-    mainLight.shadow.camera.left = -60;
-    mainLight.shadow.camera.right = 60;
-    mainLight.shadow.camera.top = 60;
-    mainLight.shadow.camera.bottom = -60;
+    mainLight.shadow.camera.near = 0.5; mainLight.shadow.camera.far = 200;
+    mainLight.shadow.camera.left = -60; mainLight.shadow.camera.right = 60;
+    mainLight.shadow.camera.top = 60; mainLight.shadow.camera.bottom = -60;
     STATE.scene3d.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    fillLight.position.set(0, 50, 0);
-    STATE.scene3d.add(fillLight);
-    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100);
-    pl1.position.set(20, 15, 20);
-    STATE.scene3d.add(pl1);
-    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80);
-    pl2.position.set(-20, 15, -20);
-    STATE.scene3d.add(pl2);
+    STATE.scene3d.add(new THREE.DirectionalLight(0xffffff, 1.0).translateY(50));
+    const pl1 = new THREE.PointLight(0x3B82F6, 2, 100); pl1.position.set(20, 15, 20); STATE.scene3d.add(pl1);
+    const pl2 = new THREE.PointLight(0x06B6D4, 1.5, 80); pl2.position.set(-20, 15, -20); STATE.scene3d.add(pl2);
 
     const grid = new THREE.GridHelper(100, 50, 0x3B82F6, 0xCCCCCC);
-    grid.material.opacity = 0.4;
-    grid.material.transparent = true;
-    grid.position.y = -0.5;
+    grid.material.opacity = 0.4; grid.material.transparent = true; grid.position.y = -0.5;
     STATE.scene3d.add(grid);
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
-      new THREE.ShadowMaterial({ opacity: 0.3 })
-    );
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = -0.5;
-    plane.receiveShadow = true;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.ShadowMaterial({ opacity: 0.3 }));
+    plane.rotation.x = -Math.PI / 2; plane.position.y = -0.5; plane.receiveShadow = true;
     STATE.scene3d.add(plane);
 
     const loader = new THREE.GLTFLoader();
-    loader.load('./roii.glb',
-      (gltf) => {
-        STATE.glbModel = gltf.scene;
-        const box = new THREE.Box3().setFromObject(STATE.glbModel);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const targetSize = 40;
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = targetSize / maxDim;
-        STATE.glbModel.scale.set(scale, scale, scale);
-        const scaledHeight = size.y * scale;
-        STATE.glbModel.position.x = -center.x;
-        STATE.glbModel.position.y = -center.y + (scaledHeight * 0.5) + 0.5;
-        STATE.glbModel.position.z = -center.z;
-        STATE.glbModel.traverse((child) => {
-          if (!child.isMesh) return;
-          const mats = Array.isArray(child.material) ? child.material : [child.material];
-          mats.forEach(mat => {
-            mat.transparent = true;
-            mat.opacity = 0.3;
-            mat.side = THREE.DoubleSide;
-            mat.depthWrite = true;
-            if (mat.color) mat.color.multiplyScalar(1.5);
-            mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.3) : new THREE.Color(0xffffff);
-            mat.emissiveIntensity = 0.4;
-          });
-          child.castShadow = true;
-          child.receiveShadow = true;
+    loader.load('./roii.glb', (gltf) => {
+      STATE.glbModel = gltf.scene;
+      const box = new THREE.Box3().setFromObject(STATE.glbModel);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const scale = 40 / Math.max(size.x, size.y, size.z);
+      STATE.glbModel.scale.set(scale, scale, scale);
+      STATE.glbModel.position.set(-center.x, -center.y + size.y * scale * 0.5 + 0.5, -center.z);
+      STATE.glbModel.traverse(child => {
+        if (!child.isMesh) return;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach(mat => {
+          mat.transparent = true; mat.opacity = 0.3; mat.side = THREE.DoubleSide; mat.depthWrite = true;
+          if (mat.color) mat.color.multiplyScalar(1.5);
+          mat.emissive = mat.color ? mat.color.clone().multiplyScalar(0.3) : new THREE.Color(0xffffff);
+          mat.emissiveIntensity = 0.4;
         });
-        STATE.scene3d.add(STATE.glbModel);
-      },
-      undefined,
-      (err) => { console.warn('GLB load failed:', err); }
-    );
+        child.castShadow = true; child.receiveShadow = true;
+      });
+      STATE.scene3d.add(STATE.glbModel);
+    }, undefined, (err) => console.warn('GLB load failed:', err));
 
     STATE.dynamicGroup = new THREE.Group();
     STATE.scene3d.add(STATE.dynamicGroup);
-
-    rebuild3D(PRESETS[document.getElementById('presetSelect').value]);
+    rebuild3D(PRESETS[STATE.currentPreset]);
 
     STATE.clock3d = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
+      if (STATE.pipState === 'minimized') return;
       STATE.controls3d.update();
       const pulse = Math.sin(STATE.clock3d.elapsedTime * 2.5) * 0.06;
       for (const m of Object.values(STATE.nodeMeshes3d)) {
@@ -1576,37 +1396,26 @@
 
   function rebuild3D(mode) {
     if (!STATE.dynamicGroup) return;
-
     while (STATE.dynamicGroup.children.length > 0) {
       const child = STATE.dynamicGroup.children[0];
       STATE.dynamicGroup.remove(child);
-      child.traverse((c) => {
+      child.traverse(c => {
         if (c.geometry) c.geometry.dispose();
-        if (c.material) {
-          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
-          else c.material.dispose();
-        }
-        if (c.material && c.material.map) c.material.map.dispose();
+        if (c.material) { if (Array.isArray(c.material)) c.material.forEach(m => m.dispose()); else c.material.dispose(); }
       });
     }
-    STATE.nodeMeshes3d = {};
-    STATE.linkMeshes3d = {};
-
+    STATE.nodeMeshes3d = {}; STATE.linkMeshes3d = {};
     const pos3d = mode.pos3d || {};
     const labels3d = mode.labels3d || {};
     const tilts3d = mode.tilts3d || {};
     const model = mode.model;
-
     const nodePos3D = {};
     for (const [id, pos] of Object.entries(pos3d)) {
       const v = new THREE.Vector3(pos.x, pos.y, pos.z);
-      const tilt = tilts3d[id] || null;
-      const dev = createDevice(id, v, labels3d[id] || id, tilt);
+      const dev = createDevice(id, v, labels3d[id] || id, tilts3d[id] || null);
       STATE.dynamicGroup.add(dev.group);
-      nodePos3D[id] = v;
-      STATE.nodeMeshes3d[id] = dev.mesh;
+      nodePos3D[id] = v; STATE.nodeMeshes3d[id] = dev.mesh;
     }
-
     const drawnLinks = new Set();
     for (const link of model.links) {
       const key = [link.from, link.to].sort().join('|');
@@ -1614,61 +1423,497 @@
       drawnLinks.add(key);
       const p1 = nodePos3D[link.from], p2 = nodePos3D[link.to];
       if (!p1 || !p2) continue;
-
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const lineMat = new THREE.LineBasicMaterial({
-        color: 0x3B82F6, transparent: true, opacity: 0.3
-      });
-      STATE.dynamicGroup.add(new THREE.Line(lineGeo, lineMat));
-
+      STATE.dynamicGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([p1, p2]),
+        new THREE.LineBasicMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.3 })
+      ));
       const curve = new THREE.CatmullRomCurve3([p1.clone(), p2.clone()]);
-      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
-      const tubeMat = new THREE.MeshStandardMaterial({
-        color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9,
-        transparent: true, opacity: 0.95
-      });
-      const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      const tubeMesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 20, 0.08, 8, false),
+        new THREE.MeshStandardMaterial({ color: 0x3B82F6, emissive: 0x3B82F6, emissiveIntensity: 0.9, transparent: true, opacity: 0.95 })
+      );
       STATE.dynamicGroup.add(tubeMesh);
-
-      const glowGeo = new THREE.TubeGeometry(curve, 20, 0.2, 8, false);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x3B82F6, transparent: true, opacity: 0.35
-      });
-      const glowMesh = new THREE.Mesh(glowGeo, glowMat);
-      STATE.dynamicGroup.add(glowMesh);
-
-      const linkIds = model.links.filter(l =>
-        [l.from, l.to].sort().join('|') === key
-      ).map(l => l.id);
-      STATE.linkMeshes3d[key] = { tube: tubeMesh, glow: glowMesh, linkIds };
+      STATE.dynamicGroup.add(new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 20, 0.2, 8, false),
+        new THREE.MeshBasicMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.35 })
+      ));
     }
   }
+
+  /* ── PiP Drag, Resize, Expand/Minimize ── */
+  function initPiP() {
+    const pip = document.getElementById('pip');
+    const titlebar = document.getElementById('pipTitlebar');
+    const resizeHandle = document.getElementById('pipResize');
+
+    // Drag
+    let isDragging = false, dragOffX = 0, dragOffY = 0;
+    titlebar.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      dragOffX = e.clientX - pip.offsetLeft;
+      dragOffY = e.clientY - pip.offsetTop;
+      e.preventDefault();
+    });
+    document.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      pip.style.left = (e.clientX - dragOffX) + 'px';
+      pip.style.top = (e.clientY - dragOffY) + 'px';
+      pip.style.right = 'auto'; pip.style.bottom = 'auto';
+    });
+    document.addEventListener('pointerup', () => { isDragging = false; });
+
+    // Resize
+    let isResizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
+    resizeHandle.addEventListener('pointerdown', (e) => {
+      if (STATE.pipState !== 'normal') return;
+      isResizing = true;
+      startW = pip.offsetWidth; startH = pip.offsetHeight;
+      startX = e.clientX; startY = e.clientY;
+      e.preventDefault(); e.stopPropagation();
+    });
+    document.addEventListener('pointermove', (e) => {
+      if (!isResizing) return;
+      pip.style.width = Math.max(200, startW + (e.clientX - startX)) + 'px';
+      pip.style.height = Math.max(150, startH + (e.clientY - startY)) + 'px';
+    });
+    document.addEventListener('pointerup', () => { isResizing = false; });
+
+    // Expand
+    document.getElementById('pipExpand').addEventListener('click', () => {
+      if (STATE.pipState === 'expanded') {
+        pip.className = 'pip normal glass'; STATE.pipState = 'normal';
+      } else {
+        pip.className = 'pip expanded glass'; STATE.pipState = 'expanded';
+      }
+      pip.style.left = ''; pip.style.top = ''; pip.style.right = ''; pip.style.bottom = '';
+    });
+
+    // Minimize
+    document.getElementById('pipMinimize').addEventListener('click', () => {
+      if (STATE.pipState === 'minimized') {
+        pip.className = 'pip normal glass'; STATE.pipState = 'normal';
+        pip.querySelector('.pip-canvas-wrap').innerHTML = '';
+        pip.querySelector('.pip-canvas-wrap').appendChild(STATE.renderer3d.domElement);
+      } else {
+        pip.className = 'pip minimized glass'; STATE.pipState = 'minimized';
+        pip.querySelector('.pip-canvas-wrap').innerHTML = '<span>3D</span>';
+      }
+      pip.style.left = ''; pip.style.top = ''; pip.style.right = ''; pip.style.bottom = '';
+    });
+
+    // Click minimized to restore
+    pip.addEventListener('click', (e) => {
+      if (STATE.pipState === 'minimized' && e.target !== document.getElementById('pipMinimize')) {
+        pip.className = 'pip normal glass'; STATE.pipState = 'normal';
+        pip.querySelector('.pip-canvas-wrap').innerHTML = '';
+        pip.querySelector('.pip-canvas-wrap').appendChild(STATE.renderer3d.domElement);
+        pip.style.left = ''; pip.style.top = ''; pip.style.right = ''; pip.style.bottom = '';
+      }
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     COMMAND PALETTE
+     ═══════════════════════════════════════════════ */
+  const COMMANDS = [
+    { group: 'Presets', icon: '&#x25CF;', label: 'Load Standard', hint: '13N/9F', action: () => loadPreset('standard') },
+    { group: 'Presets', icon: '&#x25CF;', label: 'Load Reconfigured', hint: '14N/11F', action: () => loadPreset('reconf') },
+    { group: 'Presets', icon: '&#x25CF;', label: 'Load Optimal', hint: '13N/9F', action: () => loadPreset('optimal') },
+    { group: 'Parameters', icon: '&#x2699;', label: 'Set Cycle Time', hint: 'us', action: () => showParamForm('cycle_time_us', 'Cycle Time (us)', 1000, 50000, 100) },
+    { group: 'Parameters', icon: '&#x2699;', label: 'Set Guard Band', hint: 'us', action: () => showParamForm('guard_band_us', 'Guard Band (us)', 0, 20, 1) },
+    { group: 'Parameters', icon: '&#x2699;', label: 'Set Processing Delay', hint: 'us', action: () => showParamForm('processing_delay_us', 'Proc Delay (us)', 0, 20, 1) },
+    { group: 'Edit', icon: '+', label: 'Add Node', hint: '', action: () => { addNodeAt(window.innerWidth/2, window.innerHeight/2); closeCommandPalette(); } },
+    { group: 'Edit', icon: '+', label: 'Add Flow', hint: '', action: () => { addFlow(); closeCommandPalette(); } },
+    { group: 'Solver', icon: '&#x25B6;', label: 'Solve Greedy', hint: '', action: () => { STATE.solverMode = 'greedy'; solve(); closeCommandPalette(); } },
+    { group: 'Solver', icon: '&#x25B6;', label: 'Solve ILP', hint: '', action: () => { STATE.solverMode = 'ilp'; solve(); closeCommandPalette(); } },
+    { group: 'Solver', icon: '&#x21BB;', label: 'Toggle Auto-Solve', hint: '', action: () => { STATE.autoSolve = !STATE.autoSolve; showToast(STATE.autoSolve ? 'Auto-solve ON' : 'Auto-solve OFF', 'info'); closeCommandPalette(); } },
+    { group: 'File', icon: '&#x2913;', label: 'Export JSON', hint: '', action: () => { exportJSON(); closeCommandPalette(); } },
+    { group: 'File', icon: '&#x2912;', label: 'Import JSON', hint: '', action: () => { document.getElementById('importFileHidden').click(); closeCommandPalette(); } },
+    { group: 'View', icon: '&#x2261;', label: 'Open Drawer', hint: '', action: () => { setDrawerState('half'); closeCommandPalette(); } },
+    { group: 'View', icon: '&#x2195;', label: 'Zoom to Fit', hint: '', action: () => { zoomToFit(); closeCommandPalette(); } },
+  ];
+
+  function openCommandPalette() {
+    STATE.cmdPaletteOpen = true;
+    document.getElementById('cmdOverlay').classList.add('open');
+    document.getElementById('cmdSearch').value = '';
+    document.getElementById('cmdSearch').focus();
+    document.getElementById('cmdInlineForm').style.display = 'none';
+    renderCommandList('');
+  }
+
+  function closeCommandPalette() {
+    STATE.cmdPaletteOpen = false;
+    document.getElementById('cmdOverlay').classList.remove('open');
+  }
+
+  function renderCommandList(query) {
+    const list = document.getElementById('cmdList');
+    const q = query.toLowerCase();
+    const filtered = COMMANDS.filter(c => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q));
+
+    let html = '';
+    let lastGroup = '';
+    filtered.forEach((c, i) => {
+      if (c.group !== lastGroup) { html += `<div class="cmd-group-title">${c.group}</div>`; lastGroup = c.group; }
+      html += `<div class="cmd-item${i === 0 ? ' active' : ''}" data-idx="${i}">${c.icon ? `<span class="cmd-icon">${c.icon}</span>` : ''}<span class="cmd-label">${c.label}</span><span class="cmd-hint">${c.hint}</span></div>`;
+    });
+    list.innerHTML = html;
+
+    list.querySelectorAll('.cmd-item').forEach((el, i) => {
+      el.addEventListener('click', () => { filtered[i].action(); });
+      el.addEventListener('mouseenter', () => {
+        list.querySelectorAll('.cmd-item').forEach(e => e.classList.remove('active'));
+        el.classList.add('active');
+      });
+    });
+  }
+
+  function showParamForm(field, label, min, max, step) {
+    const form = document.getElementById('cmdInlineForm');
+    form.style.display = 'block';
+    const current = STATE.model ? STATE.model[field] : min;
+    form.innerHTML = `
+      <label>${label}</label>
+      <div class="cmd-form-row">
+        <input type="range" id="cmdParamRange" min="${min}" max="${max}" step="${step}" value="${current}">
+        <span class="cmd-form-val" id="cmdParamVal">${current}</span>
+      </div>
+    `;
+    const range = form.querySelector('#cmdParamRange');
+    const val = form.querySelector('#cmdParamVal');
+    range.addEventListener('input', () => {
+      val.textContent = range.value;
+      if (STATE.model) { STATE.model[field] = parseInt(range.value); scheduleAutoSolve(); }
+    });
+    range.focus();
+  }
+
+  // Key bindings
+  document.getElementById('cmdSearch').addEventListener('input', function() { renderCommandList(this.value); });
+  document.getElementById('cmdSearch').addEventListener('keydown', function(e) {
+    const items = document.querySelectorAll('#cmdList .cmd-item');
+    const activeIdx = [...items].findIndex(i => i.classList.contains('active'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      items[activeIdx]?.classList.remove('active');
+      items[Math.min(activeIdx + 1, items.length - 1)]?.classList.add('active');
+      items[Math.min(activeIdx + 1, items.length - 1)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[activeIdx]?.classList.remove('active');
+      items[Math.max(activeIdx - 1, 0)]?.classList.add('active');
+      items[Math.max(activeIdx - 1, 0)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      items[activeIdx]?.click();
+    }
+  });
+
+  document.getElementById('cmdOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeCommandPalette();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); STATE.cmdPaletteOpen ? closeCommandPalette() : openCommandPalette(); }
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) { e.preventDefault(); openCommandPalette(); }
+    if (e.key === 'Escape') { closeCommandPalette(); closePopovers(); }
+  });
+
+  document.getElementById('cmdBtn').addEventListener('click', openCommandPalette);
+
+  /* ═══════════════════════════════════════════════
+     BOTTOM DRAWER
+     ═══════════════════════════════════════════════ */
+  function setDrawerState(state) {
+    const drawer = document.getElementById('drawer');
+    drawer.classList.remove('collapsed', 'half', 'full');
+    drawer.classList.add(state);
+    STATE.drawerState = state;
+
+    const ribbon = document.getElementById('metricsRibbon');
+    ribbon.classList.remove('drawer-half', 'drawer-full');
+    if (state === 'half') ribbon.classList.add('drawer-half');
+    if (state === 'full') ribbon.classList.add('drawer-full');
+
+    // Lazy render active tab
+    if (state !== 'collapsed') renderActiveDrawerTab();
+  }
+
+  function setDrawerTab(tab) {
+    STATE.drawerTab = tab;
+    document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.drawer-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+    if (STATE.drawerState !== 'collapsed') renderActiveDrawerTab();
+  }
+
+  function renderActiveDrawerTab() {
+    if (!STATE.currentResult || !STATE.model) return;
+    const m = STATE.model;
+    const result = STATE.currentResult;
+    const tab = STATE.drawerTab;
+    const switches = m.nodes.filter(n => n.type === 'switch').map(n => ({
+      id: n.id, label: n.id, chip: 'Switch', color: getNodeColor(n.id)
+    }));
+
+    if (tab === 'gcl') renderGCL(m, result, { ...fcopts, containerId: 'gclContainer', legendId: 'gclLegend' });
+    else if (tab === 'delay') renderDelayChart(m, result, { ...fcopts, containerId: 'delayContainer' });
+    else if (tab === 'util') renderUtilization(m, result, { containerId: 'utilContainer', beColor: '#e2e8f0' });
+    else if (tab === 'switchgcl') renderSwitchGCL(m, result, { containerId: 'switchGclArea', switches, flowColorFn: realFlowColor });
+    else if (tab === 'table') renderTable(result, { ...fcopts, containerId: 'pktTableBody' });
+    else if (tab === 'json') document.getElementById('jsonOut').textContent = JSON.stringify(result.gcl, null, 2);
+  }
+
+  // Drawer tab clicks
+  document.querySelectorAll('.drawer-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      setDrawerTab(tab.dataset.tab);
+      if (STATE.drawerState === 'collapsed') setDrawerState('half');
+    });
+  });
+
+  // Drawer handle drag
+  let drawerDragStart = null;
+  const drawerHandle = document.getElementById('drawerHandle');
+  drawerHandle.addEventListener('pointerdown', (e) => {
+    drawerDragStart = { y: e.clientY, state: STATE.drawerState };
+    e.preventDefault();
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!drawerDragStart) return;
+    const dy = drawerDragStart.y - e.clientY;
+    if (Math.abs(dy) > 40) {
+      if (dy > 0) {
+        // Dragging up
+        if (STATE.drawerState === 'collapsed') setDrawerState('half');
+        else if (STATE.drawerState === 'half') setDrawerState('full');
+      } else {
+        // Dragging down
+        if (STATE.drawerState === 'full') setDrawerState('half');
+        else if (STATE.drawerState === 'half') setDrawerState('collapsed');
+      }
+      drawerDragStart = null;
+    }
+  });
+  document.addEventListener('pointerup', () => { drawerDragStart = null; });
+
+  // Drawer handle double-click toggles
+  drawerHandle.addEventListener('dblclick', () => {
+    if (STATE.drawerState === 'collapsed') setDrawerState('half');
+    else setDrawerState('collapsed');
+  });
+
+  /* ═══════════════════════════════════════════════
+     METRICS RIBBON
+     ═══════════════════════════════════════════════ */
+  function renderMetricsRibbon(model, result) {
+    const ribbon = document.getElementById('metricsRibbon');
+    if (!result || !model) { ribbon.innerHTML = ''; return; }
+    const tsnPkts = result.packetRows.filter(p => p.status !== 'BE');
+    const overlapConflicts = Number(result.stats?.overlap_conflicts || 0);
+    const fallbackPackets = Number(result.stats?.fallback_packets || 0);
+    const allOk = tsnPkts.every(p => p.status === 'OK') && overlapConflicts === 0 && fallbackPackets === 0;
+    const avgDelay = tsnPkts.length ? (tsnPkts.reduce((s, p) => s + p.e2e_delay_us, 0) / tsnPkts.length).toFixed(0) : '-';
+
+    const pills = [
+      { text: `${model.nodes.length}N`, cls: '' },
+      { text: `${model.links.length}L`, cls: '' },
+      { text: `${model.flows.length}F`, cls: '' },
+      { text: result.method.split('(')[0].trim(), cls: '' },
+      { text: `${result.objective}us`, cls: 'warn' },
+      { text: `${result.worst_util_percent}%`, cls: result.worst_util_percent > 50 ? 'warn' : '' },
+      { text: allOk ? 'OK' : 'MISS', cls: allOk ? 'ok' : 'miss' }
+    ];
+    ribbon.innerHTML = pills.map(p => `<span class="metric-pill ${p.cls}">${p.text}</span>`).join('');
+  }
+
+  /* ═══════════════════════════════════════════════
+     SOLVER
+     ═══════════════════════════════════════════════ */
+  let solveTimer = null;
+
+  function scheduleAutoSolve() {
+    if (!STATE.autoSolve) return;
+    clearTimeout(solveTimer);
+    solveTimer = setTimeout(() => solve(), 500);
+  }
+
+  async function solve() {
+    if (!STATE.model) return;
+    const mode = STATE.solverMode;
+    const dot = document.getElementById('solveDot');
+    dot.classList.add('solving');
+
+    try {
+      if (mode === 'greedy' || mode === 'both') {
+        const t0 = performance.now();
+        const greedyResult = solveGreedy(STATE.model);
+        const wallMs = Math.round(performance.now() - t0);
+        STATE.currentResult = greedyResult;
+        renderAll();
+        pushHistory('greedy', greedyResult, wallMs);
+        showToast(`Greedy: ${wallMs}ms, ${greedyResult.packetRows.length} pkts`, 'success');
+      }
+      if ((mode === 'ilp' || mode === 'both') && STATE.glpk) {
+        const t1 = performance.now();
+        const ilpResult = await solveILP(STATE.model, STATE.glpk, { tmlim: STATE.ilpTimeout });
+        const wallMs = Math.round(performance.now() - t1);
+        STATE.currentResult = ilpResult;
+        renderAll();
+        pushHistory('ilp', ilpResult, wallMs);
+        showToast(`ILP: ${wallMs}ms, ${ilpResult.stats.variables} vars`, 'success');
+      } else if (mode === 'ilp' && !STATE.glpk) {
+        showToast('GLPK not loaded, using Greedy', 'error');
+        STATE.currentResult = solveGreedy(STATE.model);
+        renderAll();
+      }
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error', 5000);
+      console.error(e);
+    }
+    dot.classList.remove('solving');
+  }
+
+  /* ═══════════════════════════════════════════════
+     RENDER ALL
+     ═══════════════════════════════════════════════ */
+  function renderAll() {
+    if (!STATE.model) return;
+    renderCustomTopology(STATE.model, STATE.currentResult);
+    renderMetricsRibbon(STATE.model, STATE.currentResult);
+    if (STATE.drawerState !== 'collapsed') renderActiveDrawerTab();
+  }
+
+  /* ═══════════════════════════════════════════════
+     MODEL OPERATIONS
+     ═══════════════════════════════════════════════ */
+  function loadPreset(key) {
+    const p = PRESETS[key];
+    STATE.model = deepClone(p.model);
+    STATE.currentPreset = key;
+    rebuild3D(p);
+    // Update preset pills
+    document.querySelectorAll('.preset-pill').forEach(pill => pill.classList.toggle('active', pill.dataset.preset === key));
+    scheduleAutoSolve();
+    showToast(`Loaded: ${key}`, 'info');
+  }
+
+  function addFlow() {
+    const m = STATE.model;
+    if (m.nodes.length < 2) { showToast('Need at least 2 nodes', 'error'); return; }
+    const src = m.nodes[0].id;
+    const dst = m.nodes[m.nodes.length - 1].id;
+    const newId = 'f_custom_' + (m.flows.length + 1);
+    m.flows.push({ id: newId, priority: 6, payload_bytes: 4096, period_us: 10000, deadline_us: 5000, traffic_type: 'custom', src, dst, k_paths: 2 });
+    scheduleAutoSolve();
+    showToast(`Added flow ${newId}`, 'info');
+  }
+
+  function zoomToFit() {
+    if (!STATE.topoZoom || !STATE.model) return;
+    const svg = d3.select('#topoSvg');
+    const W = window.innerWidth, H = window.innerHeight;
+    const pos = STATE.nodePositions;
+    const xs = Object.values(pos).map(p => p.x);
+    const ys = Object.values(pos).map(p => p.y);
+    if (!xs.length) return;
+    const minX = Math.min(...xs) - 60, maxX = Math.max(...xs) + 60;
+    const minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + 60;
+    const bw = maxX - minX, bh = maxY - minY;
+    const scale = Math.min(W / bw, H / bh) * 0.85;
+    const tx = W / 2 - (minX + bw / 2) * scale;
+    const ty = H / 2 - (minY + bh / 2) * scale;
+    svg.transition().duration(500).call(STATE.topoZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  }
+
+  /* ═══════════════════════════════════════════════
+     SOLUTION HISTORY
+     ═══════════════════════════════════════════════ */
+  function pushHistory(method, result, wallMs) {
+    STATE.history.push({
+      timestamp: new Date().toLocaleTimeString(),
+      method, objective: result.objective || 0,
+      model: deepClone(STATE.model), result: deepClone(result), wallMs
+    });
+    if (STATE.history.length > 5) STATE.history.shift();
+  }
+
+  /* ═══════════════════════════════════════════════
+     EXPORT / IMPORT
+     ═══════════════════════════════════════════════ */
+  function exportJSON() {
+    if (!STATE.model) return;
+    const blob = new Blob([JSON.stringify(STATE.model, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tsn-model-' + Date.now() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Model exported', 'success');
+  }
+
+  // Hidden file input for import
+  const importInput = document.createElement('input');
+  importInput.type = 'file'; importInput.accept = '.json'; importInput.id = 'importFileHidden';
+  importInput.style.display = 'none';
+  document.body.appendChild(importInput);
+  importInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const imported = JSON.parse(evt.target.result);
+        if (!imported.nodes || !imported.links || !imported.flows) {
+          showToast('Invalid model', 'error'); return;
+        }
+        STATE.model = imported;
+        scheduleAutoSolve();
+        showToast('Model imported', 'success');
+      } catch (err) { showToast('Import error: ' + err.message, 'error'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  /* ═══════════════════════════════════════════════
+     EVENT BINDINGS
+     ═══════════════════════════════════════════════ */
+
+  // Preset pills
+  document.querySelectorAll('.preset-pill').forEach(pill => {
+    pill.addEventListener('click', () => loadPreset(pill.dataset.preset));
+  });
+
+  // Solve button
+  document.getElementById('solveBtn').addEventListener('click', () => solve());
+
+  // Resize
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 200); });
 
   /* ═══════════════════════════════════════════════
      INITIALIZATION
      ═══════════════════════════════════════════════ */
   initTooltip();
-
-  // Load default preset
   loadPreset('standard');
-
-  // Init 3D
   try { init3D(); } catch(e) { console.warn('3D init error:', e); }
+  initPiP();
 
-  // Load GLPK in background
+  // GLPK load
   (async () => {
-    const badge = document.getElementById("engineBadge");
+    const badge = document.getElementById('engineBadge');
     try {
       const GLPK = (await import('./vendor/glpk.js')).default;
       STATE.glpk = await GLPK();
       const ver = typeof STATE.glpk.version === 'function' ? STATE.glpk.version() : (STATE.glpk.version || '?');
-      badge.className = "engine-badge ready";
+      badge.className = 'engine-badge ready';
       badge.innerHTML = `&#9679; GLPK ${ver}`;
-      showToast('GLPK WASM loaded', 'success');
+      showToast('GLPK loaded', 'success');
     } catch (e) {
-      console.warn('GLPK load failed (greedy works):', e);
-      badge.className = "engine-badge ready";
-      badge.innerHTML = "&#9679; Greedy Only";
+      console.warn('GLPK load failed:', e);
+      badge.className = 'engine-badge ready';
+      badge.innerHTML = '&#9679; Greedy Only';
     }
   })();
   </script>
