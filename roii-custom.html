@@ -528,13 +528,13 @@
 
     /* ── Flow Path Overlays on Topology ── */
     .flow-path-line {
-      fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round;
-      opacity: 0.5; cursor: pointer; pointer-events: stroke;
+      fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+      opacity: 0.35; cursor: pointer; pointer-events: visibleStroke;
       transition: opacity 0.15s, stroke-width 0.15s;
     }
-    .flow-path-line:hover { opacity: 0.85; stroke-width: 6; }
-    .flow-path-line.active { opacity: 0.9; stroke-width: 7; }
-    .flow-path-line.dimmed { opacity: 0.08; stroke-width: 2; }
+    .flow-path-line:hover { opacity: 0.7; stroke-width: 5; }
+    .flow-path-line.active { opacity: 0.85; stroke-width: 6; stroke-dasharray: none; }
+    .flow-path-line.dimmed { opacity: 0.06; stroke-width: 2; pointer-events: none; }
 
     /* ── Flow Edit Popover (on canvas) ── */
     .flow-popover {
@@ -1009,11 +1009,12 @@
     svg.call(zoom);
     STATE.topoZoom = zoom;
 
-    // Click on background deselects flow
+    // Click on background deselects flow (only on truly empty areas)
     svg.on('click.deselect', function(event) {
-      if (event.target === svg.node() || event.target.classList.contains('zoom-layer')) {
-        if (STATE.selectedFlow) deselectFlow();
-      }
+      const t = event.target;
+      const isEmpty = t === svg.node() || t.classList.contains('zoom-layer')
+        || t.tagName === 'rect' && t.getAttribute('fill') === 'transparent';
+      if (isEmpty && STATE.selectedFlow) deselectFlow();
     });
 
     // Get positions from preset or auto-layout
@@ -1157,7 +1158,8 @@
       });
     }
 
-    // Node interactions
+    // Node interactions — unified drag + click
+    let dragStartPos = null;
     nodeSel
       .on('mouseenter', (event, d) => {
         SelectionBus.emit('node:hover', { nodeId: d.id, source: 'd3' });
@@ -1167,8 +1169,8 @@
       })
       .call(d3.drag()
         .on('start', function(event, d) {
+          dragStartPos = { x: event.x, y: event.y };
           d3.select(this).raise();
-          if (navigator.vibrate) navigator.vibrate(10);
         })
         .on('drag', function(event, d) {
           d.x = event.x; d.y = event.y;
@@ -1185,9 +1187,23 @@
             .attr('y1', dd => positions[dd.source]?.y || 0)
             .attr('x2', dd => positions[dd.target]?.x || 0)
             .attr('y2', dd => positions[dd.target]?.y || 0);
+          // Update flow path polylines during drag
+          updateFlowPathsDrag(positions, zoomLayer);
         })
-        .on('end', (event, d) => {
-          scheduleAutoSolve();
+        .on('end', function(event, d) {
+          const dist = dragStartPos
+            ? Math.hypot(event.x - dragStartPos.x, event.y - dragStartPos.y) : 0;
+          dragStartPos = null;
+          if (dist < 5) {
+            // Click — show node popover
+            const rect = svg.node().getBoundingClientRect();
+            const sx = event.sourceEvent.clientX;
+            const sy = event.sourceEvent.clientY;
+            showNodePopover(d.id, { x: sx, y: sy });
+          } else {
+            // Real drag — re-solve
+            scheduleAutoSolve();
+          }
         })
       );
 
@@ -1284,39 +1300,40 @@
 
   function setupGestures(svg, zoomLayer, model, positions, nodeColors) {
     const svgNode = svg.node();
+    let gestureStartPt = null;
 
-    // Long-press on empty space → add node
+    // Long-press on empty space → add node (600ms, cancelled by movement > 8px)
     svg.on('pointerdown.gesture', function(event) {
       if (event.target !== svgNode && !event.target.classList.contains('zoom-layer')) return;
       clearTimeout(longPressTimer);
+      gestureStartPt = { x: event.clientX, y: event.clientY };
       const pt = getTransformedPoint(event, svg);
       longPressTimer = setTimeout(() => {
         addNodeAt(pt.x, pt.y);
-      }, 400);
+        gestureStartPt = null;
+      }, 600);
     });
 
-    svg.on('pointerup.gesture pointermove.gesture pointercancel.gesture', () => {
+    svg.on('pointermove.gesture', (event) => {
+      if (gestureStartPt && Math.hypot(event.clientX - gestureStartPt.x, event.clientY - gestureStartPt.y) > 8) {
+        clearTimeout(longPressTimer);
+        gestureStartPt = null;
+      }
+    });
+
+    svg.on('pointerup.gesture pointercancel.gesture', () => {
       clearTimeout(longPressTimer);
+      gestureStartPt = null;
     });
 
-    // Single-click on nodes → edit popover (with drag guard)
-    let nodeDragOccurred = false;
-    STATE.nodeGroups.on('click.edit', function(event, d) {
-      if (nodeDragOccurred) { nodeDragOccurred = false; return; }
-      event.stopPropagation();
-      showNodePopover(d.id, { x: event.clientX, y: event.clientY });
-    });
-    // Track if a drag happened to suppress click
-    STATE.nodeGroups.on('mousedown.dragguard', () => { nodeDragOccurred = false; });
-    STATE.nodeGroups.on('mousemove.dragguard', () => { nodeDragOccurred = true; });
-
-    // Long-press on node → start rubber-band link creation
+    // Long-press on node → start rubber-band link creation (500ms)
+    let rbStartPt = null;
     STATE.nodeGroups.on('pointerdown.rubberband', function(event, d) {
       event.stopPropagation();
       const nodeId = d.id;
+      rbStartPt = { x: event.clientX, y: event.clientY };
       clearTimeout(longPressTimer);
       longPressTimer = setTimeout(() => {
-        // Start rubber-band
         rubberBandSource = nodeId;
         const pos = positions[nodeId];
         rubberBandLine = zoomLayer.append('line')
@@ -1324,10 +1341,16 @@
           .attr('x1', pos.x).attr('y1', pos.y)
           .attr('x2', pos.x).attr('y2', pos.y);
         if (navigator.vibrate) navigator.vibrate(30);
-      }, 350);
+        rbStartPt = null;
+      }, 500);
     });
 
     svg.on('pointermove.rubberband', function(event) {
+      // Cancel long-press if moved too much before timer fires
+      if (rbStartPt && Math.hypot(event.clientX - rbStartPt.x, event.clientY - rbStartPt.y) > 8) {
+        clearTimeout(longPressTimer);
+        rbStartPt = null;
+      }
       if (!rubberBandLine) return;
       const pt = getTransformedPoint(event, svg);
       rubberBandLine.attr('x2', pt.x).attr('y2', pt.y);
@@ -1335,9 +1358,9 @@
 
     svg.on('pointerup.rubberband', function(event) {
       clearTimeout(longPressTimer);
+      rbStartPt = null;
       if (!rubberBandLine || !rubberBandSource) return;
       const pt = getTransformedPoint(event, svg);
-      // Find closest node to drop point
       let closestNode = null, closestDist = 50;
       model.nodes.forEach(n => {
         const p = positions[n.id];
@@ -2494,6 +2517,28 @@
     STATE.zoomLayer.selectAll('.topo-node-g').classed('dimmed', false);
   }
 
+  /* ── Update flow path polylines during node drag ── */
+  function updateFlowPathsDrag(positions, zoomLayer) {
+    if (!STATE._flowPaths) return;
+    zoomLayer.selectAll('.flow-path-line').each(function(d, i) {
+      const fp = STATE._flowPaths[i];
+      if (!fp) return;
+      const pts = fp.pathNodes.map(id => positions[id]).filter(Boolean);
+      if (pts.length < 2) return;
+      const offset = (i - STATE._flowPaths.length / 2) * 3;
+      const lineData = pts.map((pt, j) => {
+        if (j === 0 || j === pts.length - 1) return `${pt.x},${pt.y}`;
+        const prev = pts[j - 1];
+        const next = pts[Math.min(j + 1, pts.length - 1)];
+        const dx = next.x - prev.x, dy = next.y - prev.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len * offset, ny = dx / len * offset;
+        return `${pt.x + nx},${pt.y + ny}`;
+      });
+      d3.select(this).attr('points', lineData.join(' '));
+    });
+  }
+
   /* ═══════════════════════════════════════════════
      FLOATING FLOW SIDEBAR (on topology)
      ═══════════════════════════════════════════════ */
@@ -2550,12 +2595,9 @@
      ═══════════════════════════════════════════════ */
   function drawFlowPaths(model, result, zoomLayer, positions) {
     if (!result) return;
-    // Remove old flow paths
+    // Remove old flow paths and append new layer (sits between links and nodes)
     zoomLayer.selectAll('.flow-paths-layer').remove();
-    const nodesLayer = zoomLayer.select('.nodes-layer');
-    const pathG = nodesLayer.node()
-      ? zoomLayer.insert('g', '.nodes-layer').attr('class', 'flow-paths-layer')
-      : zoomLayer.append('g').attr('class', 'flow-paths-layer');
+    const pathG = zoomLayer.append('g').attr('class', 'flow-paths-layer');
 
     const seenFlows = new Set();
     const flowPaths = [];
