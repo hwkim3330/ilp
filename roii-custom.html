@@ -477,6 +477,158 @@
     .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
     .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text2); }
     .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ── Flow Editor Cards ── */
+    .flow-editor-list { display: flex; flex-direction: column; gap: 8px; }
+    .flow-card {
+      background: rgba(255,255,255,0.7); border: 1px solid rgba(59,130,246,0.12);
+      border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      transition: all 0.15s; position: relative;
+    }
+    .flow-card:hover { border-color: rgba(59,130,246,0.3); }
+    .flow-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+    .flow-card-header {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+      padding-bottom: 6px; border-bottom: 1px solid rgba(59,130,246,0.08);
+    }
+    .flow-card-tag {
+      width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+    }
+    .flow-card-id { font-weight: 700; font-size: 0.78rem; color: var(--text); flex: 1; }
+    .flow-card-del {
+      width: 20px; height: 20px; border-radius: 50%; border: none;
+      background: rgba(220,38,38,0.08); color: var(--red); cursor: pointer;
+      font-size: 0.75rem; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .flow-card-del:hover { background: rgba(220,38,38,0.2); }
+    .flow-card-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;
+    }
+    .flow-card-grid label {
+      font-size: 0.68rem; font-weight: 600; color: var(--text3);
+      display: flex; align-items: center;
+    }
+    .flow-card-grid select, .flow-card-grid input {
+      width: 100%; padding: 3px 6px; font-size: 0.72rem;
+      border: 1px solid rgba(59,130,246,0.15); border-radius: 5px;
+      background: #fff; color: var(--text);
+    }
+    .flow-card-grid input[type="number"] { -moz-appearance: textfield; }
+    .flow-card-grid input::-webkit-outer-spin-button,
+    .flow-card-grid input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .flow-computed {
+      margin-top: 6px; padding-top: 5px; border-top: 1px dashed rgba(59,130,246,0.1);
+      font-size: 0.68rem; color: var(--text3); font-family: monospace;
+    }
+    .flow-add-btn {
+      width: 100%; padding: 8px; border-radius: 8px; border: 1px dashed rgba(59,130,246,0.25);
+      background: transparent; color: var(--blue); font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .flow-add-btn:hover { background: rgba(59,130,246,0.06); border-color: var(--blue); }
+
+    /* ── Model Editor ── */
+    .model-section {
+      margin-bottom: 10px; border: 1px solid rgba(59,130,246,0.1);
+      border-radius: 10px; overflow: hidden;
+    }
+    .model-section-header {
+      display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+      background: rgba(248,250,252,0.8); cursor: pointer; user-select: none;
+      font-size: 0.78rem; font-weight: 700; color: var(--text);
+    }
+    .model-section-header .chevron {
+      font-size: 0.65rem; color: var(--text3); transition: transform 0.15s;
+    }
+    .model-section.collapsed .model-section-body { display: none; }
+    .model-section.collapsed .chevron { transform: rotate(-90deg); }
+    .model-section-body { padding: 8px 12px; }
+    .editor-item {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+      font-size: 0.72rem;
+    }
+    .editor-item select, .editor-item input {
+      padding: 3px 6px; font-size: 0.72rem;
+      border: 1px solid rgba(59,130,246,0.15); border-radius: 5px;
+      background: #fff; color: var(--text);
+    }
+    .editor-item input { width: 70px; }
+    .editor-item select { width: 90px; }
+    .editor-item .ed-dot {
+      width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+    }
+    .editor-item .ed-del {
+      width: 18px; height: 18px; border-radius: 50%; border: none;
+      background: rgba(220,38,38,0.06); color: var(--red); cursor: pointer;
+      font-size: 0.68rem; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .editor-item .ed-del:hover { background: rgba(220,38,38,0.15); }
+    .editor-add-btn {
+      padding: 5px 12px; border-radius: 6px; border: 1px dashed rgba(59,130,246,0.2);
+      background: transparent; color: var(--blue); font-size: 0.7rem; font-weight: 600;
+      cursor: pointer; margin-top: 4px;
+    }
+    .editor-add-btn:hover { background: rgba(59,130,246,0.06); }
+
+    /* ── Radio Pills & Toggle ── */
+    .radio-group { display: flex; gap: 2px; }
+    .radio-pill {
+      padding: 4px 12px; border-radius: 8px; font-size: 0.72rem; font-weight: 600;
+      cursor: pointer; border: 1px solid rgba(59,130,246,0.15);
+      background: #fff; color: var(--text2); transition: all 0.15s;
+    }
+    .radio-pill.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .toggle-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      font-size: 0.75rem; font-weight: 600; color: var(--text2);
+    }
+    .toggle-switch {
+      position: relative; width: 36px; height: 20px; cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; inset: 0; border-radius: 10px;
+      background: rgba(0,0,0,0.1); transition: background 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--blue); }
+    .toggle-track::after {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      left: 2px; top: 2px; border-radius: 50%;
+      background: #fff; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+    .solver-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .slider-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+      font-size: 0.72rem; color: var(--text2);
+    }
+    .slider-row label { min-width: 80px; font-weight: 600; }
+    .slider-row input[type="range"] { flex: 1; }
+    .slider-row .slider-val { min-width: 50px; text-align: right; font-weight: 700; color: var(--blue); }
+
+    /* ── Flow Path Highlight on Topology ── */
+    .topo-link-line.flow-highlighted { stroke-width: 6 !important; opacity: 1 !important; }
+    .topo-link-line.dimmed { opacity: 0.12 !important; }
+    .topo-node-g.dimmed { opacity: 0.25; }
+    .topo-link-hit.dimmed { pointer-events: none; }
+
+    /* ── History Chips ── */
+    .history-chips { display: flex; gap: 3px; overflow-x: auto; max-width: 320px; }
+    .history-chips::-webkit-scrollbar { display: none; }
+    .history-chip {
+      padding: 3px 8px; border-radius: 6px; font-size: 0.62rem; font-weight: 600;
+      white-space: nowrap; cursor: pointer;
+      background: rgba(59,130,246,0.06); color: var(--text3);
+      border: 1px solid rgba(59,130,246,0.1); transition: all 0.15s;
+    }
+    .history-chip:hover { border-color: var(--blue); color: var(--blue); }
+    .history-chip.latest { color: var(--blue); border-color: rgba(59,130,246,0.25); }
+
+    @media (max-width: 900px) {
+      .history-chips { max-width: 160px; }
+    }
   </style>
 </head>
 <body>
@@ -495,6 +647,7 @@
     </div>
     <button class="top-btn primary" id="solveBtn"><span class="solve-dot" id="solveDot"></span>Solve</button>
     <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>GLPK</span>
+    <div class="history-chips" id="historyChips"></div>
     <span class="top-spacer"></span>
     <button class="top-btn" id="cmdBtn" title="Command Palette"><span class="kbd-hint">Ctrl+K</span></button>
     <a href="index.html" class="top-btn" style="text-decoration:none;">Home</a>
@@ -521,6 +674,8 @@
       <div class="drawer-handle-bar"></div>
     </div>
     <div class="drawer-tabs" id="drawerTabs">
+      <span class="drawer-tab" data-tab="flows">Flows</span>
+      <span class="drawer-tab" data-tab="model">Model</span>
       <span class="drawer-tab active" data-tab="gcl">GCL Gantt</span>
       <span class="drawer-tab" data-tab="delay">Delay</span>
       <span class="drawer-tab" data-tab="util">Utilization</span>
@@ -529,6 +684,8 @@
       <span class="drawer-tab" data-tab="json">JSON</span>
     </div>
     <div class="drawer-content">
+      <div class="drawer-panel" id="panel-flows"></div>
+      <div class="drawer-panel" id="panel-model"></div>
       <div class="drawer-panel active" id="panel-gcl">
         <div class="legend" id="gclLegend"></div>
         <div class="svg-container" id="gclContainer"></div>
@@ -757,6 +914,13 @@
       });
     svg.call(zoom);
     STATE.topoZoom = zoom;
+
+    // Click on background deselects flow
+    svg.on('click.deselect', function(event) {
+      if (event.target === svg.node() || event.target.classList.contains('zoom-layer')) {
+        if (STATE.selectedFlow) deselectFlow();
+      }
+    });
 
     // Get positions from preset or auto-layout
     const nodeColors = buildNodeColors(model);
@@ -1233,16 +1397,51 @@
 
     const flowEntries = entries.filter(e => !e.note.includes('best-effort') && !e.note.includes('guard'));
 
+    // Find the first link object for editing
+    const firstLink = m.links.find(l => linkIds.includes(l.id));
+    const rateVal = firstLink ? firstLink.rate_mbps : 1000;
+    const delayVal = firstLink ? firstLink.prop_delay_us : 0.5;
+
     div.innerHTML = `
       <div class="popover-title">${linkData.source} &rarr; ${linkData.target}</div>
       <div class="link-popover-util">${utilPercent.toFixed(1)}% utilization</div>
       ${ganttHtml}
       <div class="link-popover-entries">${flowEntries.length} flow entries, ${linkIds.length > 1 ? 'bidirectional' : 'unidirectional'}</div>
+      <div class="popover-row" style="margin-top:8px;">
+        <label>Rate (Mbps)</label>
+        <input type="number" id="popLinkRate" value="${rateVal}" min="1" step="1">
+      </div>
+      <div class="popover-row">
+        <label>Delay (us)</label>
+        <input type="number" id="popLinkDelay" value="${delayVal}" min="0" step="0.1">
+      </div>
       <div class="popover-actions">
+        <button class="popover-btn primary" id="popLinkSave">Save</button>
+        <button class="popover-btn danger" id="popLinkDelete">Delete</button>
         <button class="popover-btn" id="popLinkClose">Close</button>
       </div>
     `;
     document.getElementById('popoverContainer').appendChild(div);
+
+    div.querySelector('#popLinkSave').onclick = () => {
+      const newRate = parseFloat(div.querySelector('#popLinkRate').value) || rateVal;
+      const newDelay = parseFloat(div.querySelector('#popLinkDelay').value) || 0;
+      linkIds.forEach(lid => {
+        const link = m.links.find(l => l.id === lid);
+        if (link) { link.rate_mbps = newRate; link.prop_delay_us = newDelay; }
+      });
+      closePopovers();
+      scheduleAutoSolve();
+      showToast('Link updated', 'success');
+    };
+
+    div.querySelector('#popLinkDelete').onclick = () => {
+      m.links = m.links.filter(l => !linkIds.includes(l.id));
+      closePopovers();
+      scheduleAutoSolve();
+      showToast('Link deleted', 'info');
+    };
+
     div.querySelector('#popLinkClose').onclick = closePopovers;
 
     setTimeout(() => {
@@ -1648,10 +1847,15 @@
   }
 
   function renderActiveDrawerTab() {
-    if (!STATE.currentResult || !STATE.model) return;
     const m = STATE.model;
-    const result = STATE.currentResult;
     const tab = STATE.drawerTab;
+
+    // Editor tabs work even without a solve result
+    if (tab === 'flows') { buildFlowEditor(); return; }
+    if (tab === 'model') { buildModelEditor(); return; }
+
+    if (!STATE.currentResult || !m) return;
+    const result = STATE.currentResult;
     const switches = m.nodes.filter(n => n.type === 'switch').map(n => ({
       id: n.id, label: n.id, chip: 'Switch', color: getNodeColor(n.id)
     }));
@@ -1752,6 +1956,7 @@
         STATE.currentResult = greedyResult;
         renderAll();
         pushHistory('greedy', greedyResult, wallMs);
+        renderHistory();
         showToast(`Greedy: ${wallMs}ms, ${greedyResult.packetRows.length} pkts`, 'success');
       }
       if ((mode === 'ilp' || mode === 'both') && STATE.glpk) {
@@ -1761,6 +1966,7 @@
         STATE.currentResult = ilpResult;
         renderAll();
         pushHistory('ilp', ilpResult, wallMs);
+        renderHistory();
         showToast(`ILP: ${wallMs}ms, ${ilpResult.stats.variables} vars`, 'success');
       } else if (mode === 'ilp' && !STATE.glpk) {
         showToast('GLPK not loaded, using Greedy', 'error');
@@ -1775,6 +1981,427 @@
   }
 
   /* ═══════════════════════════════════════════════
+     FLOW & MODEL EDITORS
+     ═══════════════════════════════════════════════ */
+  function txTimeUs(bytes, rateMbps) {
+    return (bytes * 8) / rateMbps;
+  }
+
+  function pktsPerCycle(flow, model) {
+    return Math.ceil(model.cycle_time_us / flow.period_us);
+  }
+
+  function buildFlowEditor() {
+    const panel = document.getElementById('panel-flows');
+    const m = STATE.model;
+    if (!m) { panel.innerHTML = '<div style="color:var(--text3);font-size:0.8rem;">No model loaded</div>'; return; }
+
+    const nodeIds = m.nodes.map(n => n.id);
+    let html = '<div class="flow-editor-list">';
+    m.flows.forEach((f, idx) => {
+      const color = realFlowColor(f.id);
+      const linkRate = m.links.length ? m.links[0].rate_mbps : 1000;
+      const tx = txTimeUs(f.payload_bytes, linkRate).toFixed(1);
+      const pkts = pktsPerCycle(f, m);
+      const sel = STATE.selectedFlow === f.id ? ' selected' : '';
+      html += `<div class="flow-card${sel}" data-flow-idx="${idx}" data-flow-id="${f.id}">
+        <div class="flow-card-header">
+          <div class="flow-card-tag" style="background:${color};"></div>
+          <span class="flow-card-id">${f.id}</span>
+          <button class="flow-card-del" data-del-idx="${idx}" title="Delete flow">&times;</button>
+        </div>
+        <div class="flow-card-grid">
+          <label>Src</label>
+          <select data-field="src" data-idx="${idx}">
+            ${nodeIds.map(n => `<option value="${n}"${n===f.src?' selected':''}>${n}</option>`).join('')}
+          </select>
+          <label>Dst</label>
+          <select data-field="dst" data-idx="${idx}">
+            ${nodeIds.map(n => `<option value="${n}"${n===f.dst?' selected':''}>${n}</option>`).join('')}
+          </select>
+          <label>Priority</label>
+          <select data-field="priority" data-idx="${idx}">
+            ${[0,1,2,3,4,5,6,7].map(p => `<option value="${p}"${p===f.priority?' selected':''}>P${p}</option>`).join('')}
+          </select>
+          <label>k_paths</label>
+          <select data-field="k_paths" data-idx="${idx}">
+            ${[1,2,3,4].map(k => `<option value="${k}"${k===f.k_paths?' selected':''}>${k}</option>`).join('')}
+          </select>
+          <label>Payload</label>
+          <input type="number" data-field="payload_bytes" data-idx="${idx}" value="${f.payload_bytes}" min="64" max="1048576" step="64">
+          <label>Period (us)</label>
+          <input type="number" data-field="period_us" data-idx="${idx}" value="${f.period_us}" min="100" max="1000000" step="100">
+          <label>Deadline (us)</label>
+          <input type="number" data-field="deadline_us" data-idx="${idx}" value="${f.deadline_us}" min="100" max="1000000" step="100">
+        </div>
+        <div class="flow-computed">tx=${tx}us &middot; ${pkts} pkt/cycle</div>
+      </div>`;
+    });
+    html += `<button class="flow-add-btn" id="flowAddBtn">+ Add Flow</button></div>`;
+    panel.innerHTML = html;
+
+    // Event: card click → select flow
+    panel.querySelectorAll('.flow-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.flow-card-del') || e.target.closest('select') || e.target.closest('input')) return;
+        const fid = card.dataset.flowId;
+        if (STATE.selectedFlow === fid) deselectFlow();
+        else selectFlow(fid);
+      });
+    });
+
+    // Event: delete flow
+    panel.querySelectorAll('.flow-card-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.delIdx);
+        const fid = m.flows[idx].id;
+        m.flows.splice(idx, 1);
+        if (STATE.selectedFlow === fid) STATE.selectedFlow = null;
+        scheduleAutoSolve();
+        buildFlowEditor();
+        showToast(`Deleted flow ${fid}`, 'info');
+      });
+    });
+
+    // Event: field changes
+    panel.querySelectorAll('.flow-card-grid select, .flow-card-grid input').forEach(el => {
+      const handler = () => {
+        const idx = parseInt(el.dataset.idx);
+        const field = el.dataset.field;
+        const flow = m.flows[idx];
+        if (!flow) return;
+        if (field === 'priority' || field === 'k_paths') flow[field] = parseInt(el.value);
+        else if (field === 'payload_bytes' || field === 'period_us' || field === 'deadline_us') flow[field] = parseInt(el.value) || flow[field];
+        else flow[field] = el.value;
+        // Update computed
+        const card = el.closest('.flow-card');
+        const linkRate = m.links.length ? m.links[0].rate_mbps : 1000;
+        const comp = card.querySelector('.flow-computed');
+        if (comp) comp.textContent = `tx=${txTimeUs(flow.payload_bytes, linkRate).toFixed(1)}us \u00b7 ${pktsPerCycle(flow, m)} pkt/cycle`;
+        scheduleAutoSolve();
+      };
+      el.addEventListener('change', handler);
+      if (el.tagName === 'INPUT') el.addEventListener('input', handler);
+    });
+
+    // Event: add flow
+    document.getElementById('flowAddBtn')?.addEventListener('click', () => {
+      addFlow();
+      buildFlowEditor();
+    });
+  }
+
+  function buildModelEditor() {
+    const panel = document.getElementById('panel-model');
+    const m = STATE.model;
+    if (!m) { panel.innerHTML = '<div style="color:var(--text3);font-size:0.8rem;">No model loaded</div>'; return; }
+
+    const nodeIds = m.nodes.map(n => n.id);
+    let html = '';
+
+    // ① Nodes
+    html += `<div class="model-section" id="msNodes">
+      <div class="model-section-header"><span class="chevron">&#9660;</span> Nodes (${m.nodes.length})</div>
+      <div class="model-section-body">`;
+    m.nodes.forEach((n, i) => {
+      const c = getNodeColor(n.id);
+      html += `<div class="editor-item">
+        <div class="ed-dot" style="background:${c};"></div>
+        <input type="text" value="${n.id}" data-node-idx="${i}" data-field="id" style="width:100px;">
+        <select data-node-idx="${i}" data-field="type">
+          <option value="switch"${n.type==='switch'?' selected':''}>switch</option>
+          <option value="endstation"${n.type==='endstation'?' selected':''}>endstation</option>
+        </select>
+        <button class="ed-del" data-node-del="${i}">&times;</button>
+      </div>`;
+    });
+    html += `<button class="editor-add-btn" id="modelAddNode">+ Add Node</button></div></div>`;
+
+    // ② Links
+    html += `<div class="model-section" id="msLinks">
+      <div class="model-section-header"><span class="chevron">&#9660;</span> Links (${m.links.length})</div>
+      <div class="model-section-body">`;
+    m.links.forEach((l, i) => {
+      html += `<div class="editor-item">
+        <select data-link-idx="${i}" data-field="from" style="width:80px;">
+          ${nodeIds.map(n => `<option value="${n}"${n===l.from?' selected':''}>${n}</option>`).join('')}
+        </select>
+        <span style="color:var(--text3);">&rarr;</span>
+        <select data-link-idx="${i}" data-field="to" style="width:80px;">
+          ${nodeIds.map(n => `<option value="${n}"${n===l.to?' selected':''}>${n}</option>`).join('')}
+        </select>
+        <input type="number" data-link-idx="${i}" data-field="rate_mbps" value="${l.rate_mbps}" style="width:55px;" title="Mbps">
+        <input type="number" data-link-idx="${i}" data-field="prop_delay_us" value="${l.prop_delay_us}" step="0.1" style="width:45px;" title="Delay(us)">
+        <button class="ed-del" data-link-del="${i}">&times;</button>
+      </div>`;
+    });
+    html += `<button class="editor-add-btn" id="modelAddLink">+ Add Link</button></div></div>`;
+
+    // ③ Global Parameters
+    html += `<div class="model-section" id="msParams">
+      <div class="model-section-header"><span class="chevron">&#9660;</span> Global Parameters</div>
+      <div class="model-section-body">
+        <div class="slider-row"><label>Cycle Time</label><input type="range" id="msCycleTime" min="1000" max="50000" step="100" value="${m.cycle_time_us}"><span class="slider-val" id="msCycleVal">${m.cycle_time_us}us</span></div>
+        <div class="slider-row"><label>Guard Band</label><input type="range" id="msGuardBand" min="0" max="20" step="1" value="${m.guard_band_us}"><span class="slider-val" id="msGuardVal">${m.guard_band_us}us</span></div>
+        <div class="slider-row"><label>Proc Delay</label><input type="range" id="msProcDelay" min="0" max="20" step="1" value="${m.processing_delay_us}"><span class="slider-val" id="msProcVal">${m.processing_delay_us}us</span></div>
+      </div></div>`;
+
+    // ④ Solver Settings
+    html += `<div class="model-section" id="msSolver">
+      <div class="model-section-header"><span class="chevron">&#9660;</span> Solver Settings</div>
+      <div class="model-section-body">
+        <div style="margin-bottom:8px;font-size:0.72rem;font-weight:600;color:var(--text2);">Mode</div>
+        <div class="radio-group" id="solverModeGroup">
+          <span class="radio-pill${STATE.solverMode==='greedy'?' active':''}" data-mode="greedy">Greedy</span>
+          <span class="radio-pill${STATE.solverMode==='ilp'?' active':''}" data-mode="ilp">ILP</span>
+          <span class="radio-pill${STATE.solverMode==='both'?' active':''}" data-mode="both">Both</span>
+        </div>
+        <div class="slider-row" style="margin-top:8px;"><label>ILP Timeout</label><input type="range" id="msIlpTimeout" min="5" max="120" step="5" value="${STATE.ilpTimeout}"><span class="slider-val" id="msTimeoutVal">${STATE.ilpTimeout}s</span></div>
+        <div class="toggle-row">
+          <label class="toggle-switch"><input type="checkbox" id="msAutoSolve" ${STATE.autoSolve?'checked':''}><span class="toggle-track"></span></label>
+          Auto-solve
+        </div>
+        <div class="solver-actions">
+          <button class="popover-btn primary" id="msSolveNow">Solve Now</button>
+          <button class="popover-btn" id="msReset">Reset</button>
+        </div>
+      </div></div>`;
+
+    panel.innerHTML = html;
+
+    // Section collapse toggles
+    panel.querySelectorAll('.model-section-header').forEach(hdr => {
+      hdr.addEventListener('click', () => {
+        hdr.parentElement.classList.toggle('collapsed');
+      });
+    });
+
+    // Node edits
+    panel.querySelectorAll('[data-node-idx][data-field]').forEach(el => {
+      el.addEventListener('change', () => {
+        const idx = parseInt(el.dataset.nodeIdx);
+        const field = el.dataset.field;
+        const node = m.nodes[idx];
+        if (!node) return;
+        if (field === 'id') {
+          const newId = el.value.trim();
+          if (!newId) return;
+          const oldId = node.id;
+          node.id = newId;
+          m.links.forEach(l => { if (l.from === oldId) l.from = newId; if (l.to === oldId) l.to = newId; });
+          m.flows.forEach(f => { if (f.src === oldId) f.src = newId; if (f.dst === oldId) f.dst = newId; });
+        } else {
+          node[field] = el.value;
+        }
+        scheduleAutoSolve();
+      });
+    });
+
+    // Node delete
+    panel.querySelectorAll('[data-node-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.nodeDel);
+        const nid = m.nodes[idx].id;
+        m.nodes.splice(idx, 1);
+        m.links = m.links.filter(l => l.from !== nid && l.to !== nid);
+        m.flows = m.flows.filter(f => f.src !== nid && f.dst !== nid);
+        scheduleAutoSolve();
+        buildModelEditor();
+        showToast(`Deleted node ${nid}`, 'info');
+      });
+    });
+
+    // Add node
+    panel.querySelector('#modelAddNode')?.addEventListener('click', () => {
+      addNodeAt(window.innerWidth / 2, window.innerHeight / 2);
+      buildModelEditor();
+    });
+
+    // Link edits
+    panel.querySelectorAll('[data-link-idx][data-field]').forEach(el => {
+      el.addEventListener('change', () => {
+        const idx = parseInt(el.dataset.linkIdx);
+        const field = el.dataset.field;
+        const link = m.links[idx];
+        if (!link) return;
+        if (field === 'rate_mbps') link.rate_mbps = parseFloat(el.value) || link.rate_mbps;
+        else if (field === 'prop_delay_us') link.prop_delay_us = parseFloat(el.value) || 0;
+        else link[field] = el.value;
+        scheduleAutoSolve();
+      });
+    });
+
+    // Link delete
+    panel.querySelectorAll('[data-link-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.linkDel);
+        m.links.splice(idx, 1);
+        scheduleAutoSolve();
+        buildModelEditor();
+        showToast('Deleted link', 'info');
+      });
+    });
+
+    // Add link
+    panel.querySelector('#modelAddLink')?.addEventListener('click', () => {
+      if (m.nodes.length < 2) { showToast('Need at least 2 nodes', 'error'); return; }
+      addLinkBetween(m.nodes[0].id, m.nodes[1].id);
+      buildModelEditor();
+    });
+
+    // Global parameter sliders
+    const bindSlider = (id, valId, field, suffix, parser) => {
+      const slider = panel.querySelector('#' + id);
+      const valEl = panel.querySelector('#' + valId);
+      if (!slider || !valEl) return;
+      slider.addEventListener('input', () => {
+        const v = parser(slider.value);
+        m[field] = v;
+        valEl.textContent = v + suffix;
+        scheduleAutoSolve();
+      });
+    };
+    bindSlider('msCycleTime', 'msCycleVal', 'cycle_time_us', 'us', parseInt);
+    bindSlider('msGuardBand', 'msGuardVal', 'guard_band_us', 'us', parseInt);
+    bindSlider('msProcDelay', 'msProcVal', 'processing_delay_us', 'us', parseInt);
+
+    // Solver mode
+    panel.querySelectorAll('#solverModeGroup .radio-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        STATE.solverMode = pill.dataset.mode;
+        panel.querySelectorAll('#solverModeGroup .radio-pill').forEach(p => p.classList.toggle('active', p.dataset.mode === STATE.solverMode));
+      });
+    });
+
+    // ILP timeout
+    const toSlider = panel.querySelector('#msIlpTimeout');
+    const toVal = panel.querySelector('#msTimeoutVal');
+    if (toSlider && toVal) {
+      toSlider.addEventListener('input', () => {
+        STATE.ilpTimeout = parseInt(toSlider.value);
+        toVal.textContent = STATE.ilpTimeout + 's';
+      });
+    }
+
+    // Auto-solve toggle
+    panel.querySelector('#msAutoSolve')?.addEventListener('change', function() {
+      STATE.autoSolve = this.checked;
+      showToast(STATE.autoSolve ? 'Auto-solve ON' : 'Auto-solve OFF', 'info');
+    });
+
+    // Solve Now / Reset
+    panel.querySelector('#msSolveNow')?.addEventListener('click', () => solve());
+    panel.querySelector('#msReset')?.addEventListener('click', () => {
+      loadPreset(STATE.currentPreset);
+      buildModelEditor();
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     FLOW SELECTION & PATH HIGHLIGHT
+     ═══════════════════════════════════════════════ */
+  function selectFlow(flowId) {
+    STATE.selectedFlow = flowId;
+    applyFlowHighlight();
+    // Update flow cards
+    document.querySelectorAll('.flow-card').forEach(c => {
+      c.classList.toggle('selected', c.dataset.flowId === flowId);
+    });
+    SelectionBus.emit('flow:highlight', { flowId });
+  }
+
+  function deselectFlow() {
+    STATE.selectedFlow = null;
+    clearFlowHighlight();
+    document.querySelectorAll('.flow-card').forEach(c => c.classList.remove('selected'));
+    SelectionBus.emit('flow:highlight', { flowId: null });
+  }
+
+  function applyFlowHighlight() {
+    if (!STATE.zoomLayer || !STATE.currentResult || !STATE.selectedFlow) return;
+    const flowId = STATE.selectedFlow;
+    const result = STATE.currentResult;
+    const m = STATE.model;
+
+    // Find the path links for the selected flow
+    const pathLinkKeys = new Set();
+    const pathNodeIds = new Set();
+    result.packetRows.filter(p => p.flow_id === flowId).forEach(p => {
+      if (!p.hops) return;
+      p.hops.forEach(h => {
+        const link = m.links.find(l => l.id === h.link_id);
+        if (link) {
+          pathLinkKeys.add([link.from, link.to].sort().join('-'));
+          pathNodeIds.add(link.from);
+          pathNodeIds.add(link.to);
+        }
+      });
+    });
+
+    const flowColor = realFlowColor(flowId);
+
+    // Dim/highlight links
+    STATE.zoomLayer.selectAll('.link-g').each(function(d) {
+      const isOnPath = pathLinkKeys.has(d.key);
+      d3.select(this).select('.topo-link-line')
+        .classed('flow-highlighted', isOnPath)
+        .classed('dimmed', !isOnPath);
+      if (isOnPath) {
+        d3.select(this).select('.topo-link-line')
+          .attr('stroke', flowColor)
+          .attr('stroke-width', 6);
+      }
+      d3.select(this).select('.topo-link-hit')
+        .classed('dimmed', !isOnPath);
+    });
+
+    // Dim/highlight nodes
+    STATE.zoomLayer.selectAll('.topo-node-g').each(function(d) {
+      const isOnPath = pathNodeIds.has(d.id);
+      d3.select(this).classed('dimmed', !isOnPath);
+    });
+  }
+
+  function clearFlowHighlight() {
+    if (!STATE.zoomLayer) return;
+    STATE.zoomLayer.selectAll('.link-g').each(function() {
+      d3.select(this).select('.topo-link-line')
+        .classed('flow-highlighted', false)
+        .classed('dimmed', false);
+      d3.select(this).select('.topo-link-hit')
+        .classed('dimmed', false);
+    });
+    STATE.zoomLayer.selectAll('.topo-node-g').classed('dimmed', false);
+  }
+
+  /* ═══════════════════════════════════════════════
+     SOLUTION HISTORY DISPLAY
+     ═══════════════════════════════════════════════ */
+  function renderHistory() {
+    const container = document.getElementById('historyChips');
+    if (!container) return;
+    container.innerHTML = STATE.history.map((h, i) => {
+      const isLatest = i === STATE.history.length - 1;
+      return `<span class="history-chip${isLatest ? ' latest' : ''}" data-hist-idx="${i}">${h.timestamp} ${h.method.toUpperCase()} ${h.objective}us</span>`;
+    }).join('');
+
+    container.querySelectorAll('.history-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const idx = parseInt(chip.dataset.histIdx);
+        const h = STATE.history[idx];
+        if (!h) return;
+        STATE.model = deepClone(h.model);
+        STATE.currentResult = deepClone(h.result);
+        renderAll();
+        if (STATE.drawerTab === 'flows') buildFlowEditor();
+        if (STATE.drawerTab === 'model') buildModelEditor();
+        showToast(`Restored: ${h.method} @ ${h.timestamp}`, 'info');
+      });
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
      RENDER ALL
      ═══════════════════════════════════════════════ */
   function renderAll() {
@@ -1782,6 +2409,8 @@
     renderCustomTopology(STATE.model, STATE.currentResult);
     renderMetricsRibbon(STATE.model, STATE.currentResult);
     if (STATE.drawerState !== 'collapsed') renderActiveDrawerTab();
+    // Re-apply flow highlight after topology re-render
+    if (STATE.selectedFlow) setTimeout(() => applyFlowHighlight(), 50);
   }
 
   /* ═══════════════════════════════════════════════
@@ -1791,9 +2420,13 @@
     const p = PRESETS[key];
     STATE.model = deepClone(p.model);
     STATE.currentPreset = key;
+    STATE.selectedFlow = null;
     rebuild3D(p);
     // Update preset pills
     document.querySelectorAll('.preset-pill').forEach(pill => pill.classList.toggle('active', pill.dataset.preset === key));
+    // Rebuild editor tabs if active
+    if (STATE.drawerTab === 'flows') buildFlowEditor();
+    if (STATE.drawerTab === 'model') buildModelEditor();
     scheduleAutoSolve();
     showToast(`Loaded: ${key}`, 'info');
   }
