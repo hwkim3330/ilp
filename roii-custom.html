@@ -107,6 +107,7 @@
       background: var(--green); display: inline-block;
     }
     .solve-dot.solving { background: var(--orange); animation: pulse-dot 0.6s infinite; }
+    .solve-dot.dirty { background: var(--orange); animation: pulse-dot 1.2s infinite; }
     @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
     .engine-badge {
@@ -410,15 +411,16 @@
     .tooltip .tt-v { font-weight: 600; }
 
     /* ── D3 Topology Styles ── */
-    .topo-node-circle { cursor: pointer; transition: r 0.15s; }
-    .topo-node-circle:hover { filter: brightness(1.1); }
+    .topo-node-rect { cursor: pointer; transition: filter 0.15s, stroke-width 0.15s; }
+    .topo-node-rect:hover { filter: brightness(1.08); }
+    .topo-node-outer { pointer-events: none; }
     .topo-node-label {
       font-size: 10px; font-weight: 700; text-anchor: middle;
       fill: var(--text); pointer-events: none;
     }
-    .topo-node-type {
-      font-size: 7.5px; font-weight: 600; text-anchor: middle;
-      fill: var(--text3); pointer-events: none;
+    .topo-node-type-bg { pointer-events: none; }
+    .topo-node-type-text {
+      font-size: 7px; font-weight: 700; pointer-events: none;
     }
     .topo-link-line {
       stroke: rgba(59,130,246,0.2); stroke-width: 2;
@@ -851,7 +853,7 @@
      STATE
      ═══════════════════════════════════════════════ */
   const STATE = {
-    model: null, glpk: null, solverMode: 'greedy', autoSolve: true,
+    model: null, glpk: null, solverMode: 'greedy', autoSolve: false, dirty: false,
     ilpTimeout: 15, currentResult: null, history: [],
     // 3D
     scene3d: null, camera3d: null, renderer3d: null, controls3d: null,
@@ -917,9 +919,10 @@
     if (!STATE.zoomLayer) return;
     STATE.zoomLayer.selectAll('.topo-node-g').each(function(d) {
       if (d.id === nodeId) {
-        d3.select(this).select('.topo-node-circle')
+        d3.select(this).select('.topo-node-rect')
           .transition().duration(150)
-          .attr('r', on ? 28 : 22);
+          .attr('stroke-width', on ? 3.5 : 2)
+          .style('filter', on ? 'brightness(1.12) drop-shadow(0 0 6px rgba(59,130,246,0.3))' : null);
       }
     });
   }
@@ -992,7 +995,7 @@
       .append('feMergeNode').attr('in', d => d);
 
     defs.append('marker').attr('id', 'arr')
-      .attr('viewBox', '0 0 10 7').attr('refX', 35).attr('refY', 3.5)
+      .attr('viewBox', '0 0 10 7').attr('refX', 65).attr('refY', 3.5)
       .attr('markerWidth', 8).attr('markerHeight', 6).attr('orient', 'auto')
       .append('polygon').attr('points', '0 0, 10 3.5, 0 7').attr('fill', '#94a3b8');
 
@@ -1120,22 +1123,44 @@
       .attr('class', 'topo-node-g')
       .attr('transform', d => `translate(${d.x},${d.y})`);
 
-    // Outer ring
-    nodeSel.append('circle')
-      .attr('r', 30).attr('fill', 'none')
+    // Compute rect width per node based on label length
+    const nodeRectW = d => Math.max(80, d.label.length * 10 + 24);
+    const nodeRectH = 44;
+
+    // Outer ring (rounded rect)
+    nodeSel.append('rect')
+      .attr('class', 'topo-node-outer')
+      .attr('width', d => nodeRectW(d) + 10).attr('height', nodeRectH + 10)
+      .attr('x', d => -(nodeRectW(d) + 10) / 2).attr('y', -(nodeRectH + 10) / 2)
+      .attr('rx', 11).attr('ry', 11)
+      .attr('fill', 'none')
       .attr('stroke', d => d.stroke).attr('stroke-width', 1).attr('opacity', 0.12);
 
-    // Main circle
-    nodeSel.append('circle')
-      .attr('class', 'topo-node-circle')
-      .attr('r', 22).attr('fill', d => d.color)
+    // Main rounded rect
+    nodeSel.append('rect')
+      .attr('class', 'topo-node-rect')
+      .attr('width', d => nodeRectW(d)).attr('height', nodeRectH)
+      .attr('x', d => -nodeRectW(d) / 2).attr('y', -nodeRectH / 2)
+      .attr('rx', 8).attr('ry', 8)
+      .attr('fill', d => d.color)
       .attr('stroke', d => d.stroke).attr('stroke-width', 2);
 
-    // Labels
+    // Type badge (top-left inside rect)
+    nodeSel.append('rect')
+      .attr('class', 'topo-node-type-bg')
+      .attr('width', 22).attr('height', 12).attr('rx', 3).attr('ry', 3)
+      .attr('x', d => -nodeRectW(d) / 2 + 4).attr('y', -nodeRectH / 2 + 3)
+      .attr('fill', 'rgba(0,0,0,0.08)');
+    nodeSel.append('text')
+      .attr('class', 'topo-node-type-text')
+      .attr('x', d => -nodeRectW(d) / 2 + 15).attr('y', -nodeRectH / 2 + 12)
+      .attr('text-anchor', 'middle')
+      .attr('fill', d => d.stroke)
+      .text(d => d.shortLabel);
+
+    // Label (centered)
     nodeSel.append('text').attr('class', 'topo-node-label')
-      .attr('dy', -1).text(d => d.label);
-    nodeSel.append('text').attr('class', 'topo-node-type')
-      .attr('dy', 12).text(d => d.shortLabel);
+      .attr('dy', 5).text(d => d.label);
 
     // Show util badge on switch nodes after solve
     if (result) {
@@ -1150,7 +1175,7 @@
         });
         if (maxUtil > 0) {
           d3.select(this).append('text')
-            .attr('dy', 38).attr('text-anchor', 'middle')
+            .attr('dy', 34).attr('text-anchor', 'middle')
             .attr('font-size', '8px').attr('font-weight', '700')
             .attr('fill', maxUtil > 50 ? '#dc2626' : maxUtil > 30 ? '#d97706' : '#059669')
             .text(maxUtil.toFixed(1) + '%');
@@ -2061,7 +2086,20 @@
      ═══════════════════════════════════════════════ */
   let solveTimer = null;
 
+  function markDirty() {
+    STATE.dirty = true;
+    const dot = document.getElementById('solveDot');
+    if (dot && !dot.classList.contains('solving')) dot.classList.add('dirty');
+  }
+
+  function clearDirty() {
+    STATE.dirty = false;
+    const dot = document.getElementById('solveDot');
+    if (dot) dot.classList.remove('dirty');
+  }
+
   function scheduleAutoSolve() {
+    markDirty();
     if (!STATE.autoSolve) return;
     clearTimeout(solveTimer);
     solveTimer = setTimeout(() => solve(), 500);
@@ -2071,6 +2109,7 @@
     if (!STATE.model) return;
     const mode = STATE.solverMode;
     const dot = document.getElementById('solveDot');
+    dot.classList.remove('dirty');
     dot.classList.add('solving');
 
     try {
@@ -2103,6 +2142,7 @@
       console.error(e);
     }
     dot.classList.remove('solving');
+    clearDirty();
   }
 
   /* ═══════════════════════════════════════════════
@@ -2793,7 +2833,8 @@
     if (STATE.drawerTab === 'flows') buildFlowEditor();
     if (STATE.drawerTab === 'model') buildModelEditor();
     renderFlowSidebar();
-    scheduleAutoSolve();
+    // Always solve on preset load
+    solve();
     showToast(`Loaded: ${key}`, 'info');
   }
 
