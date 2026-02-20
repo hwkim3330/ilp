@@ -144,6 +144,49 @@
     }
     .failure-banner.show { display: flex; }
 
+    /* ── Comparison Card ─────────────────────── */
+    .cmp-card {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+      border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .cmp-side {
+      padding: 20px 24px;
+      background: rgba(255,255,255,0.6);
+      transition: all 0.3s ease;
+    }
+    .cmp-side.active {
+      background: rgba(255,255,255,0.98);
+      box-shadow: inset 0 0 0 2px var(--blue);
+    }
+    .cmp-side.active .cmp-label { color: var(--blue); }
+    .cmp-label {
+      font-size: 0.95rem; font-weight: 800; margin-bottom: 12px;
+      color: var(--text3); transition: color 0.3s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cmp-active-tag {
+      display: none; font-size: 0.65rem; padding: 2px 8px;
+      border-radius: 99px; background: var(--blue); color: #fff; font-weight: 700;
+    }
+    .cmp-side.active .cmp-active-tag { display: inline-block; }
+    .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .cmp-item { }
+    .cmp-k { font-size: 0.68rem; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cmp-v { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 2px; }
+    .cmp-v small { font-size: 0.7rem; font-weight: 600; color: var(--text3); }
+    .cmp-delta {
+      grid-column: 1 / -1;
+      margin-top: 8px; padding: 8px 12px;
+      border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+      background: rgba(59,130,246,0.06); color: var(--text2);
+      display: none;
+    }
+    .cmp-delta.show { display: block; }
+    @media (max-width: 700px) { .cmp-card { grid-template-columns: 1fr; } }
+
     /* ── Sensor Spec Table ────────────────────── */
     .spec-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 10px; }
     .spec-table th { text-align: left; padding: 5px 8px; color: var(--text3); font-weight: 600; border-bottom: 1px solid rgba(59,130,246,0.2); }
@@ -201,12 +244,40 @@
         <h1>ROii Streaming Sensor Demo</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub">Burst vs Streaming &mdash; All 1 Gbps Links</div>
+      <div class="sub" id="dynamicSub">Streaming &mdash; 1.5ms cycle, 45 pkts/cycle, All 1 Gbps Links</div>
 
       <!-- 2-Mode Toggle: Burst / Streaming -->
       <div class="mode-group" id="modeGroup">
         <button class="mode-btn" data-mode="burst">Burst (10ms, 14 pkts)</button>
         <button class="mode-btn active" data-mode="streaming">Streaming (1.5ms, 45 pkts)</button>
+      </div>
+    </div>
+
+    <!-- ★ Burst vs Streaming Comparison Card ★ -->
+    <div class="cmp-card" id="cmpCard">
+      <div class="cmp-side" id="cmpBurst" data-mode="burst">
+        <div class="cmp-label">Burst Mode <span class="cmp-active-tag">ACTIVE</span></div>
+        <div class="cmp-grid">
+          <div class="cmp-item"><div class="cmp-k">Cycle Time</div><div class="cmp-v">10,000 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">14</div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Pkt Size</div><div class="cmp-v">128 <small>KB</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Tx Time</div><div class="cmp-v">1,049 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Guard Band</div><div class="cmp-v">3 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Bottleneck</div><div class="cmp-v" id="cmpBurstUtil">&mdash;</div></div>
+          <div class="cmp-delta" id="cmpBurstDelta"></div>
+        </div>
+      </div>
+      <div class="cmp-side active" id="cmpStream" data-mode="streaming">
+        <div class="cmp-label">Streaming Mode <span class="cmp-active-tag">ACTIVE</span></div>
+        <div class="cmp-grid">
+          <div class="cmp-item"><div class="cmp-k">Cycle Time</div><div class="cmp-v">1,500 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">45</div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Pkt Size</div><div class="cmp-v">1,200 <small>B</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Tx Time</div><div class="cmp-v">9.9 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Guard Band</div><div class="cmp-v">1 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Bottleneck</div><div class="cmp-v" id="cmpStreamUtil">&mdash;</div></div>
+          <div class="cmp-delta" id="cmpStreamDelta"></div>
+        </div>
       </div>
     </div>
 
@@ -225,7 +296,7 @@
 
     <!-- Sensor Hardware Spec (dynamic) -->
     <div class="card">
-      <div class="card-title">Sensor Hardware Specifications</div>
+      <div class="card-title" id="specTitle">Sensor Hardware Specifications &mdash; Streaming</div>
       <table class="spec-table">
         <thead id="specTableHead"><tr>
           <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time</th>
@@ -381,13 +452,13 @@
 
   /*
    * Streaming traffic model:
-   *   G32 LiDAR:    1200B UDP packets every 100µs (≈96 Mbps continuous)
-   *   Pandar 40P:   1200B UDP packets every 300µs (≈32 Mbps continuous)
-   *   MRR-35 Radar: 256B  CAN2ETH  every 1500µs (≈1.4 Mbps)
+   *   G32 LiDAR:    1200B UDP packets every 100us (~96 Mbps continuous)
+   *   Pandar 40P:   1200B UDP packets every 300us (~32 Mbps continuous)
+   *   MRR-35 Radar: 256B  CAN2ETH  every 1500us (~1.4 Mbps)
    *
-   * Cycle time = LCM(100, 300, 1500) = 1500µs
+   * Cycle time = LCM(100, 300, 1500) = 1500us
    * Per cycle: G32 = 15 pkts, Pandar = 5 pkts, Radar = 1 pkt
-   * Total per cycle: 15×2 + 5×2 + 1×5 = 45 pkts
+   * Total per cycle: 15x2 + 5x2 + 1x5 = 45 pkts
    */
   const ROII_STREAMING = {
     cycle_time_us: 1500,
@@ -396,19 +467,19 @@
     nodes: JSON.parse(JSON.stringify(STREAMING_NODES)),
     links: JSON.parse(JSON.stringify(STREAMING_LINKS)),
     flows: [
-      // G32 Front Center LiDAR — 15 pkts/cycle (1200B every 100µs)
+      // G32 Front Center LiDAR — 15 pkts/cycle (1200B every 100us)
       { id: "f_lidar_fc", priority: 7, payload_bytes: 1200, period_us: 100, deadline_us: 200,
         traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
-      // Pandar Front Left — 5 pkts/cycle (1200B every 300µs)
+      // Pandar Front Left — 5 pkts/cycle (1200B every 300us)
       { id: "f_lidar_fl", priority: 7, payload_bytes: 1200, period_us: 300, deadline_us: 600,
         traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
-      // Pandar Front Right — 5 pkts/cycle (1200B every 300µs)
+      // Pandar Front Right — 5 pkts/cycle (1200B every 300us)
       { id: "f_lidar_fr", priority: 7, payload_bytes: 1200, period_us: 300, deadline_us: 600,
         traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
-      // G32 Rear LiDAR — 15 pkts/cycle (1200B every 100µs)
+      // G32 Rear LiDAR — 15 pkts/cycle (1200B every 100us)
       { id: "f_lidar_r",  priority: 7, payload_bytes: 1200, period_us: 100, deadline_us: 200,
         traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
-      // MRR-35 Radar ×5 — 1 pkt/cycle each (256B every 1500µs)
+      // MRR-35 Radar x5 — 1 pkt/cycle each (256B every 1500us)
       { id: "f_radar_f",   priority: 6, payload_bytes: 256, period_us: 1500, deadline_us: 1500,
         traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
       { id: "f_radar_flc", priority: 6, payload_bytes: 256, period_us: 1500, deadline_us: 1500,
@@ -450,10 +521,10 @@
 
   /* ── Sensor Spec Table Rows ── */
   const BURST_SPEC_ROWS = [
-    { dot: "#10B981", sensor: "Front Center LiDAR", model: "AutoL G32",           iface: "1000BASE-T1", speed: "1000 Mbps", payload: "128 KB",          period: "50ms (20Hz)",      tx: "1048.9 \u00b5s" },
-    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",           period: "50ms (20Hz)",      tx: "262.4 \u00b5s" },
-    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",           period: "50ms (20Hz)",      tx: "262.4 \u00b5s" },
-    { dot: "#10B981", sensor: "Rear LiDAR",          model: "AutoL G32",           iface: "1000BASE-T1", speed: "1000 Mbps", payload: "128 KB",          period: "50ms (20Hz)",      tx: "1048.9 \u00b5s" },
+    { dot: "#10B981", sensor: "Front Center LiDAR", model: "AutoL G32",           iface: "1000BASE-T1", speed: "1000 Mbps", payload: "128 KB",          period: "50ms (20Hz)",        tx: "1048.9 \u00b5s" },
+    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",           period: "50ms (20Hz)",        tx: "262.4 \u00b5s" },
+    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",           period: "50ms (20Hz)",        tx: "262.4 \u00b5s" },
+    { dot: "#10B981", sensor: "Rear LiDAR",          model: "AutoL G32",           iface: "1000BASE-T1", speed: "1000 Mbps", payload: "128 KB",          period: "50ms (20Hz)",        tx: "1048.9 \u00b5s" },
     { dot: "#952aff", sensor: "Front Radar",         model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72",    period: "5ms (50Hz \u00d72)", tx: "33.1 \u00b5s" },
     { dot: "#952aff", sensor: "Front-Left Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72",    period: "5ms (50Hz \u00d72)", tx: "33.1 \u00b5s" },
     { dot: "#952aff", sensor: "Front-Right Corner",  model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72",    period: "5ms (50Hz \u00d72)", tx: "33.1 \u00b5s" },
@@ -475,6 +546,8 @@
 
   function renderSpecTable(rows) {
     const isStreaming = rows === STREAMING_SPEC_ROWS;
+    document.getElementById("specTitle").innerHTML =
+      `Sensor Hardware Specifications &mdash; ${isStreaming ? 'Streaming' : 'Burst'}`;
     const thead = document.getElementById("specTableHead");
     thead.innerHTML = `<tr>
       <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time</th>${isStreaming ? '<th>Pkts/Cycle</th>' : ''}
@@ -499,7 +572,8 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: BURST_SPEC_ROWS,
-      tmlim: 15
+      tmlim: 15,
+      sub: 'Burst &mdash; 10ms cycle, 14 pkts/cycle, All 1 Gbps Links'
     },
     streaming: {
       model: ROII_STREAMING,
@@ -510,7 +584,8 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: STREAMING_SPEC_ROWS,
-      tmlim: 30
+      tmlim: 30,
+      sub: 'Streaming &mdash; 1.5ms cycle, 45 pkts/cycle, All 1 Gbps Links'
     }
   };
 
@@ -523,6 +598,9 @@
   let currentModel = null;
   let currentResult = null;
   let baselineGreedyResult = null;
+
+  // Store results per mode for comparison card
+  const modeResults = { burst: null, streaming: null };
 
   /* ── 3D State ── */
   let scene3d = null, camera3d = null, renderer3d = null, controls3d = null;
@@ -554,6 +632,71 @@
       }
     }
     return m;
+  }
+
+  /* ── Comparison Card ─────────────────────────── */
+  function updateComparisonCard(result) {
+    // Highlight active side
+    document.getElementById('cmpBurst').classList.toggle('active', currentMode === 'burst');
+    document.getElementById('cmpStream').classList.toggle('active', currentMode === 'streaming');
+
+    // Store result for current mode
+    modeResults[currentMode] = result;
+
+    // Update bottleneck utilization from current result
+    if (result && result.stats) {
+      const maxUtil = result.stats.max_utilization != null
+        ? (result.stats.max_utilization * 100).toFixed(1) + '%'
+        : (result.packetRows ? computeBottleneckUtil(result) : '\u2014');
+      const el = currentMode === 'burst'
+        ? document.getElementById('cmpBurstUtil')
+        : document.getElementById('cmpStreamUtil');
+      el.innerHTML = maxUtil;
+    }
+
+    // Show delta when both modes have results
+    const bRes = modeResults.burst;
+    const sRes = modeResults.streaming;
+    if (bRes && sRes) {
+      const bPkts = bRes.packetRows.length;
+      const sPkts = sRes.packetRows.length;
+      const bObj = Number(bRes.objective || 0);
+      const sObj = Number(sRes.objective || 0);
+      const bMiss = bRes.packetRows.filter(p => p.status === 'MISS').length;
+      const sMiss = sRes.packetRows.filter(p => p.status === 'MISS').length;
+
+      const burstDelta = document.getElementById('cmpBurstDelta');
+      burstDelta.classList.add('show');
+      burstDelta.innerHTML = `${bPkts} packets, objective ${bObj.toFixed(1)}\u00b5s` +
+        (bMiss > 0 ? `, <span style="color:var(--red)">${bMiss} MISS</span>` : ', 0 MISS');
+
+      const streamDelta = document.getElementById('cmpStreamDelta');
+      streamDelta.classList.add('show');
+      const pktRatio = (sPkts / bPkts).toFixed(1);
+      streamDelta.innerHTML = `${sPkts} packets (${pktRatio}\u00d7), objective ${sObj.toFixed(1)}\u00b5s` +
+        (sMiss > 0 ? `, <span style="color:var(--red)">${sMiss} MISS</span>` : ', 0 MISS');
+    }
+  }
+
+  function computeBottleneckUtil(result) {
+    // Approximate from packet rows
+    if (!currentModel || !result.packetRows) return '\u2014';
+    const linkOccupancy = {};
+    for (const pkt of result.packetRows) {
+      if (pkt.hops) {
+        for (const hop of pkt.hops) {
+          const lid = hop.link || hop.lid;
+          if (!lid) continue;
+          linkOccupancy[lid] = (linkOccupancy[lid] || 0) + (hop.tx || 0);
+        }
+      }
+    }
+    const ct = currentModel.cycle_time_us;
+    let maxU = 0;
+    for (const [lid, occ] of Object.entries(linkOccupancy)) {
+      maxU = Math.max(maxU, occ / ct);
+    }
+    return maxU > 0 ? (maxU * 100).toFixed(1) + '%' : '\u2014';
   }
 
   /* ── Init ────────────────────────────────────── */
@@ -589,7 +732,7 @@
       compareBadgeEl.style.borderColor = 'rgba(59,130,246,0.25)';
       compareBadgeEl.style.background = 'rgba(59,130,246,0.08)';
       compareBadgeEl.style.color = 'var(--blue)';
-      compareBadgeEl.textContent = `Baseline: Greedy objective ${result.objective}us`;
+      compareBadgeEl.textContent = `Baseline: Greedy objective ${result.objective}\u00b5s`;
       return;
     }
     if (!baselineGreedyResult) return;
@@ -605,7 +748,7 @@
     compareBadgeEl.style.borderColor = improved ? 'rgba(5,150,105,0.25)' : 'rgba(217,119,6,0.25)';
     compareBadgeEl.style.background = improved ? 'rgba(5,150,105,0.08)' : 'rgba(217,119,6,0.10)';
     compareBadgeEl.style.color = improved ? 'var(--green)' : 'var(--orange)';
-    compareBadgeEl.textContent = `ILP vs Greedy: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}% objective, MISS ${gMiss}->${iMiss}`;
+    compareBadgeEl.textContent = `ILP vs Greedy: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}% objective, MISS ${gMiss}\u2192${iMiss}`;
   }
 
   /* ── Render Scenario Description ── */
@@ -625,6 +768,11 @@
     ).join("");
   }
 
+  /* ── Update Dynamic Subtitle ── */
+  function updateSubtitle() {
+    document.getElementById('dynamicSub').innerHTML = MODES[currentMode].sub;
+  }
+
   /* ── Mode Switching (Burst / Streaming) ── */
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -634,6 +782,7 @@
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
       renderScenarioDesc();
       renderSpecTable(MODES[currentMode].specRows);
+      updateSubtitle();
       // Same topology — no 3D rebuild needed
       reload();
     });
@@ -712,6 +861,7 @@
       currentModel = model;
       currentResult = result;
       renderAll();
+      updateComparisonCard(result);
       statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets scheduled`;
       statusEl.className = "status-ok";
       updateCompareBadge('greedy', result);
@@ -736,6 +886,7 @@
       currentModel = model;
       currentResult = result;
       renderAll();
+      updateComparisonCard(result);
       statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
       statusEl.className = "status-ok";
       updateCompareBadge('ilp', result);
@@ -1047,6 +1198,7 @@
   /* ── Initialize ────────────────────────────── */
   renderScenarioDesc();
   renderSpecTable(MODES[currentMode].specRows);
+  updateSubtitle();
   const badge = document.getElementById("engineBadge");
   badge.className = "engine-badge ready";
   badge.innerHTML = "&#9679; Greedy Ready";
