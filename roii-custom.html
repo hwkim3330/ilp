@@ -1444,6 +1444,7 @@
     const newId = 'l_' + fromId.toLowerCase() + '_' + toId.toLowerCase() + '_' + Date.now().toString(36).slice(-4);
     m.links.push({ id: newId, from: fromId, to: toId, rate_mbps: 1000, prop_delay_us: 0.5 });
     scheduleAutoSolve();
+    renderAll();
     showToast(`Added link ${fromId} -> ${toId}`, 'info');
   }
 
@@ -1501,13 +1502,16 @@
       node.type = newType;
       closePopovers();
       scheduleAutoSolve();
+      renderAll();
     };
     div.querySelector('#popNodeDelete').onclick = () => {
       m.nodes.splice(nodeIdx, 1);
       m.links = m.links.filter(l => l.from !== nodeId && l.to !== nodeId);
       m.flows = m.flows.filter(f => f.src !== nodeId && f.dst !== nodeId);
+      delete STATE.nodePositions[nodeId];
       closePopovers();
       scheduleAutoSolve();
+      renderAll();
       showToast(`Deleted node ${nodeId}`, 'info');
     };
     div.querySelector('#popNodeClose').onclick = closePopovers;
@@ -1605,6 +1609,7 @@
       m.links = m.links.filter(l => !linkIds.includes(l.id));
       closePopovers();
       scheduleAutoSolve();
+      renderAll();
       showToast('Link deleted', 'info');
     };
 
@@ -2240,6 +2245,7 @@
         m.flows.splice(idx, 1);
         if (STATE.selectedFlow === fid) STATE.selectedFlow = null;
         scheduleAutoSolve();
+        renderAll();
         buildFlowEditor();
         showToast(`Deleted flow ${fid}`, 'info');
       });
@@ -2387,7 +2393,9 @@
         m.nodes.splice(idx, 1);
         m.links = m.links.filter(l => l.from !== nid && l.to !== nid);
         m.flows = m.flows.filter(f => f.src !== nid && f.dst !== nid);
+        delete STATE.nodePositions[nid];
         scheduleAutoSolve();
+        renderAll();
         buildModelEditor();
         showToast(`Deleted node ${nid}`, 'info');
       });
@@ -2419,6 +2427,7 @@
         const idx = parseInt(btn.dataset.linkDel);
         m.links.splice(idx, 1);
         scheduleAutoSolve();
+        renderAll();
         buildModelEditor();
         showToast('Deleted link', 'info');
       });
@@ -2781,7 +2790,7 @@
       if (STATE.selectedFlow === flowId) STATE.selectedFlow = null;
       closePopovers();
       scheduleAutoSolve();
-      renderFlowSidebar();
+      renderAll();
       showToast(`Deleted flow ${flowId}`, 'info');
     };
 
