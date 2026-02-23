@@ -357,6 +357,17 @@
     <div class="card" style="padding:12px 20px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text3);font-weight:600;">
+          ILP Timeout
+          <select id="tmlimSelect" style="padding:3px 8px;border-radius:6px;border:1px solid rgba(59,130,246,0.2);font-size:0.78rem;font-weight:700;background:#fff;color:var(--text);">
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+            <option value="120">2min</option>
+            <option value="180" selected>3min</option>
+            <option value="300">5min</option>
+            <option value="0">No limit</option>
+          </select>
+        </label>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
         <div class="scenario-group" id="scenarioGroup">
           <button class="scenario-btn active" data-scenario="normal">Normal</button>
@@ -572,7 +583,6 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: BURST_SPEC_ROWS,
-      tmlim: 15,
       sub: 'Burst &mdash; 10ms cycle, 14 pkts/cycle, All 1 Gbps Links'
     },
     streaming: {
@@ -584,7 +594,6 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: STREAMING_SPEC_ROWS,
-      tmlim: 120,
       sub: 'Streaming &mdash; 1.5ms cycle, 45 pkts/cycle, All 1 Gbps Links'
     }
   };
@@ -874,11 +883,13 @@
   /* ── ILP Solver ── */
   async function runILPSolve() {
     if (!glpk) { runGreedy(); return; }
-    const tmlim = MODES[currentMode].tmlim;
+    const tmlimVal = parseInt(document.getElementById('tmlimSelect').value);
+    const tmlim = tmlimVal || 99999;  // 0 = no limit (use large number)
+    const label = tmlimVal === 0 ? 'no limit' : `tmlim=${tmlim}s`;
     try {
       const model = JSON.parse(inputEl.value);
       resolveBtn.disabled = true;
-      statusEl.innerHTML = `<span class="spinner"></span>Solving ILP (tmlim=${tmlim}s)...`;
+      statusEl.innerHTML = `<span class="spinner"></span>Solving ILP (${label})...`;
       statusEl.className = "";
       await new Promise(r => setTimeout(r, 50));
 
