@@ -288,48 +288,63 @@
         <h1>ROii Real LiDAR Analysis</h1>
         <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
       </div>
-      <div class="sub" id="dynamicSub">Ouster OS-1-16 &mdash; 416KB/frame, 128 pkts, 3328B/pkt, ~34 Mbps</div>
+      <div class="sub" id="dynamicSub">Ouster OS-1-16 &mdash; 416KB/frame, 128 pkts, 3328B/pkt, 34.1 Mbps (UDP) / 35.9 Mbps (wire)</div>
 
       <!-- 2-Mode Toggle: Burst / Fragmented -->
       <div class="mode-group" id="modeGroup">
-        <button class="mode-btn active" data-mode="burst">Burst (128 pkts/frame)</button>
+        <button class="mode-btn active" data-mode="burst">Streaming (128 pkts &times; 781&micro;s)</button>
         <button class="mode-btn" data-mode="fragmented">IP Fragmented (384 frags/frame)</button>
       </div>
     </div>
 
     <!-- ★ Real LiDAR Analysis Card ★ -->
     <div class="analysis-card">
-      <h3>Ouster OS-1-16-A0 &mdash; Measured Traffic Profile</h3>
+      <h3>Ouster OS-1-16-A0 &mdash; Measured Traffic Profile (Real Capture)</h3>
       <div class="analysis-grid">
         <div class="analysis-item">
           <div class="a-label">Frame Size</div>
           <div class="a-val">416 <small>KB/frame</small></div>
-          <div class="a-note">426,496 bytes measured</div>
+          <div class="a-note">425,984B (UDP) / 427,008B (IP) / 449,280B (wire)</div>
         </div>
         <div class="analysis-item">
           <div class="a-label">Frame Rate</div>
           <div class="a-val">10 <small>Hz</small></div>
-          <div class="a-note">100ms period</div>
+          <div class="a-note">100ms period, 2048&times;10 mode</div>
         </div>
         <div class="analysis-item">
           <div class="a-label">Data Rate</div>
-          <div class="a-val">~34 <small>Mbps</small></div>
-          <div class="a-note">416KB &times; 10 &times; 8</div>
+          <div class="a-val">34.1 <small>Mbps</small></div>
+          <div class="a-note">UDP 34.1 / IP 34.2 / Wire 35.9 Mbps</div>
         </div>
         <div class="analysis-item">
           <div class="a-label">Packets / Frame</div>
           <div class="a-val">128 <small>pkts</small></div>
-          <div class="a-note">3,328 bytes each (UDP)</div>
+          <div class="a-note">3,328B UDP payload each (3,336B datagram)</div>
         </div>
         <div class="analysis-item">
           <div class="a-label">IP Fragments</div>
           <div class="a-val">3 <small>per pkt</small></div>
-          <div class="a-note">MTU 1500 &rarr; 384 frags/frame</div>
+          <div class="a-note">1480 + 1480 + 376 bytes &rarr; 384 frags/frame</div>
+        </div>
+        <div class="analysis-item">
+          <div class="a-label">Streaming Pattern</div>
+          <div class="a-val">781 <small>&micro;s interval</small></div>
+          <div class="a-note">Uniform &plusmn;90.6&micro;s jitter (not burst)</div>
         </div>
         <div class="analysis-item" id="burstAnalysis">
-          <div class="a-label">Burst Tx Time (1 hop)</div>
+          <div class="a-label">Tx Time (1 hop @ 1Gbps)</div>
+          <div class="a-val">11.8 / 26.7 <small>&micro;s</small></div>
+          <div class="a-note">Per fragment / per datagram</div>
+        </div>
+        <div class="analysis-item">
+          <div class="a-label">Frame Tx Total</div>
           <div class="a-val">3,408 <small>&micro;s</small></div>
-          <div class="a-note">416KB @ 1 Gbps</div>
+          <div class="a-note">425,984B &times; 8 / 1Gbps = 3.4ms per hop</div>
+        </div>
+        <div class="analysis-item">
+          <div class="a-label">IMU Stream</div>
+          <div class="a-val">56 <small>B &times; 100Hz</small></div>
+          <div class="a-note">Port 7503, 10ms interval, 0.045 Mbps</div>
         </div>
       </div>
     </div>
@@ -342,15 +357,50 @@
       </div>
     </div>
 
+    <!-- ★ Software TAS Simulation Results ★ -->
+    <div class="analysis-card" id="tasCard">
+      <h3>Software TAS Simulation &mdash; Real Ouster Traffic (5s capture)</h3>
+      <p style="font-size:0.82rem;color:var(--text2);margin:0 0 12px;">
+        Applied IEEE 802.1Qbv gate scheduling in software to live Ouster packets.
+        1ms TAS cycle, variable gate open/close ratio. Per-fragment Tx = 11.8&micro;s,
+        3-hop base E2E = 46&micro;s &mdash; all configurations pass 1ms and 5ms deadlines.
+      </p>
+      <div class="analysis-grid" id="tasGrid">
+        <div class="analysis-item ok">
+          <div class="a-label">No TAS (100% open)</div>
+          <div class="a-val">100% <small>pass</small></div>
+          <div class="a-note">0 blocked, 0&micro;s delay, baseline</div>
+        </div>
+        <div class="analysis-item ok">
+          <div class="a-label">TAS-80% (800/200&micro;s)</div>
+          <div class="a-val">~80% <small>pass</small></div>
+          <div class="a-note">~20% blocked, max delay 200&micro;s, 1ms&amp;5ms OK</div>
+        </div>
+        <div class="analysis-item ok">
+          <div class="a-label">TAS-50% (500/500&micro;s)</div>
+          <div class="a-val">~49% <small>pass</small></div>
+          <div class="a-note">~51% blocked, max delay 500&micro;s, 1ms&amp;5ms OK</div>
+        </div>
+        <div class="analysis-item ok">
+          <div class="a-label">TAS-20% (200/800&micro;s)</div>
+          <div class="a-val">~19% <small>pass</small></div>
+          <div class="a-note">~81% blocked, max delay 800&micro;s, 1ms&amp;5ms OK</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="tas-bar-chart" id="tasBarChart"></div>
+      </div>
+    </div>
+
     <!-- ★ Burst vs Fragmented Comparison Card ★ -->
     <div class="cmp-card" id="cmpCard">
       <div class="cmp-side active" id="cmpBurst" data-mode="burst">
-        <div class="cmp-label">Burst Mode <span class="cmp-active-tag">ACTIVE</span></div>
+        <div class="cmp-label">Streaming Mode <span class="cmp-active-tag">ACTIVE</span></div>
         <div class="cmp-grid">
           <div class="cmp-item"><div class="cmp-k">Cycle Time</div><div class="cmp-v">100,000 <small>&micro;s</small></div></div>
-          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">138</div></div>
-          <div class="cmp-item"><div class="cmp-k">Max Pkt Size</div><div class="cmp-v">3,328 <small>B</small></div></div>
-          <div class="cmp-item"><div class="cmp-k">Max Tx Time</div><div class="cmp-v">27.1 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">360</div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Pkt Size</div><div class="cmp-v">32,768 <small>B</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Ouster Tx</div><div class="cmp-v">26.6 <small>&micro;s</small></div></div>
           <div class="cmp-item"><div class="cmp-k">Guard Band</div><div class="cmp-v">3 <small>&micro;s</small></div></div>
           <div class="cmp-item"><div class="cmp-k">Bottleneck</div><div class="cmp-v" id="cmpBurstUtil">&mdash;</div></div>
           <div class="cmp-delta" id="cmpBurstDelta"></div>
@@ -360,9 +410,9 @@
         <div class="cmp-label">Fragmented Mode <span class="cmp-active-tag">ACTIVE</span></div>
         <div class="cmp-grid">
           <div class="cmp-item"><div class="cmp-k">Cycle Time</div><div class="cmp-v">100,000 <small>&micro;s</small></div></div>
-          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">394</div></div>
-          <div class="cmp-item"><div class="cmp-k">Max Pkt Size</div><div class="cmp-v">1,500 <small>B</small></div></div>
-          <div class="cmp-item"><div class="cmp-k">Max Tx Time</div><div class="cmp-v">12.3 <small>&micro;s</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Pkts / Cycle</div><div class="cmp-v">~870</div></div>
+          <div class="cmp-item"><div class="cmp-k">Max Frag Size</div><div class="cmp-v">1,480 <small>B</small></div></div>
+          <div class="cmp-item"><div class="cmp-k">Frag Tx Time</div><div class="cmp-v">11.8 <small>&micro;s</small></div></div>
           <div class="cmp-item"><div class="cmp-k">Guard Band</div><div class="cmp-v">1 <small>&micro;s</small></div></div>
           <div class="cmp-item"><div class="cmp-k">Bottleneck</div><div class="cmp-v" id="cmpFragUtil">&mdash;</div></div>
           <div class="cmp-delta" id="cmpFragDelta"></div>
@@ -379,11 +429,11 @@
         </tr></thead>
         <tbody>
           <tr>
-            <td>Frame Size</td><td>128 KB</td><td>416 KB</td>
+            <td>Frame Size</td><td>128 KB</td><td>416 KB (425,984B UDP)</td>
             <td class="val-up">3.25&times; larger</td>
           </tr>
           <tr>
-            <td>Packets / Frame</td><td>1 (burst)</td><td>128 UDP</td>
+            <td>Packets / Frame</td><td>1 (burst)</td><td>128 UDP (3,328B each)</td>
             <td class="val-up">128&times; more</td>
           </tr>
           <tr>
@@ -395,16 +445,32 @@
             <td class="val-down">2&times; slower</td>
           </tr>
           <tr>
-            <td>Tx Time (1 hop)</td><td>1,049 &micro;s</td><td>3,408 &micro;s</td>
+            <td>Tx Pattern</td><td>Burst (all at once)</td><td>Streaming (781&micro;s interval)</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr>
+            <td>Frame Tx (1 hop)</td><td>1,049 &micro;s</td><td>3,408 &micro;s</td>
             <td class="val-up">3.25&times; longer</td>
           </tr>
           <tr>
-            <td>Data Rate</td><td>~21 Mbps</td><td>~34 Mbps</td>
+            <td>Per-Pkt Tx (1 hop)</td><td>1,049 &micro;s</td><td>26.7 &micro;s (datagram)</td>
+            <td class="val-down">39&times; faster</td>
+          </tr>
+          <tr>
+            <td>Data Rate (UDP)</td><td>~21 Mbps</td><td>34.1 Mbps</td>
             <td class="val-up">1.6&times; higher</td>
           </tr>
           <tr>
-            <td>IP Fragments</td><td>N/A (jumbo)</td><td>3 per pkt (MTU 1500)</td>
+            <td>Data Rate (Wire)</td><td>&mdash;</td><td>35.9 Mbps</td>
+            <td class="val-up">+5.3% overhead</td>
+          </tr>
+          <tr>
+            <td>IP Fragments</td><td>N/A (jumbo)</td><td>3/pkt (1480+1480+376B)</td>
             <td class="val-up">384 frags/frame</td>
+          </tr>
+          <tr>
+            <td>IMU</td><td>&mdash;</td><td>56B &times; 100Hz (port 7503)</td>
+            <td>0.045 Mbps</td>
           </tr>
         </tbody>
       </table>
@@ -647,14 +713,15 @@
 
   /*
    * FRAGMENTED model: same Ouster data but IP fragmented (MTU 1500)
-   * Each 3328B packet → 3 IP fragments: 1500 + 1500 + 328 bytes
+   * Each 3328B UDP pkt → 3 IP fragments: 1480 + 1480 + 376 bytes (IP payload)
    * 128 pkts × 3 frags = 384 fragments per frame
-   * + Pandar FL/FR as fragmented: 32768B / 1500 = 22 frags each
-   * + Radar: 4096B / 1500 = 3 frags each, 2 pkts per 5ms period
+   * + Pandar FL/FR as fragmented: 32768B / 1480 ≈ 23 frags each
+   * + Radar: 4096B / 1480 = 3 frags each, 2 pkts per 5ms period
    *
-   * Model each as small TSN-schedulable fragments
+   * Model each as small TSN-schedulable fragments (1480B = max IP fragment payload)
+   * Tx time per fragment at 1 Gbps: 1480×8/1000 = 11.84µs
    * For Ouster: 384 frags in 100ms, period = 100000/384 ≈ 260us
-   * For Pandar: 22 frags in 50ms, period = 50000/22 ≈ 2273us
+   * For Pandar: 23 frags in 50ms, period = 50000/23 ≈ 2174us
    * For Radar: 3 frags in 5000us, period = 5000/3 ≈ 1667us
    */
   const ROII_LIVE_FRAG = {
@@ -664,35 +731,35 @@
     nodes: JSON.parse(JSON.stringify(LIVE_NODES)),
     links: JSON.parse(JSON.stringify(LIVE_LINKS)),
     flows: [
-      // Ouster FC fragmented: 384 frags/frame, 1500B each
-      { id: "f_lidar_fc", priority: 7, payload_bytes: 1500, period_us: 260, deadline_us: 2000,
+      // Ouster FC fragmented: 384 frags/frame, 1480B each, 11.8µs tx
+      { id: "f_lidar_fc", priority: 7, payload_bytes: 1480, period_us: 260, deadline_us: 2000,
         traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
       // Ouster Rear fragmented
-      { id: "f_lidar_r",  priority: 7, payload_bytes: 1500, period_us: 260, deadline_us: 2000,
+      { id: "f_lidar_r",  priority: 7, payload_bytes: 1480, period_us: 260, deadline_us: 2000,
         traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
-      // Pandar FL/FR fragmented: 22 frags/frame
-      { id: "f_lidar_fl", priority: 7, payload_bytes: 1500, period_us: 2273, deadline_us: 5000,
+      // Pandar FL/FR fragmented: 23 frags/frame
+      { id: "f_lidar_fl", priority: 7, payload_bytes: 1480, period_us: 2174, deadline_us: 5000,
         traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_lidar_fr", priority: 7, payload_bytes: 1500, period_us: 2273, deadline_us: 5000,
+      { id: "f_lidar_fr", priority: 7, payload_bytes: 1480, period_us: 2174, deadline_us: 5000,
         traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
       // Radar fragmented: 3 frags per 4KB pkt
-      { id: "f_radar_f",   priority: 6, payload_bytes: 1500, period_us: 1667, deadline_us: 5000,
+      { id: "f_radar_f",   priority: 6, payload_bytes: 1480, period_us: 1667, deadline_us: 5000,
         traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_flc", priority: 6, payload_bytes: 1500, period_us: 1667, deadline_us: 5000,
+      { id: "f_radar_flc", priority: 6, payload_bytes: 1480, period_us: 1667, deadline_us: 5000,
         traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_frc", priority: 6, payload_bytes: 1500, period_us: 1667, deadline_us: 5000,
+      { id: "f_radar_frc", priority: 6, payload_bytes: 1480, period_us: 1667, deadline_us: 5000,
         traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rlc", priority: 6, payload_bytes: 1500, period_us: 1667, deadline_us: 5000,
+      { id: "f_radar_rlc", priority: 6, payload_bytes: 1480, period_us: 1667, deadline_us: 5000,
         traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rrc", priority: 6, payload_bytes: 1500, period_us: 1667, deadline_us: 5000,
+      { id: "f_radar_rrc", priority: 6, payload_bytes: 1480, period_us: 1667, deadline_us: 5000,
         traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
     ]
   };
 
   /* ── Scenario Descriptions ── */
   const BURST_SCENARIO = {
-    title: "Ouster OS-1-16 Burst \u2014 128 pkts/frame, 100ms cycle",
-    description: "Real measured traffic from Ouster OS-1-16-A0 LiDAR: <strong>416KB per frame</strong> at 10Hz. Each frame consists of 128 UDP packets of 3,328 bytes. Packets arrive as a burst within each 100ms frame period. Front-center and rear positions use Ouster; side positions keep Pandar 40P. At 3 hops and 5ms deadline, the 416KB burst requires <strong>3,408\u00b5s per hop \u00d7 3 = 10.2ms</strong> \u2014 exceeding 5ms deadline.",
+    title: "Ouster OS-1-16 Streaming \u2014 128 pkts/frame, 781\u00b5s interval",
+    description: "Real measured traffic from Ouster OS-1-16-A0 LiDAR: <strong>416KB per frame</strong> (425,984B UDP payload) at 10Hz. Each frame: 128 UDP packets of 3,328 bytes, streamed at <strong>781\u00b5s uniform intervals</strong> (\u00b190.6\u00b5s jitter). Data rate: 34.1 Mbps (UDP) / 35.9 Mbps (wire). Per-packet Tx = 26.6\u00b5s at 1Gbps. Front-center and rear positions use Ouster; side positions keep Pandar 40P. Per-packet scheduling: <strong>3-hop E2E = 91\u00b5s</strong> \u2014 well within any practical deadline. IMU: 56B \u00d7 100Hz on port 7503.",
     flows: [
       { name: "Ouster FC \u2192 ACU-IT",    color: "#10B981", desc: "3328B \u00d7128 pkts, P7, 781\u00b5s period (27.1\u00b5s tx)" },
       { name: "Ouster Rear \u2192 ACU-IT",  color: "#10B981", desc: "3328B \u00d7128 pkts, P7, 781\u00b5s period (27.1\u00b5s tx)" },
@@ -715,17 +782,17 @@
 
   const FRAG_SCENARIO = {
     title: "Ouster OS-1-16 IP Fragmented \u2014 384 frags/frame, 100ms cycle",
-    description: "Same Ouster data but with <strong>IP fragmentation</strong> at MTU 1500. Each 3,328B UDP packet becomes 3 IP fragments (1500+1500+328). Per frame: 128 pkts \u00d7 3 = <strong>384 fragments</strong>. Smaller packets reduce per-hop Tx time to 12.3\u00b5s but dramatically increase GCL entry count and guard band overhead. Total fragments per cycle: 384 (Ouster \u00d72) + 44 (Pandar \u00d72) + 30 (Radar \u00d75) = <strong>~842 fragments</strong>.",
+    description: "Same Ouster data but with <strong>IP fragmentation</strong> at MTU 1500. Each 3,328B UDP packet becomes 3 IP fragments (<strong>1480+1480+376 bytes</strong>). Per frame: 128 pkts \u00d7 3 = <strong>384 fragments</strong>. Smaller fragments reduce per-hop Tx time to <strong>11.8\u00b5s</strong> (3-hop E2E = 46\u00b5s) but dramatically increase GCL entry count. Total fragments per cycle: 384 (Ouster \u00d72) + 46 (Pandar \u00d72) + 30 (Radar \u00d75) = <strong>~844 fragments</strong>.",
     flows: [
-      { name: "Ouster FC \u2192 ACU-IT",    color: "#10B981", desc: "1500B \u00d7384 frags, P7, 260\u00b5s period (12.3\u00b5s tx)" },
-      { name: "Ouster Rear \u2192 ACU-IT",  color: "#10B981", desc: "1500B \u00d7384 frags, P7, 260\u00b5s period (12.3\u00b5s tx)" },
-      { name: "Pandar FL \u2192 ACU-IT",    color: "#0D9488", desc: "1500B \u00d722 frags, P7, 2273\u00b5s period (12.3\u00b5s tx)" },
-      { name: "Pandar FR \u2192 ACU-IT",    color: "#0D9488", desc: "1500B \u00d722 frags, P7, 2273\u00b5s period (12.3\u00b5s tx)" },
-      { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "1500B \u00d73 frags, P6, 1667\u00b5s period (12.3\u00b5s tx)" },
-      { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "1500B \u00d73 frags, P6, 1667\u00b5s period (12.3\u00b5s tx)" },
-      { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "1500B \u00d73 frags, P6, 1667\u00b5s period (12.3\u00b5s tx)" },
-      { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "1500B \u00d73 frags, P6, 1667\u00b5s period (12.3\u00b5s tx)" },
-      { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "1500B \u00d73 frags, P6, 1667\u00b5s period (12.3\u00b5s tx)" }
+      { name: "Ouster FC \u2192 ACU-IT",    color: "#10B981", desc: "1480B \u00d7384 frags, P7, 260\u00b5s period (11.8\u00b5s tx)" },
+      { name: "Ouster Rear \u2192 ACU-IT",  color: "#10B981", desc: "1480B \u00d7384 frags, P7, 260\u00b5s period (11.8\u00b5s tx)" },
+      { name: "Pandar FL \u2192 ACU-IT",    color: "#0D9488", desc: "1480B \u00d723 frags, P7, 2174\u00b5s period (11.8\u00b5s tx)" },
+      { name: "Pandar FR \u2192 ACU-IT",    color: "#0D9488", desc: "1480B \u00d723 frags, P7, 2174\u00b5s period (11.8\u00b5s tx)" },
+      { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "1480B \u00d73 frags, P6, 1667\u00b5s period (11.8\u00b5s tx)" },
+      { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d73 frags, P6, 1667\u00b5s period (11.8\u00b5s tx)" },
+      { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d73 frags, P6, 1667\u00b5s period (11.8\u00b5s tx)" },
+      { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d73 frags, P6, 1667\u00b5s period (11.8\u00b5s tx)" },
+      { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d73 frags, P6, 1667\u00b5s period (11.8\u00b5s tx)" }
     ],
     domains: [
       { name: "Ouster OS-1-16 Fragments (1Gbps)", color: "#10B981" },
@@ -750,15 +817,15 @@
   ];
 
   const FRAG_SPEC_ROWS = [
-    { dot: "#10B981", sensor: "Front Center LiDAR", model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,500 B",   period: "260\u00b5s",  tx: "12.3 \u00b5s",  pkts: "384 frags/frame" },
-    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "2273\u00b5s", tx: "12.3 \u00b5s",  pkts: "22 frags/frame" },
-    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "2273\u00b5s", tx: "12.3 \u00b5s",  pkts: "22 frags/frame" },
-    { dot: "#10B981", sensor: "Rear LiDAR",          model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,500 B",   period: "260\u00b5s",  tx: "12.3 \u00b5s",  pkts: "384 frags/frame" },
-    { dot: "#952aff", sensor: "Front Radar",         model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "1667\u00b5s", tx: "12.3 \u00b5s",  pkts: "3 frags/pkt" },
-    { dot: "#952aff", sensor: "Front-Left Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "1667\u00b5s", tx: "12.3 \u00b5s",  pkts: "3 frags/pkt" },
-    { dot: "#952aff", sensor: "Front-Right Corner",  model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "1667\u00b5s", tx: "12.3 \u00b5s",  pkts: "3 frags/pkt" },
-    { dot: "#952aff", sensor: "Rear-Left Corner",    model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "1667\u00b5s", tx: "12.3 \u00b5s",  pkts: "3 frags/pkt" },
-    { dot: "#952aff", sensor: "Rear-Right Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,500 B",  period: "1667\u00b5s", tx: "12.3 \u00b5s",  pkts: "3 frags/pkt" }
+    { dot: "#10B981", sensor: "Front Center LiDAR", model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,480 B",   period: "260\u00b5s",  tx: "11.8 \u00b5s",  pkts: "384 frags/frame" },
+    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2174\u00b5s", tx: "11.8 \u00b5s",  pkts: "23 frags/frame" },
+    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2174\u00b5s", tx: "11.8 \u00b5s",  pkts: "23 frags/frame" },
+    { dot: "#10B981", sensor: "Rear LiDAR",          model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,480 B",   period: "260\u00b5s",  tx: "11.8 \u00b5s",  pkts: "384 frags/frame" },
+    { dot: "#952aff", sensor: "Front Radar",         model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "1667\u00b5s", tx: "11.8 \u00b5s",  pkts: "3 frags/pkt" },
+    { dot: "#952aff", sensor: "Front-Left Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "1667\u00b5s", tx: "11.8 \u00b5s",  pkts: "3 frags/pkt" },
+    { dot: "#952aff", sensor: "Front-Right Corner",  model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "1667\u00b5s", tx: "11.8 \u00b5s",  pkts: "3 frags/pkt" },
+    { dot: "#952aff", sensor: "Rear-Left Corner",    model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "1667\u00b5s", tx: "11.8 \u00b5s",  pkts: "3 frags/pkt" },
+    { dot: "#952aff", sensor: "Rear-Right Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "1667\u00b5s", tx: "11.8 \u00b5s",  pkts: "3 frags/pkt" }
   ];
 
   function renderSpecTable(rows) {
@@ -782,7 +849,7 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: BURST_SPEC_ROWS,
-      sub: 'Burst &mdash; Ouster 128 pkts/frame, 3328B/pkt, 100ms cycle'
+      sub: 'Streaming &mdash; Ouster 128 pkts/frame, 3328B/pkt, 781&micro;s interval, 100ms cycle'
     },
     fragmented: {
       model: ROII_LIVE_FRAG,
@@ -793,7 +860,7 @@
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
       specRows: FRAG_SPEC_ROWS,
-      sub: 'Fragmented &mdash; MTU 1500, 384 frags/frame, 100ms cycle'
+      sub: 'Fragmented &mdash; MTU 1500, 1480B frags, 384 frags/frame, 11.8&micro;s tx, 100ms cycle'
     }
   };
 
@@ -844,38 +911,48 @@
   /* ── Deadline Feasibility Analysis ── */
   function renderDeadlineAnalysis() {
     const grid = document.getElementById('deadlineGrid');
-    // Ouster burst: 416KB = 426496 bytes, tx_time = 426496*8/1e9 * 1e6 = 3411.97us per hop
-    const txPerHop = 3412; // us
-    const hops = [2, 3, 4];
-    const deadline = 5000; // us
+    // Three scheduling granularities:
+    // 1) Per IP fragment: 1480B → 11.84µs tx per hop
+    // 2) Per UDP datagram: 3336B (3328+8) → 26.7µs tx per hop
+    // 3) Whole frame burst: 425984B → 3408µs tx per hop
+    const levels = [
+      { name: 'Per Fragment', tx: 11.8, unit: '1480B', note: 'IP frag at MTU 1500' },
+      { name: 'Per Datagram', tx: 26.7, unit: '3336B', note: 'UDP pkt (3328+8)' },
+      { name: 'Frame Burst', tx: 3408, unit: '416KB', note: 'All 128 pkts at once' }
+    ];
 
     let html = '';
-    for (const h of hops) {
-      const total = txPerHop * h;
-      const isMiss = total > deadline;
-      html += `
-        <div class="analysis-item ${isMiss ? 'miss' : 'ok'}">
-          <div class="a-label">${h}-Hop E2E Tx</div>
-          <div class="a-val">${(total/1000).toFixed(1)} <small>ms</small></div>
-          <div class="a-note">${txPerHop}\u00b5s/hop \u00d7 ${h} = ${total}\u00b5s ${isMiss ? '> 5ms MISS' : '\u2264 5ms OK'}</div>
-        </div>`;
+    for (const lv of levels) {
+      html += `<div class="analysis-item" style="grid-column:span 3;">
+        <div class="a-label" style="font-weight:700;color:var(--blue);">${lv.name} &mdash; ${lv.unit} (${lv.tx}\u00b5s/hop)</div>
+      </div>`;
+      for (const h of [2, 3]) {
+        const total = lv.tx * h;
+        const prop = 0.5 * h;
+        const proc = 3 * h;
+        const e2e = total + prop + proc;
+        for (const dl of [1000, 5000]) {
+          const isMiss = e2e > dl;
+          html += `
+            <div class="analysis-item ${isMiss ? 'miss' : 'ok'}">
+              <div class="a-label">${h}-hop, ${dl/1000}ms DL</div>
+              <div class="a-val">${e2e < 100 ? e2e.toFixed(1) : (e2e/1000).toFixed(1)} <small>${e2e < 100 ? '\u00b5s' : 'ms'}</small></div>
+              <div class="a-note">${isMiss ? 'MISS' : 'OK'} (tx=${total < 100 ? total.toFixed(1)+'\u00b5s' : (total/1000).toFixed(1)+'ms'})</div>
+            </div>`;
+        }
+      }
     }
-    // Guard band overhead
+    // TAS verdict
     html += `
-      <div class="analysis-item">
-        <div class="a-label">TAS Guard Band</div>
-        <div class="a-val">3 <small>&micro;s \u00d7 128</small></div>
-        <div class="a-note">384\u00b5s overhead for 128 pkts</div>
+      <div class="analysis-item ok" style="grid-column:span 2;">
+        <div class="a-label">TAS Verdict</div>
+        <div class="a-val">Per-fragment scheduling</div>
+        <div class="a-note">11.8\u00b5s/hop \u00d7 3 = 46\u00b5s E2E \u2014 all deadlines met, TAS-20% (800\u00b5s max delay) still within 1ms</div>
       </div>
       <div class="analysis-item miss">
-        <div class="a-label">Verdict (3-hop, 5ms)</div>
-        <div class="a-val">MISS</div>
-        <div class="a-note">10.2ms burst > 5ms deadline</div>
-      </div>
-      <div class="analysis-item ok">
-        <div class="a-label">Verdict (2-hop, 10ms)</div>
-        <div class="a-val">OK</div>
-        <div class="a-note">6.8ms < 10ms with Tri-Star topology</div>
+        <div class="a-label">Frame Burst Warning</div>
+        <div class="a-val">3-hop &gt; 10ms</div>
+        <div class="a-note">3408\u00b5s/hop \u00d7 3 = 10.2ms \u2014 must use per-packet or per-fragment scheduling</div>
       </div>`;
     grid.innerHTML = html;
   }
@@ -885,8 +962,8 @@
     const container = document.getElementById('sweepContainer');
     container.innerHTML = '';
     const W = container.clientWidth || 700;
-    const H = 340;
-    const margin = { top: 30, right: 40, bottom: 50, left: 70 };
+    const H = 400;
+    const margin = { top: 30, right: 130, bottom: 50, left: 70 };
     const w = W - margin.left - margin.right;
     const h = H - margin.top - margin.bottom;
 
@@ -894,98 +971,175 @@
       .attr('width', W).attr('height', H);
     const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Sweep deadlines from 1ms to 20ms
+    // Sweep deadlines from 10µs to 20ms (log scale to show all levels)
     const deadlines = [];
-    for (let d = 1000; d <= 20000; d += 500) deadlines.push(d);
+    for (let d = 10; d < 100; d += 10) deadlines.push(d);
+    for (let d = 100; d < 1000; d += 50) deadlines.push(d);
+    for (let d = 1000; d <= 20000; d += 200) deadlines.push(d);
 
-    // For each deadline, check feasibility for Ouster burst at 2-hop and 3-hop
-    const txPerHop = 3412;
-    const data2hop = deadlines.map(d => ({ deadline: d, e2e: txPerHop * 2, feasible: txPerHop * 2 <= d }));
-    const data3hop = deadlines.map(d => ({ deadline: d, e2e: txPerHop * 3, feasible: txPerHop * 3 <= d }));
+    // Three scheduling levels, 3-hop each:
+    const fragTx3 = 11.8 * 3 + 0.5*3 + 3*3;    // ~46µs per frag, 3 hops
+    const dgTx3   = 26.7 * 3 + 0.5*3 + 3*3;     // ~91µs per datagram, 3 hops
+    const burstTx3 = 3408 * 3;                     // ~10224µs whole frame, 3 hops
+    const burstTx2 = 3408 * 2;                     // ~6816µs whole frame, 2 hops
+    const g32Tx3 = 1049 * 3;                        // G32 reference
 
-    // Also show G32 (spec) for reference
-    const g32TxPerHop = 1049;
-    const dataG32_3hop = deadlines.map(d => ({ deadline: d, e2e: g32TxPerHop * 3, feasible: g32TxPerHop * 3 <= d }));
-
-    const x = d3.scaleLinear().domain([1000, 20000]).range([0, w]);
-    const y = d3.scaleLinear().domain([0, 16000]).range([h, 0]);
+    const x = d3.scaleLog().domain([10, 20000]).range([0, w]);
+    const y = d3.scaleLog().domain([10, 16000]).range([h, 0]);
 
     // Axes
-    g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x).ticks(10).tickFormat(d => (d/1000) + 'ms'))
-      .selectAll('text').style('font-size', '0.72rem').style('fill', '#64748b');
-    g.append('g').call(d3.axisLeft(y).ticks(8).tickFormat(d => (d/1000).toFixed(0) + 'ms'))
-      .selectAll('text').style('font-size', '0.72rem').style('fill', '#64748b');
+    g.append('g').attr('transform', `translate(0,${h})`)
+      .call(d3.axisBottom(x).tickValues([10,50,100,500,1000,5000,10000,20000])
+        .tickFormat(d => d >= 1000 ? (d/1000)+'ms' : d+'\u00b5s'))
+      .selectAll('text').style('font-size', '0.7rem').style('fill', '#64748b');
+    g.append('g')
+      .call(d3.axisLeft(y).tickValues([10,50,100,500,1000,5000,10000])
+        .tickFormat(d => d >= 1000 ? (d/1000)+'ms' : d+'\u00b5s'))
+      .selectAll('text').style('font-size', '0.7rem').style('fill', '#64748b');
 
     // Labels
     svg.append('text').attr('x', W/2).attr('y', H - 8).attr('text-anchor', 'middle')
       .style('font-size', '0.78rem').style('fill', '#475569').style('font-weight', '600')
-      .text('Deadline (\u00b5s)');
+      .text('Deadline');
     svg.append('text').attr('x', -H/2 + margin.top).attr('y', 18).attr('text-anchor', 'middle')
       .attr('transform', 'rotate(-90)').style('font-size', '0.78rem').style('fill', '#475569').style('font-weight', '600')
-      .text('E2E Tx Time (\u00b5s)');
+      .text('E2E Time (3-hop)');
 
     // Diagonal feasibility line (deadline = e2e)
-    g.append('line').attr('x1', x(1000)).attr('y1', y(1000)).attr('x2', x(16000)).attr('y2', y(16000))
+    const diagData = deadlines.filter(d => d >= 10 && d <= 16000).map(d => ({ deadline: d, e2e: d }));
+    const lineFn = d3.line().x(d => x(d.deadline)).y(d => y(d.e2e));
+    g.append('path').datum(diagData).attr('d', lineFn)
       .attr('stroke', '#94a3b8').attr('stroke-width', 1).attr('stroke-dasharray', '4,4');
-    g.append('text').attr('x', x(14500)).attr('y', y(14500) - 8)
-      .style('font-size', '0.68rem').style('fill', '#94a3b8').style('font-weight', '600')
+    g.append('text').attr('x', x(12000)).attr('y', y(12000) - 8)
+      .style('font-size', '0.65rem').style('fill', '#94a3b8').style('font-weight', '600')
       .text('deadline = e2e');
 
-    // Feasibility region
+    // Feasible region shading
     g.append('rect').attr('x', 0).attr('y', 0).attr('width', w).attr('height', h)
-      .attr('fill', 'none');
+      .attr('fill', 'rgba(5,150,105,0.03)');
 
-    // Ouster 3-hop line
-    const line3 = d3.line().x(d => x(d.deadline)).y(d => y(d.e2e));
-    g.append('path').datum(data3hop).attr('d', line3)
-      .attr('stroke', '#dc2626').attr('stroke-width', 2.5).attr('fill', 'none');
-    g.append('text').attr('x', x(20000) + 4).attr('y', y(txPerHop * 3) + 4)
-      .style('font-size', '0.7rem').style('fill', '#dc2626').style('font-weight', '700')
-      .text('OS-1 3-hop');
+    // Helper to draw horizontal line
+    function hline(yVal, color, width, dash, label) {
+      const clipped = Math.max(10, Math.min(yVal, 16000));
+      g.append('line').attr('x1', 0).attr('y1', y(clipped)).attr('x2', w).attr('y2', y(clipped))
+        .attr('stroke', color).attr('stroke-width', width).attr('stroke-dasharray', dash || 'none');
+      g.append('text').attr('x', w + 6).attr('y', y(clipped) + 4)
+        .style('font-size', '0.65rem').style('fill', color).style('font-weight', '700')
+        .text(label);
+    }
 
-    // Ouster 2-hop line
-    g.append('path').datum(data2hop).attr('d', line3)
-      .attr('stroke', '#059669').attr('stroke-width', 2.5).attr('fill', 'none');
-    g.append('text').attr('x', x(20000) + 4).attr('y', y(txPerHop * 2) + 4)
-      .style('font-size', '0.7rem').style('fill', '#059669').style('font-weight', '700')
-      .text('OS-1 2-hop');
+    // Per-fragment 3-hop (46µs) — GREEN
+    hline(fragTx3, '#059669', 2.5, null, 'Frag 3-hop (46\u00b5s)');
 
-    // G32 3-hop reference
-    g.append('path').datum(dataG32_3hop).attr('d', line3)
-      .attr('stroke', '#3B82F6').attr('stroke-width', 1.5).attr('fill', 'none').attr('stroke-dasharray', '6,3');
-    g.append('text').attr('x', x(20000) + 4).attr('y', y(g32TxPerHop * 3) + 4)
-      .style('font-size', '0.7rem').style('fill', '#3B82F6').style('font-weight', '700')
-      .text('G32 3-hop');
+    // Per-datagram 3-hop (91µs) — TEAL
+    hline(dgTx3, '#0891b2', 2.5, null, 'Dgram 3-hop (91\u00b5s)');
 
-    // 5ms deadline marker
-    const dl5ms = 5000;
-    g.append('line').attr('x1', x(dl5ms)).attr('y1', 0).attr('x2', x(dl5ms)).attr('y2', h)
-      .attr('stroke', '#d97706').attr('stroke-width', 1.5).attr('stroke-dasharray', '4,2');
-    g.append('text').attr('x', x(dl5ms) + 4).attr('y', 14)
-      .style('font-size', '0.7rem').style('fill', '#d97706').style('font-weight', '700')
-      .text('5ms deadline');
+    // Frame burst 3-hop — RED
+    hline(burstTx3, '#dc2626', 2.5, null, 'Burst 3-hop (10.2ms)');
 
-    // 10ms deadline marker
-    const dl10ms = 10000;
-    g.append('line').attr('x1', x(dl10ms)).attr('y1', 0).attr('x2', x(dl10ms)).attr('y2', h)
-      .attr('stroke', '#7c3aed').attr('stroke-width', 1.5).attr('stroke-dasharray', '4,2');
-    g.append('text').attr('x', x(dl10ms) + 4).attr('y', 14)
-      .style('font-size', '0.7rem').style('fill', '#7c3aed').style('font-weight', '700')
-      .text('10ms deadline');
+    // Frame burst 2-hop — ORANGE
+    hline(burstTx2, '#d97706', 2, '6,3', 'Burst 2-hop (6.8ms)');
+
+    // G32 3-hop reference — BLUE dashed
+    hline(g32Tx3, '#3B82F6', 1.5, '6,3', 'G32 3-hop (3.1ms)');
+
+    // Deadline markers
+    function vline(xVal, color, label) {
+      g.append('line').attr('x1', x(xVal)).attr('y1', 0).attr('x2', x(xVal)).attr('y2', h)
+        .attr('stroke', color).attr('stroke-width', 1.5).attr('stroke-dasharray', '4,2');
+      g.append('text').attr('x', x(xVal) + 4).attr('y', 14)
+        .style('font-size', '0.68rem').style('fill', color).style('font-weight', '700')
+        .text(label);
+    }
+    vline(1000, '#db2777', '1ms');
+    vline(5000, '#d97706', '5ms');
+    vline(10000, '#7c3aed', '10ms');
 
     // Intersection dots
-    // OS-1 3-hop hits 5ms: MISS (10236 > 5000)
-    g.append('circle').attr('cx', x(dl5ms)).attr('cy', y(txPerHop * 3))
-      .attr('r', 5).attr('fill', '#dc2626').attr('stroke', '#fff').attr('stroke-width', 2);
-    // OS-1 2-hop at 5ms: MISS still (6824 > 5000)
-    g.append('circle').attr('cx', x(dl5ms)).attr('cy', y(txPerHop * 2))
-      .attr('r', 5).attr('fill', '#dc2626').attr('stroke', '#fff').attr('stroke-width', 2);
-    // OS-1 2-hop at 10ms: OK (6824 < 10000)
-    g.append('circle').attr('cx', x(dl10ms)).attr('cy', y(txPerHop * 2))
-      .attr('r', 5).attr('fill', '#059669').attr('stroke', '#fff').attr('stroke-width', 2);
+    function dot(xv, yv, ok) {
+      const cy = Math.max(10, Math.min(yv, 16000));
+      g.append('circle').attr('cx', x(xv)).attr('cy', y(cy))
+        .attr('r', 5).attr('fill', ok ? '#059669' : '#dc2626').attr('stroke', '#fff').attr('stroke-width', 2);
+    }
+    // Fragment at 1ms: OK (46 << 1000)
+    dot(1000, fragTx3, true);
+    // Datagram at 1ms: OK (91 < 1000)
+    dot(1000, dgTx3, true);
+    // Burst 3-hop at 5ms: MISS (10224 > 5000)
+    dot(5000, burstTx3, false);
+    // Burst 2-hop at 5ms: MISS (6816 > 5000)
+    dot(5000, burstTx2, false);
+    // Burst 2-hop at 10ms: OK (6816 < 10000)
+    dot(10000, burstTx2, true);
     // G32 3-hop at 5ms: OK (3147 < 5000)
-    g.append('circle').attr('cx', x(dl5ms)).attr('cy', y(g32TxPerHop * 3))
-      .attr('r', 5).attr('fill', '#059669').attr('stroke', '#fff').attr('stroke-width', 2);
+    dot(5000, g32Tx3, true);
+
+    // TAS gate delay zone annotation
+    g.append('rect')
+      .attr('x', x(fragTx3)).attr('y', y(1000))
+      .attr('width', x(1000) - x(fragTx3)).attr('height', y(fragTx3) - y(1000))
+      .attr('fill', 'rgba(5,150,105,0.08)').attr('stroke', 'rgba(5,150,105,0.2)')
+      .attr('stroke-dasharray', '3,3');
+    g.append('text').attr('x', x(Math.sqrt(fragTx3 * 1000))).attr('y', y(Math.sqrt(fragTx3 * 1000)) - 6)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '0.62rem').style('fill', '#059669').style('font-weight', '600')
+      .text('TAS feasible zone');
+  }
+
+  /* ── TAS Simulation Bar Chart ── */
+  function renderTASChart() {
+    const container = document.getElementById('tasBarChart');
+    if (!container) return;
+    container.innerHTML = '';
+    const W = container.clientWidth || 600;
+    const H = 200;
+    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    const w = W - margin.left - margin.right;
+    const h = H - margin.top - margin.bottom;
+
+    const svg = d3.select(container).append('svg').attr('width', W).attr('height', H);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const data = [
+      { config: 'NoTAS (100%)', pass: 100, blocked: 0, maxDelay: 0, color: '#059669' },
+      { config: 'TAS-80%', pass: 80, blocked: 20, maxDelay: 200, color: '#3B82F6' },
+      { config: 'TAS-50%', pass: 49, blocked: 51, maxDelay: 500, color: '#d97706' },
+      { config: 'TAS-20%', pass: 19, blocked: 81, maxDelay: 800, color: '#dc2626' }
+    ];
+
+    const x = d3.scaleBand().domain(data.map(d => d.config)).range([0, w]).padding(0.3);
+    const y = d3.scaleLinear().domain([0, 100]).range([h, 0]);
+
+    g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x))
+      .selectAll('text').style('font-size', '0.7rem').style('fill', '#475569').style('font-weight', '600');
+    g.append('g').call(d3.axisLeft(y).ticks(5).tickFormat(d => d + '%'))
+      .selectAll('text').style('font-size', '0.7rem').style('fill', '#64748b');
+
+    // Pass bars
+    g.selectAll('.bar-pass').data(data).join('rect')
+      .attr('x', d => x(d.config)).attr('y', d => y(d.pass))
+      .attr('width', x.bandwidth()).attr('height', d => h - y(d.pass))
+      .attr('fill', d => d.color).attr('rx', 3).attr('opacity', 0.8);
+
+    // Labels on bars
+    g.selectAll('.label').data(data).join('text')
+      .attr('x', d => x(d.config) + x.bandwidth()/2).attr('y', d => y(d.pass) - 4)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '0.72rem').style('fill', d => d.color).style('font-weight', '700')
+      .text(d => d.pass + '% pass');
+
+    // Max delay annotation
+    g.selectAll('.delay').data(data.filter(d => d.maxDelay > 0)).join('text')
+      .attr('x', d => x(d.config) + x.bandwidth()/2).attr('y', d => y(d.pass) + 16)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '0.65rem').style('fill', '#fff').style('font-weight', '600')
+      .text(d => 'max ' + d.maxDelay + '\u00b5s');
+
+    // 1ms deadline line
+    svg.append('text').attr('x', W - margin.right).attr('y', margin.top + h + 32)
+      .attr('text-anchor', 'end')
+      .style('font-size', '0.68rem').style('fill', '#059669').style('font-weight', '600')
+      .text('All configs pass 1ms & 5ms deadlines (3-hop E2E = 46\u00b5s + gate delay \u2264 800\u00b5s)');
   }
 
   /* ── Comparison Card ── */
@@ -1270,7 +1424,7 @@
   let resizeTimer;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { renderAll(); renderDeadlineSweep(); }, 300);
+    resizeTimer = setTimeout(() => { renderAll(); renderDeadlineSweep(); renderTASChart(); }, 300);
   });
 
   /* ═══════════════════════════════════════════════
@@ -1539,6 +1693,7 @@
 
   /* ── Initialize ────────────────────────────── */
   renderDeadlineAnalysis();
+  renderTASChart();
   renderScenarioDesc();
   renderSpecTable(MODES[currentMode].specRows);
   updateSubtitle();
