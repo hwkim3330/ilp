@@ -286,7 +286,7 @@
       <div class="keti-header">
         <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
         <h1>ROii Real LiDAR Analysis</h1>
-        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
+        <span class="engine-badge ready" id="engineBadge">&#9679; Greedy Ready</span>
       </div>
       <div class="sub" id="dynamicSub">Ouster OS-1-16 &mdash; 416KB/frame, 128 pkts, 3328B/pkt, 34.1 Mbps (UDP) / 35.9 Mbps (wire)</div>
 
@@ -557,18 +557,7 @@
     <!-- Solve Controls -->
     <div class="card" style="padding:12px 20px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
-        <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text3);font-weight:600;">
-          ILP Timeout
-          <select id="tmlimSelect" style="padding:3px 8px;border-radius:6px;border:1px solid rgba(59,130,246,0.2);font-size:0.78rem;font-weight:700;background:#fff;color:var(--text);">
-            <option value="30">30s</option>
-            <option value="60">60s</option>
-            <option value="120" selected>2min</option>
-            <option value="180">3min</option>
-            <option value="300">5min</option>
-            <option value="0">No limit</option>
-          </select>
-        </label>
+        <button class="btn btn-primary" id="resolveBtn">Re-Solve (Greedy)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
         <div class="scenario-group" id="scenarioGroup">
           <button class="scenario-btn active" data-scenario="normal">Normal</button>
@@ -611,7 +600,7 @@
   <script src="vendor/d3.min.js"></script>
   <script type="module">
   import {
-    initTooltip, solveGreedy, solveILP, renderMetrics, renderTopology,
+    initTooltip, solveGreedy, renderMetrics, renderTopology,
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
@@ -621,205 +610,12 @@
     ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS,
     ROII_REAL_3D_LABELS, realGetDeviceType
   } from './js/roii-real-data.js?v=4';
-
-  /* ═══════════════════════════════════════════════
-     Ouster OS-1-16-A0 Real LiDAR Traffic Model
-     Measured: 416KB/frame, 10Hz, 128 pkts/frame, 3328B/pkt
-     IP fragmentation: 3 fragments per packet (MTU 1500)
-     ═══════════════════════════════════════════════ */
-
-  const LIVE_NODES = [
-    { id: "LIDAR_FC", type: "endstation" },
-    { id: "LIDAR_FL", type: "endstation" },
-    { id: "LIDAR_FR", type: "endstation" },
-    { id: "LIDAR_R",  type: "endstation" },
-    { id: "RADAR_F",   type: "endstation" },
-    { id: "RADAR_FLC", type: "endstation" },
-    { id: "RADAR_FRC", type: "endstation" },
-    { id: "RADAR_RLC", type: "endstation" },
-    { id: "RADAR_RRC", type: "endstation" },
-    { id: "SW_FL",   type: "switch" },
-    { id: "SW_FR",   type: "switch" },
-    { id: "SW_REAR", type: "switch" },
-    { id: "ACU_IT",  type: "endstation" }
-  ];
-
-  const LIVE_LINKS = [
-    { id: "l_lidarfc_swfl",   from: "LIDAR_FC",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_lidarfl_swfl",   from: "LIDAR_FL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_lidarfr_swfr",   from: "LIDAR_FR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_lidarr_swrear",  from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarf_swfl",    from: "RADAR_F",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
-    { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
-  ];
-
-  /*
-   * STREAMING model: Ouster sends 128 UDP packets of 3328B each per frame
-   * Each packet is schedulable as an individual TSN frame (no IP fragmentation)
-   * Measured: 781µs uniform interval between packets
-   *
-   * Ouster OS-1-16: 128 pkts/frame @ 10Hz = 128 pkts per 100ms
-   * ILP requires cycle_time % period == 0
-   * 100000 / 128 = 781.25 (not integer!) → use period=800 (125 pkts/cycle, ~2.3% fewer)
-   * Pandar: 50000µs period (2/cycle) — divides 100000 ✓
-   * Radar:  5000µs period (20/cycle) — divides 100000 ✓
-   */
-  const ROII_LIVE_BURST = {
-    cycle_time_us: 100000,
-    guard_band_us: 3,
-    processing_delay_us: 3,
-    nodes: JSON.parse(JSON.stringify(LIVE_NODES)),
-    links: JSON.parse(JSON.stringify(LIVE_LINKS)),
-    flows: [
-      // Ouster OS-1-16 Front Center — ~125 pkts/cycle (real 128), 3328B each, 10Hz
-      { id: "f_lidar_fc", priority: 7, payload_bytes: 3328, period_us: 800, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
-      // Ouster OS-1-16 Rear — same profile
-      { id: "f_lidar_r",  priority: 7, payload_bytes: 3328, period_us: 800, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
-      // Keep Pandar 40P for FL/FR (original 32KB burst model, 20Hz)
-      { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 50000, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 50000, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
-      // MRR-35 Radar x5 — 4KB x2 at 50Hz
-      { id: "f_radar_f",   priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
-    ]
-  };
-
-  /*
-   * FRAGMENTED model: same Ouster data but IP fragmented (MTU 1500)
-   * Each 3328B UDP pkt → 3 IP fragments: 1480 + 1480 + 376 bytes (IP payload)
-   * 128 pkts × 3 frags = 384 fragments per frame
-   *
-   * ILP requires cycle_time % period == 0 → use nearest divisors of 100000:
-   * Ouster: 384 frags → period=250µs (400/cycle, ~4% more)
-   * Pandar: 46 frags/100ms → period=2500µs (40/cycle, ~13% fewer)
-   * Radar:  60 frags/100ms → period=2000µs (50/cycle, ~17% fewer)
-   * Tx time per 1480B fragment at 1 Gbps: 11.84µs
-   */
-  const ROII_LIVE_FRAG = {
-    cycle_time_us: 100000,
-    guard_band_us: 1,
-    processing_delay_us: 1,
-    nodes: JSON.parse(JSON.stringify(LIVE_NODES)),
-    links: JSON.parse(JSON.stringify(LIVE_LINKS)),
-    flows: [
-      // Ouster FC fragmented: ~400 frags/cycle (real 384), 1480B each, 11.8µs tx
-      { id: "f_lidar_fc", priority: 7, payload_bytes: 1480, period_us: 250, deadline_us: 2000,
-        traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
-      // Ouster Rear fragmented
-      { id: "f_lidar_r",  priority: 7, payload_bytes: 1480, period_us: 250, deadline_us: 2000,
-        traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
-      // Pandar FL/FR fragmented: ~40 frags/cycle (real 46)
-      { id: "f_lidar_fl", priority: 7, payload_bytes: 1480, period_us: 2500, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_lidar_fr", priority: 7, payload_bytes: 1480, period_us: 2500, deadline_us: 5000,
-        traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
-      // Radar fragmented: ~50 frags/cycle (real 60)
-      { id: "f_radar_f",   priority: 6, payload_bytes: 1480, period_us: 2000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_flc", priority: 6, payload_bytes: 1480, period_us: 2000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_frc", priority: 6, payload_bytes: 1480, period_us: 2000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rlc", priority: 6, payload_bytes: 1480, period_us: 2000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
-      { id: "f_radar_rrc", priority: 6, payload_bytes: 1480, period_us: 2000, deadline_us: 5000,
-        traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
-    ]
-  };
-
-  /* ── Scenario Descriptions ── */
-  const BURST_SCENARIO = {
-    title: "Ouster OS-1-16 Streaming \u2014 128 pkts/frame, 781\u00b5s interval",
-    description: "Real measured traffic from Ouster OS-1-16-A0 LiDAR: <strong>416KB per frame</strong> (425,984B UDP payload) at 10Hz. Each frame: 128 UDP packets of 3,328 bytes, streamed at <strong>781\u00b5s uniform intervals</strong> (\u00b190.6\u00b5s jitter). Data rate: 34.1 Mbps (UDP) / 35.9 Mbps (wire). Per-packet Tx = 26.6\u00b5s at 1Gbps. Front-center and rear positions use Ouster; side positions keep Pandar 40P. Per-packet scheduling: <strong>3-hop E2E = 91\u00b5s</strong> \u2014 well within any practical deadline. IMU: 56B \u00d7 100Hz on port 7503.",
-    flows: [
-      { name: "Ouster FC \u2192 ACU-IT",    color: "#10B981", desc: "3328B \u00d7125 pkts, P7, 800\u00b5s period (26.6\u00b5s tx)" },
-      { name: "Ouster Rear \u2192 ACU-IT",  color: "#10B981", desc: "3328B \u00d7125 pkts, P7, 800\u00b5s period (26.6\u00b5s tx)" },
-      { name: "Pandar FL \u2192 ACU-IT",    color: "#0D9488", desc: "32KB burst, P7, 50ms period (262.4\u00b5s tx)" },
-      { name: "Pandar FR \u2192 ACU-IT",    color: "#0D9488", desc: "32KB burst, P7, 50ms period (262.4\u00b5s tx)" },
-      { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "4KB \u00d72, P6, 5ms period (33.1\u00b5s tx)" },
-      { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72, P6, 5ms period (33.1\u00b5s tx)" },
-      { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72, P6, 5ms period (33.1\u00b5s tx)" },
-      { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72, P6, 5ms period (33.1\u00b5s tx)" },
-      { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72, P6, 5ms period (33.1\u00b5s tx)" }
-    ],
-    domains: [
-      { name: "Ouster OS-1-16 (1Gbps)",       color: "#10B981" },
-      { name: "Hesai Pandar 40P (1Gbps)",      color: "#0D9488" },
-      { name: "Continental MRR-35 (1Gbps)",    color: "#952aff" },
-      { name: "LAN9692 Backbone",              color: "#3B82F6" },
-      { name: "ACU-IT Processing",             color: "#dc2626" }
-    ]
-  };
-
-  const FRAG_SCENARIO = {
-    title: "Ouster OS-1-16 IP Fragmented \u2014 384 frags/frame, 100ms cycle",
-    description: "Same Ouster data but with <strong>IP fragmentation</strong> at MTU 1500. Each 3,328B UDP packet becomes 3 IP fragments (<strong>1480+1480+376 bytes</strong>). Per frame: 128 pkts \u00d7 3 = <strong>384 fragments</strong>. Smaller fragments reduce per-hop Tx time to <strong>11.8\u00b5s</strong> (3-hop E2E = 46\u00b5s) but dramatically increase GCL entry count. Total fragments per cycle: 384 (Ouster \u00d72) + 46 (Pandar \u00d72) + 30 (Radar \u00d75) = <strong>~844 fragments</strong>.",
-    flows: [
-      { name: "Ouster FC \u2192 ACU-IT",    color: "#10B981", desc: "1480B \u00d7400 frags, P7, 250\u00b5s period (11.8\u00b5s tx)" },
-      { name: "Ouster Rear \u2192 ACU-IT",  color: "#10B981", desc: "1480B \u00d7400 frags, P7, 250\u00b5s period (11.8\u00b5s tx)" },
-      { name: "Pandar FL \u2192 ACU-IT",    color: "#0D9488", desc: "1480B \u00d740 frags, P7, 2500\u00b5s period (11.8\u00b5s tx)" },
-      { name: "Pandar FR \u2192 ACU-IT",    color: "#0D9488", desc: "1480B \u00d740 frags, P7, 2500\u00b5s period (11.8\u00b5s tx)" },
-      { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "1480B \u00d750 frags, P6, 2000\u00b5s period (11.8\u00b5s tx)" },
-      { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d750 frags, P6, 2000\u00b5s period (11.8\u00b5s tx)" },
-      { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d750 frags, P6, 2000\u00b5s period (11.8\u00b5s tx)" },
-      { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d750 frags, P6, 2000\u00b5s period (11.8\u00b5s tx)" },
-      { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "1480B \u00d750 frags, P6, 2000\u00b5s period (11.8\u00b5s tx)" }
-    ],
-    domains: [
-      { name: "Ouster OS-1-16 Fragments (1Gbps)", color: "#10B981" },
-      { name: "Pandar 40P Fragments (1Gbps)",      color: "#0D9488" },
-      { name: "MRR-35 Fragments (1Gbps)",          color: "#952aff" },
-      { name: "LAN9692 Backbone",                  color: "#3B82F6" },
-      { name: "ACU-IT Processing",                 color: "#dc2626" }
-    ]
-  };
-
-  /* ── Sensor Spec Table Rows ── */
-  const BURST_SPEC_ROWS = [
-    { dot: "#10B981", sensor: "Front Center LiDAR", model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "3,328 B",    period: "800\u00b5s",  tx: "26.6 \u00b5s",  pkts: "125/cycle" },
-    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",     period: "50ms",        tx: "262.4 \u00b5s", pkts: "2/cycle" },
-    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "32 KB",     period: "50ms",        tx: "262.4 \u00b5s", pkts: "2/cycle" },
-    { dot: "#10B981", sensor: "Rear LiDAR",          model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "3,328 B",    period: "800\u00b5s",  tx: "26.6 \u00b5s",  pkts: "125/cycle" },
-    { dot: "#952aff", sensor: "Front Radar",         model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72", period: "5ms",      tx: "33.1 \u00b5s",  pkts: "20/cycle" },
-    { dot: "#952aff", sensor: "Front-Left Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72", period: "5ms",      tx: "33.1 \u00b5s",  pkts: "20/cycle" },
-    { dot: "#952aff", sensor: "Front-Right Corner",  model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72", period: "5ms",      tx: "33.1 \u00b5s",  pkts: "20/cycle" },
-    { dot: "#952aff", sensor: "Rear-Left Corner",    model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72", period: "5ms",      tx: "33.1 \u00b5s",  pkts: "20/cycle" },
-    { dot: "#952aff", sensor: "Rear-Right Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "4 KB \u00d72", period: "5ms",      tx: "33.1 \u00b5s",  pkts: "20/cycle" }
-  ];
-
-  const FRAG_SPEC_ROWS = [
-    { dot: "#10B981", sensor: "Front Center LiDAR", model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,480 B",   period: "250\u00b5s",  tx: "11.8 \u00b5s",  pkts: "400 frags/cycle" },
-    { dot: "#0D9488", sensor: "Front Left LiDAR",   model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2500\u00b5s", tx: "11.8 \u00b5s",  pkts: "40 frags/cycle" },
-    { dot: "#0D9488", sensor: "Front Right LiDAR",  model: "Hesai Pandar 40P",    iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2500\u00b5s", tx: "11.8 \u00b5s",  pkts: "40 frags/cycle" },
-    { dot: "#10B981", sensor: "Rear LiDAR",          model: "Ouster OS-1-16-A0",  iface: "1000BASE-T", speed: "1000 Mbps", payload: "1,480 B",   period: "250\u00b5s",  tx: "11.8 \u00b5s",  pkts: "400 frags/cycle" },
-    { dot: "#952aff", sensor: "Front Radar",         model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2000\u00b5s", tx: "11.8 \u00b5s",  pkts: "50 frags/cycle" },
-    { dot: "#952aff", sensor: "Front-Left Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2000\u00b5s", tx: "11.8 \u00b5s",  pkts: "50 frags/cycle" },
-    { dot: "#952aff", sensor: "Front-Right Corner",  model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2000\u00b5s", tx: "11.8 \u00b5s",  pkts: "50 frags/cycle" },
-    { dot: "#952aff", sensor: "Rear-Left Corner",    model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2000\u00b5s", tx: "11.8 \u00b5s",  pkts: "50 frags/cycle" },
-    { dot: "#952aff", sensor: "Rear-Right Corner",   model: "Continental MRR-35",  iface: "1000BASE-T1", speed: "1000 Mbps", payload: "1,480 B",  period: "2000\u00b5s", tx: "11.8 \u00b5s",  pkts: "50 frags/cycle" }
-  ];
+  import {
+    ROII_LIVE_BURST, ROII_LIVE_FRAG,
+    LIVE_BURST_SCENARIO, LIVE_FRAG_SCENARIO,
+    LIVE_BURST_SPEC_ROWS, LIVE_FRAG_SPEC_ROWS,
+    TAS_RESULTS, DEADLINE_LEVELS, LINK_FAIL
+  } from './js/roii-live-data.js';
 
   function renderSpecTable(rows) {
     const tbody = document.getElementById("specTableBody");
@@ -835,24 +631,24 @@
   const MODES = {
     burst: {
       model: ROII_LIVE_BURST,
-      scenario: BURST_SCENARIO,
+      scenario: LIVE_BURST_SCENARIO,
       getPositions: getRealPositions,
       nodeColors: ROII_REAL_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS,
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
-      specRows: BURST_SPEC_ROWS,
+      specRows: LIVE_BURST_SPEC_ROWS,
       sub: 'Streaming &mdash; Ouster 128 pkts/frame, 3328B/pkt, 781&micro;s interval, 100ms cycle'
     },
     fragmented: {
       model: ROII_LIVE_FRAG,
-      scenario: FRAG_SCENARIO,
+      scenario: LIVE_FRAG_SCENARIO,
       getPositions: getRealPositions,
       nodeColors: ROII_REAL_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS,
       labels3d: ROII_REAL_3D_LABELS,
       tilts3d: ROII_REAL_3D_TILTS,
-      specRows: FRAG_SPEC_ROWS,
+      specRows: LIVE_FRAG_SPEC_ROWS,
       sub: 'Fragmented &mdash; MTU 1500, 1480B frags, 384 frags/frame, 11.8&micro;s tx, 100ms cycle'
     }
   };
@@ -860,12 +656,10 @@
   const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
 
   /* ── State ───────────────────────────────────── */
-  let glpk = null;
   let currentMode = 'burst';
   let currentScenario = 'normal';
   let currentModel = null;
   let currentResult = null;
-  let baselineGreedyResult = null;
 
   const modeResults = { burst: null, fragmented: null };
 
@@ -876,13 +670,6 @@
   let linkMeshes3d = {};
   let clock3d = null;
   let glbModel = null;
-
-  /* ── Link Failure Scenarios ── */
-  const LINK_FAIL = {
-    'fail-left-backbone':    { links: ['l_swfl_swrear'], desc: 'SW_FL\u2192SW_REAR link down \u2014 traffic reroutes via SW_FR' },
-    'fail-right-backbone':   { links: ['l_swfr_swrear'], desc: 'SW_FR\u2192SW_REAR link down \u2014 traffic reroutes via SW_FL' },
-    'fail-front-crosslink':  { links: ['l_swfl_swfr', 'l_swfr_swfl'], desc: 'SW_FL\u2194SW_FR crosslink down \u2014 front switches use direct backbone' }
-  };
 
   /* ── Build Model for Scenario ── */
   function buildModel() {
@@ -904,15 +691,7 @@
   /* ── Deadline Feasibility Analysis ── */
   function renderDeadlineAnalysis() {
     const grid = document.getElementById('deadlineGrid');
-    // Three scheduling granularities:
-    // 1) Per IP fragment: 1480B → 11.84µs tx per hop
-    // 2) Per UDP datagram: 3336B (3328+8) → 26.7µs tx per hop
-    // 3) Whole frame burst: 425984B → 3408µs tx per hop
-    const levels = [
-      { name: 'Per Fragment', tx: 11.8, unit: '1480B', note: 'IP frag at MTU 1500' },
-      { name: 'Per Datagram', tx: 26.7, unit: '3336B', note: 'UDP pkt (3328+8)' },
-      { name: 'Frame Burst', tx: 3408, unit: '416KB', note: 'All 128 pkts at once' }
-    ];
+    const levels = DEADLINE_LEVELS;
 
     let html = '';
     for (const lv of levels) {
@@ -1093,12 +872,7 @@
     const svg = d3.select(container).append('svg').attr('width', W).attr('height', H);
     const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-    const data = [
-      { config: 'NoTAS (100%)', pass: 100, blocked: 0, maxDelay: 0, color: '#059669' },
-      { config: 'TAS-80%', pass: 80, blocked: 20, maxDelay: 200, color: '#3B82F6' },
-      { config: 'TAS-50%', pass: 49, blocked: 51, maxDelay: 500, color: '#d97706' },
-      { config: 'TAS-20%', pass: 19, blocked: 81, maxDelay: 800, color: '#dc2626' }
-    ];
+    const data = TAS_RESULTS;
 
     const x = d3.scaleBand().domain(data.map(d => d.config)).range([0, w]).padding(0.3);
     const y = d3.scaleLinear().domain([0, 100]).range([h, 0]);
@@ -1209,36 +983,13 @@
   const failureBanner = document.getElementById("failureBanner");
   const failureText = document.getElementById("failureText");
 
-  function effectiveMissCount(result) {
-    const deadlineMiss = result.packetRows.filter(p => p.status === "MISS").length;
-    return deadlineMiss + Number(result.stats?.overlap_conflicts || 0);
-  }
-
-  function updateCompareBadge(mode, result) {
+  function updateCompareBadge(result) {
     if (!compareBadgeEl || !result) return;
-    if (mode === 'greedy') {
-      baselineGreedyResult = result;
-      compareBadgeEl.style.display = 'inline-block';
-      compareBadgeEl.style.borderColor = 'rgba(59,130,246,0.25)';
-      compareBadgeEl.style.background = 'rgba(59,130,246,0.08)';
-      compareBadgeEl.style.color = 'var(--blue)';
-      compareBadgeEl.textContent = `Baseline: Greedy objective ${result.objective}\u00b5s`;
-      return;
-    }
-    if (!baselineGreedyResult) return;
-    const gr = baselineGreedyResult;
-    const gObj = Number(gr.objective || 0);
-    const iObj = Number(result.objective || 0);
-    const deltaPct = gObj > 0 ? ((gObj - iObj) / gObj) * 100 : 0;
-    const gMiss = effectiveMissCount(gr);
-    const iMiss = effectiveMissCount(result);
-    const improved = deltaPct >= 0 && iMiss <= gMiss;
-
     compareBadgeEl.style.display = 'inline-block';
-    compareBadgeEl.style.borderColor = improved ? 'rgba(5,150,105,0.25)' : 'rgba(217,119,6,0.25)';
-    compareBadgeEl.style.background = improved ? 'rgba(5,150,105,0.08)' : 'rgba(217,119,6,0.10)';
-    compareBadgeEl.style.color = improved ? 'var(--green)' : 'var(--orange)';
-    compareBadgeEl.textContent = `ILP vs Greedy: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}% objective, MISS ${gMiss}\u2192${iMiss}`;
+    compareBadgeEl.style.borderColor = 'rgba(59,130,246,0.25)';
+    compareBadgeEl.style.background = 'rgba(59,130,246,0.08)';
+    compareBadgeEl.style.color = 'var(--blue)';
+    compareBadgeEl.textContent = `Greedy objective ${result.objective}\u00b5s`;
   }
 
   /* ── Render Scenario Description ── */
@@ -1332,7 +1083,7 @@
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
 
-  resolveBtn.addEventListener("click", runILPSolve);
+  resolveBtn.addEventListener("click", () => { reload(); });
 
   function reload() {
     const model = buildModel();
@@ -1353,40 +1104,11 @@
       updateComparisonCard(result);
       statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets scheduled`;
       statusEl.className = "status-ok";
-      updateCompareBadge('greedy', result);
+      updateCompareBadge(result);
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
       statusEl.className = "status-err";
     }
-  }
-
-  /* ── ILP Solver ── */
-  async function runILPSolve() {
-    if (!glpk) { runGreedy(); return; }
-    const tmlimVal = parseInt(document.getElementById('tmlimSelect').value);
-    const tmlim = tmlimVal || 99999;
-    const label = tmlimVal === 0 ? 'no limit' : `tmlim=${tmlim}s`;
-    try {
-      const model = JSON.parse(inputEl.value);
-      resolveBtn.disabled = true;
-      statusEl.innerHTML = `<span class="spinner"></span>Solving ILP (${label})...`;
-      statusEl.className = "";
-      await new Promise(r => setTimeout(r, 50));
-
-      const result = await solveILP(model, glpk, { tmlim });
-      currentModel = model;
-      currentResult = result;
-      renderAll();
-      updateComparisonCard(result);
-      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
-      statusEl.className = "status-ok";
-      updateCompareBadge('ilp', result);
-    } catch (e) {
-      statusEl.textContent = "ILP failed: " + e.message + " \u2014 using greedy";
-      statusEl.className = "status-err";
-      runGreedy();
-    }
-    resolveBtn.disabled = false;
   }
 
   function renderAll() {
@@ -1690,29 +1412,10 @@
   renderScenarioDesc();
   renderSpecTable(MODES[currentMode].specRows);
   updateSubtitle();
-  const badge = document.getElementById("engineBadge");
-  badge.className = "engine-badge ready";
-  badge.innerHTML = "&#9679; Greedy Ready";
-  resolveBtn.disabled = false;
   reload();
   renderDeadlineSweep();
 
   try { init3D(); } catch(e) { console.warn('3D init error:', e); }
-
-  /* ── Load GLPK/WASM in background ─────────── */
-  (async () => {
-    try {
-      const GLPK = (await import('./vendor/glpk.js')).default;
-      glpk = await GLPK();
-      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
-      badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
-      resolveBtn.textContent = "Re-Solve (ILP)";
-      runILPSolve();
-    } catch (e) {
-      console.warn('GLPK load failed (greedy works):', e);
-      resolveBtn.textContent = "Re-Solve (Greedy)";
-    }
-  })();
   </script>
 </body>
 </html>
