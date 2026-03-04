@@ -201,7 +201,7 @@
         <h1>ROii Realistic Sensor Demo</h1>
         <span class="engine-badge ready" id="engineBadge">&#9679; Greedy Scheduler</span>
       </div>
-      <div class="sub">All 1 Gbps Links &mdash; G32 &times;2 + Pandar 40P &times;2 &mdash; 500&micro;s Cycle (Greedy)</div>
+      <div class="sub">All 1 Gbps Links &mdash; G32 &times;2 + 40P &times;2 + MRR-35 &times;5 &mdash; 500&micro;s Cycle (Greedy)</div>
     </div>
 
     <!-- 3D Shuttle Visualization -->
@@ -229,9 +229,14 @@
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1262 B</td><td>536 &micro;s</td><td>1</td><td>10.400 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1262 B</td><td>536 &micro;s</td><td>1</td><td>10.400 &micro;s</td></tr>
           <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>AutoL G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1248 B</td><td>167 &micro;s</td><td>3</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096 B</td><td>5000 &micro;s</td><td>1</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096 B</td><td>5000 &micro;s</td><td>1</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096 B</td><td>5000 &micro;s</td><td>1</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096 B</td><td>5000 &micro;s</td><td>1</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4096 B</td><td>5000 &micro;s</td><td>1</td><td>33.1 &micro;s</td></tr>
         </tbody>
         <tfoot><tr><td colspan="8" style="font-size:0.75rem;color:var(--text3);padding-top:8px;">
-          Cycle = 500&micro;s &mdash; Total 8 pkts/cycle &mdash; Gateway Tx: 82.528&micro;s/500&micro;s = <strong>16.5%</strong> utilization
+          Cycle = 500&micro;s &mdash; LiDAR 8 pkts (82.5&micro;s) + Radar 5 pkts (165.5&micro;s) = <strong>13 pkts/cycle</strong>
         </td></tr></tfoot>
       </table>
     </div>

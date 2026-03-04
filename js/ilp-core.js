@@ -96,7 +96,7 @@ export function expandPackets(model) {
       if (!Array.isArray(p) || p.length === 0) throw new Error(`flow ${f.id}: empty path`);
       for (const lid of p) if (!lm.has(lid)) throw new Error(`flow ${f.id}: unknown link ${lid}`);
     }
-    const reps = Math.max(1, Math.round(model.cycle_time_us / f.period_us));
+    const reps = Math.max(1, Math.ceil(model.cycle_time_us / f.period_us));
     for (let k = 0; k < reps; k++) {
       const rel = k * f.period_us;
       pkts.push({
