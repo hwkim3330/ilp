@@ -47,74 +47,80 @@ const LINKS = [
   { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
 ];
 
-/* ── Standard Model (10ms = GCD(50ms, 20ms)) ─────────── */
+/* ── Standard Model (500µs window, G32×2 + 40P×2, no radar) ── */
+const NODES_STD = [
+  { id: "LIDAR_FC", type: "endstation" },  // AutoL G32
+  { id: "LIDAR_FL", type: "endstation" },  // Hesai Pandar 40P
+  { id: "LIDAR_FR", type: "endstation" },  // Hesai Pandar 40P
+  { id: "LIDAR_R",  type: "endstation" },  // AutoL G32
+  { id: "SW_FL",   type: "switch" },
+  { id: "SW_FR",   type: "switch" },
+  { id: "SW_REAR", type: "switch" },
+  { id: "ACU_IT",  type: "endstation" }
+];
+const LINKS_STD = [
+  // LiDAR → switches (all 1 Gbps)
+  { id: "l_lidarfc_swfl",   from: "LIDAR_FC",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfl_swfl",   from: "LIDAR_FL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarfr_swfr",   from: "LIDAR_FR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_lidarr_swrear",  from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  // Triangle switch backbone (1 Gbps bidirectional)
+  { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+  { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+  // Gateway → Processing
+  { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
+];
+
 export const ROII_REAL_STANDARD = {
-  cycle_time_us: 10000,
-  guard_band_us: 3,
+  cycle_time_us: 500,
+  guard_band_us: 1,
   processing_delay_us: 3,
-  nodes: JSON.parse(JSON.stringify(NODES)),
-  links: JSON.parse(JSON.stringify(LINKS)),
+  nodes: JSON.parse(JSON.stringify(NODES_STD)),
+  links: JSON.parse(JSON.stringify(LINKS_STD)),
   flows: [
-    // LiDAR flows (P7) — G32: 128KB point cloud burst, Pandar: 32KB sub-sampled
-    { id: "f_lidar_fc", priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+    // G32 (P7) — 1248B payload, 167µs period → 3 pkts/cycle, Tx 10.288µs
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 1248, period_us: 167, deadline_us: 167,
       traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_lidar_fl", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_lidar_fr", priority: 7, payload_bytes: 32768, period_us: 10000, deadline_us: 5000,
-      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_lidar_r",  priority: 7, payload_bytes: 131072, period_us: 10000, deadline_us: 5000,
+    { id: "f_lidar_r",  priority: 7, payload_bytes: 1248, period_us: 167, deadline_us: 167,
       traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
-    // Radar flows (P6) — MRR-35: 4KB detection data, 50Hz (2 pkts per 10ms cycle)
-    { id: "f_radar_f",   priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_flc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_frc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_rlc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_rrc", priority: 6, payload_bytes: 4096, period_us: 5000, deadline_us: 2000,
-      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
+    // 40P (P7) — 1262B payload, 536µs period → 1 pkt/cycle, Tx 10.400µs
+    { id: "f_lidar_fl", priority: 7, payload_bytes: 1262, period_us: 536, deadline_us: 500,
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_lidar_fr", priority: 7, payload_bytes: 1262, period_us: 536, deadline_us: 500,
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 }
   ]
 };
 
-/* ── Fixed Node Positions (vehicle top-down layout) ── */
+/* ── Fixed Node Positions (vehicle top-down layout, 8 nodes) ── */
 export function getRealPositions(W, H) {
   return {
-    // Top row — front sensors evenly spaced
-    RADAR_FLC: { x: W * 0.04, y: H * 0.06 },
-    LIDAR_FL:  { x: W * 0.20, y: H * 0.06 },
-    LIDAR_FC:  { x: W * 0.36, y: H * 0.06 },
-    RADAR_F:   { x: W * 0.50, y: H * 0.06 },
-    LIDAR_FR:  { x: W * 0.64, y: H * 0.06 },
-    RADAR_FRC: { x: W * 0.80, y: H * 0.06 },
-    // Upper-middle — front zone controllers (symmetric)
+    // Top row — front LiDARs
+    LIDAR_FL:  { x: W * 0.15, y: H * 0.06 },
+    LIDAR_FC:  { x: W * 0.50, y: H * 0.06 },
+    LIDAR_FR:  { x: W * 0.85, y: H * 0.06 },
+    // Middle — zone controllers
     SW_FL:     { x: W * 0.25, y: H * 0.34 },
     SW_FR:     { x: W * 0.75, y: H * 0.34 },
-    // Lower-middle — rear sensors + gateway
-    RADAR_RLC: { x: W * 0.08, y: H * 0.60 },
-    SW_REAR:   { x: W * 0.50, y: H * 0.58 },
-    RADAR_RRC: { x: W * 0.92, y: H * 0.60 },
-    LIDAR_R:   { x: W * 0.50, y: H * 0.78 },
+    // Lower-middle — rear switch + LiDAR
+    SW_REAR:   { x: W * 0.50, y: H * 0.55 },
+    LIDAR_R:   { x: W * 0.50, y: H * 0.75 },
     // Bottom — ACU-IT
     ACU_IT:    { x: W * 0.50, y: H * 0.92 }
   };
 }
 
-/* ── Node Color Map ──────────────────────────── */
+/* ── Node Color Map (8 nodes, no radar) ──────── */
 export const ROII_REAL_NODE_COLORS = {
   // LiDAR G32 — bright green
   LIDAR_FC:  { fill: "#d1fae5", stroke: "#10B981", label: "G32 FC",       shortLabel: "G32" },
   LIDAR_R:   { fill: "#d1fae5", stroke: "#10B981", label: "G32 Rear",     shortLabel: "G32" },
   // LiDAR Pandar 40P — teal green
-  LIDAR_FL:  { fill: "#ccfbf1", stroke: "#0D9488", label: "Pandar FL",    shortLabel: "P40P" },
-  LIDAR_FR:  { fill: "#ccfbf1", stroke: "#0D9488", label: "Pandar FR",    shortLabel: "P40P" },
-  // Radar MRR-35 — purple
-  RADAR_F:   { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 F",     shortLabel: "MRR" },
-  RADAR_FLC: { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 FLC",   shortLabel: "MRR" },
-  RADAR_FRC: { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 FRC",   shortLabel: "MRR" },
-  RADAR_RLC: { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 RLC",   shortLabel: "MRR" },
-  RADAR_RRC: { fill: "#ede9fe", stroke: "#952aff", label: "MRR-35 RRC",   shortLabel: "MRR" },
+  LIDAR_FL:  { fill: "#ccfbf1", stroke: "#0D9488", label: "40P FL",       shortLabel: "40P" },
+  LIDAR_FR:  { fill: "#ccfbf1", stroke: "#0D9488", label: "40P FR",       shortLabel: "40P" },
   // Switches — blue
   SW_FL:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-L ZC",   shortLabel: "LAN9692" },
   SW_FR:     { fill: "#dbeafe", stroke: "#3B82F6", label: "Front-R ZC",   shortLabel: "LAN9692" },
@@ -134,6 +140,8 @@ export const ROII_REAL_SWITCHES = [
 export function realFlowColor(fid) {
   const id = (fid || '').toLowerCase();
   if (id.endsWith('_rep')) return '#d97706';  // 802.1CB replicated copy
+  if (id.includes('lidar_fc') || id.includes('lidar_r')) return '#10B981';  // G32
+  if (id.includes('lidar_fl') || id.includes('lidar_fr')) return '#0D9488'; // 40P
   if (id.includes('lidar')) return '#10B981';
   if (id.includes('radar')) return '#952aff';
   return '#3B82F6';
@@ -141,23 +149,17 @@ export function realFlowColor(fid) {
 
 /* ── Scenario Descriptions ───────────────────── */
 export const ROII_REAL_STANDARD_SCENARIO = {
-  title: "ROii Realistic \u2014 Standard 10ms Cycle",
-  description: "Realistic ROii shuttle sensor network. All links 1 Gbps. AutoL G32 sends 128KB point cloud burst (1048.9\u00b5s tx), Hesai Pandar 40P sends 32KB sub-sampled data (262.4\u00b5s tx), Continental MRR-35 sends 4KB detection data at 50Hz (2 pkts/cycle, 33.1\u00b5s tx each). <strong>9 flows, 14 pkts/cycle</strong>. Bottleneck utilization \u2248 30%.",
+  title: "ROii LiDAR-Only \u2014 500\u00b5s Cycle (Greedy)",
+  description: "ROii shuttle with <strong>4 LiDAR sensors only</strong> (no radar). All links 1 Gbps. AutoL G32: 1248B payload, 167\u00b5s period (3 pkts/cycle, 10.288\u00b5s tx). Hesai 40P: 1262B payload, 536\u00b5s period (1 pkt/cycle, 10.400\u00b5s tx). <strong>4 flows, 8 pkts/cycle</strong>. Gateway utilization \u2248 16.5%.",
   flows: [
-    { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "128KB point cloud, P7, 1Gbps (1048.9\u00b5s tx)" },
-    { name: "Pandar FL \u2192 ACU-IT",   color: "#0D9488", desc: "32KB sub-sampled, P7, 1Gbps (262.4\u00b5s tx)" },
-    { name: "Pandar FR \u2192 ACU-IT",   color: "#0D9488", desc: "32KB sub-sampled, P7, 1Gbps (262.4\u00b5s tx)" },
-    { name: "G32 Rear \u2192 ACU-IT",    color: "#10B981", desc: "128KB point cloud, P7, 1Gbps (1048.9\u00b5s tx)" },
-    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
-    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
-    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
-    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" },
-    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "4KB \u00d72pkts, P6, 50Hz (33.1\u00b5s tx)" }
+    { name: "G32 FC \u2192 ACU-IT",    color: "#10B981", desc: "1248B \u00d73pkts, P7, 167\u00b5s period (10.288\u00b5s tx)" },
+    { name: "G32 Rear \u2192 ACU-IT",  color: "#10B981", desc: "1248B \u00d73pkts, P7, 167\u00b5s period (10.288\u00b5s tx)" },
+    { name: "40P FL \u2192 ACU-IT",    color: "#0D9488", desc: "1262B \u00d71pkt, P7, 536\u00b5s period (10.400\u00b5s tx)" },
+    { name: "40P FR \u2192 ACU-IT",    color: "#0D9488", desc: "1262B \u00d71pkt, P7, 536\u00b5s period (10.400\u00b5s tx)" }
   ],
   domains: [
     { name: "LiDAR G32 (1Gbps)",       color: "#10B981" },
     { name: "LiDAR Pandar 40P (1Gbps)", color: "#0D9488" },
-    { name: "Radar MRR-35 (1Gbps)",    color: "#952aff" },
     { name: "LAN9692 Backbone",        color: "#3B82F6" },
     { name: "ACU-IT Processing",       color: "#dc2626" }
   ]
@@ -167,60 +169,42 @@ export const ROII_REAL_STANDARD_SCENARIO = {
    3D Visualization Data (standard 13-node topology)
    ═══════════════════════════════════════════════════ */
 
-/* ── 3D Positions (mapped from vehicle geometry) ── */
+/* ── 3D Positions (mapped from vehicle geometry, 8 nodes) ── */
 export const ROII_REAL_3D_POSITIONS = {
   LIDAR_FC:   { x:  0,    y: 5.5,  z: 18.5 },
   LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },
   LIDAR_FR:   { x:  8.5,  y: 10,   z: 16.2 },
   LIDAR_R:    { x:  0,    y: 5.5,  z:-18.5 },
-  RADAR_F:    { x:  0,    y: 7,    z: 18.5 },
-  RADAR_FLC:  { x: -7,    y: 6.5,  z: 17.5 },
-  RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 },
-  RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },
-  RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },
   SW_FL:      { x: -4,    y: 2,    z: 10   },
   SW_FR:      { x:  4,    y: 2,    z: 10   },
   SW_REAR:    { x:  0,    y: 2,    z: -8   },
   ACU_IT:     { x:  0,    y: 2,    z:-15   }
 };
 
-/* ── 3D Tilts (angled radar sensors) ── */
-export const ROII_REAL_3D_TILTS = {
-  RADAR_FLC: { y: -Math.PI / 6 },
-  RADAR_FRC: { y:  Math.PI / 6 },
-  RADAR_RLC: { y:  Math.PI / 6 },
-  RADAR_RRC: { y: -Math.PI / 6 }
-};
+/* ── 3D Tilts (no radar sensors) ── */
+export const ROII_REAL_3D_TILTS = {};
 
 /* ── 3D Labels ── */
 export const ROII_REAL_3D_LABELS = {
-  LIDAR_FC:  'G32-Front-Center',  LIDAR_FL:  'Pandar-FL',
-  LIDAR_FR:  'Pandar-FR',         LIDAR_R:   'G32-Rear',
-  RADAR_F:   'MRR35-Front',       RADAR_FLC: 'MRR35-FLC',
-  RADAR_FRC: 'MRR35-FRC',         RADAR_RLC: 'MRR35-RLC',
-  RADAR_RRC: 'MRR35-RRC',
-  SW_FL:     'Front-L ZC',        SW_FR:     'Front-R ZC',
-  SW_REAR:   'Rear-GW',           ACU_IT:    'ACU-IT'
+  LIDAR_FC:  'G32-FC',    LIDAR_FL:  '40P-FL',
+  LIDAR_FR:  '40P-FR',    LIDAR_R:   'G32-Rear',
+  SW_FL:     'Front-L ZC', SW_FR:    'Front-R ZC',
+  SW_REAR:   'Rear-GW',   ACU_IT:    'ACU-IT'
 };
 
-/* ── 3D Flow Paths (for animated particles) ── */
+/* ── 3D Flow Paths (4 LiDAR flows) ── */
 export const ROII_REAL_FLOW_PATHS = [
   { path: ['LIDAR_FC','SW_FL','SW_REAR','ACU_IT'],  color: 0x10B981 },
   { path: ['LIDAR_FL','SW_FL','SW_REAR','ACU_IT'],  color: 0x0D9488 },
   { path: ['LIDAR_FR','SW_FR','SW_REAR','ACU_IT'],  color: 0x0D9488 },
-  { path: ['LIDAR_R','SW_REAR','ACU_IT'],           color: 0x10B981 },
-  { path: ['RADAR_F','SW_FL','SW_REAR','ACU_IT'],   color: 0x952aff },
-  { path: ['RADAR_FLC','SW_FL','SW_REAR','ACU_IT'], color: 0x952aff },
-  { path: ['RADAR_FRC','SW_FR','SW_REAR','ACU_IT'], color: 0x952aff },
-  { path: ['RADAR_RLC','SW_REAR','ACU_IT'],         color: 0x952aff },
-  { path: ['RADAR_RRC','SW_REAR','ACU_IT'],         color: 0x952aff }
+  { path: ['LIDAR_R','SW_REAR','ACU_IT'],           color: 0x10B981 }
 ];
 
 /* ── Device Type Classifier (for 3D templates) ── */
 export function realGetDeviceType(nodeId) {
   if (nodeId === 'LIDAR_FC' || nodeId === 'LIDAR_R') return 'lidar_g32';
   if (nodeId === 'LIDAR_FL' || nodeId === 'LIDAR_FR') return 'lidar_pandar';
-  if (nodeId.startsWith('RADAR')) return 'radar';
+  if (nodeId.startsWith('RADAR')) return 'radar';   // kept for other pages
   if (nodeId === 'REP') return 'replicator';
   if (nodeId === 'SW_REAR') return 'switch_r';
   if (nodeId.startsWith('SW')) return 'switch_f';

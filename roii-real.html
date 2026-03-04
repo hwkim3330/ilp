@@ -199,15 +199,9 @@
       <div class="keti-header">
         <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
         <h1>ROii Realistic Sensor Demo</h1>
-        <span class="engine-badge loading" id="engineBadge"><span class="spinner"></span>Loading GLPK...</span>
+        <span class="engine-badge ready" id="engineBadge">&#9679; Greedy Scheduler</span>
       </div>
-      <div class="sub">All 1 Gbps Links &mdash; G32, Pandar 40P, MRR-35 Sensors</div>
-
-      <!-- 2-Mode Toggle -->
-      <div class="mode-group" id="modeGroup">
-        <button class="mode-btn active" data-mode="standard">Standard (13 Nodes)</button>
-        <button class="mode-btn" data-mode="reconf">Reconfigured (14 Nodes + REP)</button>
-      </div>
+      <div class="sub">All 1 Gbps Links &mdash; G32 &times;2 + Pandar 40P &times;2 &mdash; 500&micro;s Cycle (Greedy)</div>
     </div>
 
     <!-- 3D Shuttle Visualization -->
@@ -228,19 +222,17 @@
       <div class="card-title">Sensor Hardware Specifications</div>
       <table class="spec-table">
         <thead><tr>
-          <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Tx Time (1st hop)</th>
+          <th>Sensor</th><th>Model</th><th>Interface</th><th>Link Speed</th><th>Payload</th><th>Period</th><th>Pkts/Cycle</th><th>Tx Time</th>
         </tr></thead>
         <tbody>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>AutoL G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>128 KB</td><td>50ms (20Hz)</td><td>1048.9 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32 KB</td><td>50ms (20Hz)</td><td>262.4 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai Pandar 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>32 KB</td><td>50ms (20Hz)</td><td>262.4 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>AutoL G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>128 KB</td><td>50ms (20Hz)</td><td>1048.9 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front Radar</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Front-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Left Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
-          <tr><td><span class="spec-dot" style="background:#952aff"></span>Rear-Right Corner</td><td>Continental MRR-35</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>4 KB &times;2</td><td>5ms (50Hz &times;2)</td><td>33.1 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Front Center LiDAR</td><td>AutoL G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1248 B</td><td>167 &micro;s</td><td>3</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Left LiDAR</td><td>Hesai 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1262 B</td><td>536 &micro;s</td><td>1</td><td>10.400 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#0D9488"></span>Front Right LiDAR</td><td>Hesai 40P</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1262 B</td><td>536 &micro;s</td><td>1</td><td>10.400 &micro;s</td></tr>
+          <tr><td><span class="spec-dot" style="background:#10B981"></span>Rear LiDAR</td><td>AutoL G32</td><td>1000BASE-T1</td><td>1000 Mbps</td><td>1248 B</td><td>167 &micro;s</td><td>3</td><td>10.288 &micro;s</td></tr>
         </tbody>
+        <tfoot><tr><td colspan="8" style="font-size:0.75rem;color:var(--text3);padding-top:8px;">
+          Cycle = 500&micro;s &mdash; Total 8 pkts/cycle &mdash; Gateway Tx: 82.528&micro;s/500&micro;s = <strong>16.5%</strong> utilization
+        </td></tr></tfoot>
       </table>
     </div>
 
@@ -295,7 +287,7 @@
     <!-- Solve Controls -->
     <div class="card" style="padding:12px 20px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="resolveBtn" disabled>Re-Solve (ILP)</button>
+        <button class="btn btn-primary" id="resolveBtn">Re-Solve (Greedy)</button>
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
         <div class="scenario-group" id="scenarioGroup">
           <button class="scenario-btn active" data-scenario="normal">Normal</button>
@@ -338,7 +330,7 @@
   <script src="vendor/d3.min.js"></script>
   <script type="module">
   import {
-    initTooltip, solveGreedy, solveILP, renderMetrics, renderTopology,
+    initTooltip, solveGreedy, renderMetrics, renderTopology,
     renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
@@ -346,25 +338,15 @@
     ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
     ROII_REAL_STANDARD_SCENARIO, realFlowColor,
     ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS,
-    ROII_REAL_3D_LABELS, realGetDeviceType,
-    ROII_REAL_RECONF,
-    getReconfPositions, ROII_RECONF_NODE_COLORS,
-    ROII_RECONF_SCENARIO,
-    ROII_REAL_3D_POSITIONS_RECONF, ROII_REAL_3D_LABELS_RECONF
-  } from './js/roii-real-data.js?v=4';
+    ROII_REAL_3D_LABELS, realGetDeviceType
+  } from './js/roii-real-data.js?v=5';
 
-  /* ── MODES Registry (Standard / Reconfigured) ── */
+  /* ── MODES Registry (Standard only) ── */
   const MODES = {
     standard: {
       model: ROII_REAL_STANDARD, scenario: ROII_REAL_STANDARD_SCENARIO,
       getPositions: getRealPositions, nodeColors: ROII_REAL_NODE_COLORS,
       pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS,
-      tilts3d: ROII_REAL_3D_TILTS
-    },
-    reconf: {
-      model: ROII_REAL_RECONF, scenario: ROII_RECONF_SCENARIO,
-      getPositions: getReconfPositions, nodeColors: ROII_RECONF_NODE_COLORS,
-      pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF,
       tilts3d: ROII_REAL_3D_TILTS
     }
   };
@@ -482,18 +464,7 @@
     ).join("");
   }
 
-  /* ── Mode Switching (2 modes) ── */
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentMode = btn.dataset.mode;
-      currentScenario = 'normal';
-      updateScenarioUI();
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
-      renderScenarioDesc();
-      rebuild3D(MODES[currentMode]);
-      reload();
-    });
-  });
+  /* ── Mode (standard only) ── */
 
   /* ── 3D Link Failure Highlight ── */
   function update3DLinks() {
@@ -550,7 +521,7 @@
     statusEl.textContent = "Reset to default"; statusEl.className = "status-ok";
   });
 
-  resolveBtn.addEventListener("click", runILPSolve);
+  resolveBtn.addEventListener("click", () => runGreedy());
 
   function reload() {
     const model = buildModel();
@@ -577,30 +548,7 @@
     }
   }
 
-  /* ── ILP Solver ── */
-  async function runILPSolve() {
-    if (!glpk) { runGreedy(); return; }
-    try {
-      const model = JSON.parse(inputEl.value);
-      resolveBtn.disabled = true;
-      statusEl.innerHTML = '<span class="spinner"></span>Solving ILP (tmlim=15s)...';
-      statusEl.className = "";
-      await new Promise(r => setTimeout(r, 50));
-
-      const result = await solveILP(model, glpk, { tmlim: 15 });
-      currentModel = model;
-      currentResult = result;
-      renderAll();
-      statusEl.innerHTML = `<strong style="color:var(--green)">ILP solved in ${result.stats.runtime_ms}ms</strong> &mdash; ${result.stats.variables} vars, ${result.stats.binaries} bins`;
-      statusEl.className = "status-ok";
-      updateCompareBadge('ilp', result);
-    } catch (e) {
-      statusEl.textContent = "ILP failed: " + e.message + " \u2014 using greedy";
-      statusEl.className = "status-err";
-      runGreedy();
-    }
-    resolveBtn.disabled = false;
-  }
+  /* ── ILP disabled (Greedy only) ── */
 
   function renderAll() {
     if (!currentResult) return;
@@ -930,20 +878,7 @@
   // Init 3D
   try { init3D(); } catch(e) { console.warn('3D init error:', e); }
 
-  /* ── Load GLPK/WASM in background ─────────── */
-  (async () => {
-    try {
-      const GLPK = (await import('./vendor/glpk.js')).default;
-      glpk = await GLPK();
-      const ver = typeof glpk.version === 'function' ? glpk.version() : (glpk.version || '?');
-      badge.innerHTML = `&#9679; GLPK ${ver} + Greedy`;
-      resolveBtn.textContent = "Re-Solve (ILP)";
-      runILPSolve();  // Auto-solve with ILP once ready
-    } catch (e) {
-      console.warn('GLPK load failed (greedy works):', e);
-      resolveBtn.textContent = "Re-Solve (Greedy)";
-    }
-  })();
+  /* ── Greedy only (ILP disabled) ── */
   </script>
 </body>
 </html>
