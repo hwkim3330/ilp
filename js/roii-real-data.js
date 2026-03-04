@@ -103,16 +103,16 @@ export const ROII_REAL_STANDARD = {
       traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
     { id: "f_lidar_fr", priority: 7, payload_bytes: 1262, period_us: 536, deadline_us: 500,
       traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
-    // Radar (P6) — MRR-35: 256B (CAN-FD object list), 5000µs period → 1 pkt/cycle, Tx 2.352µs
-    { id: "f_radar_f",   priority: 6, payload_bytes: 256, period_us: 5000, deadline_us: 500,
+    // Radar (P6) — MRR-35: 64B (CAN-FD frame), 5000µs period → 1 pkt/cycle, Tx 0.816µs
+    { id: "f_radar_f",   priority: 6, payload_bytes: 64, period_us: 5000, deadline_us: 500,
       traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_flc", priority: 6, payload_bytes: 256, period_us: 5000, deadline_us: 500,
+    { id: "f_radar_flc", priority: 6, payload_bytes: 64, period_us: 5000, deadline_us: 500,
       traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_frc", priority: 6, payload_bytes: 256, period_us: 5000, deadline_us: 500,
+    { id: "f_radar_frc", priority: 6, payload_bytes: 64, period_us: 5000, deadline_us: 500,
       traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_rlc", priority: 6, payload_bytes: 256, period_us: 5000, deadline_us: 500,
+    { id: "f_radar_rlc", priority: 6, payload_bytes: 64, period_us: 5000, deadline_us: 500,
       traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
-    { id: "f_radar_rrc", priority: 6, payload_bytes: 256, period_us: 5000, deadline_us: 500,
+    { id: "f_radar_rrc", priority: 6, payload_bytes: 64, period_us: 5000, deadline_us: 500,
       traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
   ]
 };
@@ -179,17 +179,17 @@ export function realFlowColor(fid) {
 /* ── Scenario Descriptions ───────────────────── */
 export const ROII_REAL_STANDARD_SCENARIO = {
   title: "ROii Sensor Network \u2014 500\u00b5s Cycle (Greedy)",
-  description: "ROii shuttle sensor network. All links 1 Gbps. AutoL G32: 1248B, 167\u00b5s period (3 pkts/cycle, 10.288\u00b5s tx). Hesai 40P: 1262B, 536\u00b5s period (1 pkt/cycle, 10.400\u00b5s tx). MRR-35: 256B CAN-FD, 5000\u00b5s period (1 pkt/cycle, 2.352\u00b5s tx). <strong>9 flows, 13 pkts/cycle</strong>. LiDAR 8 pkts on gateway \u2248 16.5%.",
+  description: "ROii shuttle sensor network. All links 1 Gbps. AutoL G32: 1248B, 167\u00b5s period (3 pkts/cycle, 10.288\u00b5s tx). Hesai 40P: 1262B, 536\u00b5s period (1 pkt/cycle, 10.400\u00b5s tx). MRR-35: 64B CAN-FD, 5000\u00b5s period (1 pkt/cycle, 0.816\u00b5s tx). <strong>9 flows, 13 pkts/cycle</strong>. LiDAR 8 pkts on gateway \u2248 16.5%.",
   flows: [
     { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "1248B \u00d73pkts, P7, 167\u00b5s period (10.288\u00b5s tx)" },
     { name: "G32 Rear \u2192 ACU-IT",    color: "#10B981", desc: "1248B \u00d73pkts, P7, 167\u00b5s period (10.288\u00b5s tx)" },
     { name: "40P FL \u2192 ACU-IT",      color: "#0D9488", desc: "1262B \u00d71pkt, P7, 536\u00b5s period (10.400\u00b5s tx)" },
     { name: "40P FR \u2192 ACU-IT",      color: "#0D9488", desc: "1262B \u00d71pkt, P7, 536\u00b5s period (10.400\u00b5s tx)" },
-    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "256B \u00d71pkt, P6, 5000\u00b5s period (2.352\u00b5s tx)" },
-    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "256B \u00d71pkt, P6, 5000\u00b5s period (2.352\u00b5s tx)" },
-    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "256B \u00d71pkt, P6, 5000\u00b5s period (2.352\u00b5s tx)" },
-    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "256B \u00d71pkt, P6, 5000\u00b5s period (2.352\u00b5s tx)" },
-    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "256B \u00d71pkt, P6, 5000\u00b5s period (2.352\u00b5s tx)" }
+    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "64B \u00d71pkt, P6, 5000\u00b5s period (0.816\u00b5s tx)" },
+    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, P6, 5000\u00b5s period (0.816\u00b5s tx)" },
+    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, P6, 5000\u00b5s period (0.816\u00b5s tx)" },
+    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, P6, 5000\u00b5s period (0.816\u00b5s tx)" },
+    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, P6, 5000\u00b5s period (0.816\u00b5s tx)" }
   ],
   domains: [
     { name: "LiDAR G32 (1Gbps)",       color: "#10B981" },
