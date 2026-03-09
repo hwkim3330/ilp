@@ -117,6 +117,68 @@ export const ROII_REAL_STANDARD = {
   ]
 };
 
+/* ── 8-TC Dedicated PCP Model (500µs, 13 nodes, 9 flows, all 8 TCs used) ── */
+export const ROII_REAL_8TC = {
+  cycle_time_us: 500,
+  guard_band_us: 1,
+  processing_delay_us: 3,
+  no_be: true,
+  nodes: JSON.parse(JSON.stringify(NODES_STD)),
+  links: JSON.parse(JSON.stringify(LINKS_STD)),
+  flows: [
+    // LiDAR G32 — PCP 7 (TC7)
+    { id: "f_lidar_fc", priority: 7, payload_bytes: 1248, period_us: 167, deadline_us: 167,
+      traffic_type: "lidar", src: "LIDAR_FC", dst: "ACU_IT", k_paths: 2 },
+    // LiDAR G32 — PCP 6 (TC6)
+    { id: "f_lidar_r",  priority: 6, payload_bytes: 1248, period_us: 167, deadline_us: 167,
+      traffic_type: "lidar", src: "LIDAR_R",  dst: "ACU_IT", k_paths: 2 },
+    // LiDAR Pandar 40P — PCP 5 (TC5)
+    { id: "f_lidar_fl", priority: 5, payload_bytes: 1262, period_us: 536, deadline_us: 500,
+      traffic_type: "lidar", src: "LIDAR_FL", dst: "ACU_IT", k_paths: 2 },
+    // LiDAR Pandar 40P — PCP 4 (TC4)
+    { id: "f_lidar_fr", priority: 4, payload_bytes: 1262, period_us: 536, deadline_us: 500,
+      traffic_type: "lidar", src: "LIDAR_FR", dst: "ACU_IT", k_paths: 2 },
+    // Radar MRR-35 — PCP 3 (TC3)
+    { id: "f_radar_f",   priority: 3, payload_bytes: 64, period_us: 5000, deadline_us: 500,
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 2 },
+    // Radar MRR-35 — PCP 2 (TC2)
+    { id: "f_radar_flc", priority: 2, payload_bytes: 64, period_us: 5000, deadline_us: 500,
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 2 },
+    // Radar MRR-35 — PCP 1 (TC1)
+    { id: "f_radar_frc", priority: 1, payload_bytes: 64, period_us: 5000, deadline_us: 500,
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 2 },
+    // Radar MRR-35 — PCP 0 (TC0, shared: rlc + rrc)
+    { id: "f_radar_rlc", priority: 0, payload_bytes: 64, period_us: 5000, deadline_us: 500,
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 2 },
+    { id: "f_radar_rrc", priority: 0, payload_bytes: 64, period_us: 5000, deadline_us: 500,
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 2 }
+  ]
+};
+
+/* ── 8-TC Scenario Description ── */
+export const ROII_8TC_SCENARIO = {
+  title: "ROii 8-TC Dedicated PCP \u2014 No Best-Effort",
+  description: "All 8 TCs dedicated to sensor flows. <strong>No best-effort traffic allowed</strong>. Each LiDAR gets its own PCP (7\u20134), radars share remaining PCPs (3\u20130). Rear radars (RLC+RRC) share PCP 0. Same 500\u00b5s cycle, 13 nodes, 9 flows, 13 pkts/cycle. <strong>Gate schedule uses all 8 queues</strong>.",
+  flows: [
+    { name: "G32 FC \u2192 ACU-IT",      color: "#10B981", desc: "1248B \u00d73pkts, PCP 7 (TC7), 167\u00b5s period" },
+    { name: "G32 Rear \u2192 ACU-IT",    color: "#10B981", desc: "1248B \u00d73pkts, PCP 6 (TC6), 167\u00b5s period" },
+    { name: "40P FL \u2192 ACU-IT",      color: "#0D9488", desc: "1262B \u00d71pkt, PCP 5 (TC5), 536\u00b5s period" },
+    { name: "40P FR \u2192 ACU-IT",      color: "#0D9488", desc: "1262B \u00d71pkt, PCP 4 (TC4), 536\u00b5s period" },
+    { name: "MRR-35 F \u2192 ACU-IT",    color: "#952aff", desc: "64B \u00d71pkt, PCP 3 (TC3), 5000\u00b5s period" },
+    { name: "MRR-35 FLC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, PCP 2 (TC2), 5000\u00b5s period" },
+    { name: "MRR-35 FRC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, PCP 1 (TC1), 5000\u00b5s period" },
+    { name: "MRR-35 RLC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, PCP 0 (TC0), 5000\u00b5s period" },
+    { name: "MRR-35 RRC \u2192 ACU-IT",  color: "#952aff", desc: "64B \u00d71pkt, PCP 0 (TC0), 5000\u00b5s period" }
+  ],
+  domains: [
+    { name: "LiDAR G32 (TC7/TC6)",      color: "#10B981" },
+    { name: "LiDAR Pandar 40P (TC5/TC4)", color: "#0D9488" },
+    { name: "Radar MRR-35 (TC3\u2013TC0)", color: "#952aff" },
+    { name: "LAN9692 Backbone",          color: "#3B82F6" },
+    { name: "ACU-IT Processing",         color: "#dc2626" }
+  ]
+};
+
 /* ── Fixed Node Positions (vehicle top-down layout, 13 nodes) ── */
 export function getRealPositions(W, H) {
   return {

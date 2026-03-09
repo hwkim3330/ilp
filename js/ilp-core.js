@@ -129,22 +129,25 @@ function buildResult(model, pkts, schedHops, method, stats) {
   }
   pktRows.sort((a, b) => a.end_us - b.end_us);
 
+  const noBe = !!model.no_be;
   const gcl = { cycle_time_us: model.cycle_time_us, base_time_us: 0, links: {} };
   for (const lnk of model.links) {
     const rows = linkRows[lnk.id].slice().sort((a, b) => a.start_us - b.start_us);
     const entries = []; let cur = 0, idx = 0;
     for (const r of rows) {
-      if (r.start_us > cur) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
+      if (r.start_us > cur && !noBe) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'best-effort gap' });
+      else if (r.start_us > cur && noBe) entries.push({ index: idx++, gate_mask: '00000000', start_us: round3(cur), end_us: round3(r.start_us), duration_us: round3(r.start_us - cur), note: 'all-gates-closed gap' });
       entries.push({ index: idx++, gate_mask: r.type === 'guard' ? '00000000' : gateMask(r.priority), start_us: r.start_us, end_us: r.end_us, duration_us: r.duration_us, note: r.note });
       cur = Math.max(cur, r.end_us);
     }
-    if (cur < model.cycle_time_us) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
+    if (cur < model.cycle_time_us && !noBe) entries.push({ index: idx++, gate_mask: '00001111', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'best-effort remainder' });
+    else if (cur < model.cycle_time_us && noBe) entries.push({ index: idx++, gate_mask: '00000000', start_us: round3(cur), end_us: round3(model.cycle_time_us), duration_us: round3(model.cycle_time_us - cur), note: 'all-gates-closed remainder' });
     gcl.links[lnk.id] = { from: lnk.from, to: lnk.to, entries };
   }
 
   let worstUtil = 0;
   for (const lnk of model.links) {
-    let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort')) act += e.duration_us;
+    let act = 0; for (const e of gcl.links[lnk.id].entries) if (!e.note.includes('best-effort') && !e.note.includes('all-gates-closed')) act += e.duration_us;
     worstUtil = Math.max(worstUtil, act / model.cycle_time_us * 100);
   }
 
@@ -158,10 +161,50 @@ function buildResult(model, pkts, schedHops, method, stats) {
   }
   const outStats = { ...(stats || {}), overlap_conflicts: overlapConflicts };
 
+  // Generate per-switch board configs
+  const switchNodes = model.nodes.filter(n => n.type === 'switch').map(n => n.id);
+  let boardConfigs = null;
+  if (switchNodes.length > 0) {
+    boardConfigs = {};
+    for (const swId of switchNodes) {
+      const egressLinks = model.links.filter(l => l.from === swId);
+      const ports = {};
+      for (const el of egressLinks) {
+        const gclEntries = gcl.links[el.id]?.entries || [];
+        // Collect PCPs used on this port
+        const pcpsUsed = new Set();
+        for (const e of gclEntries) {
+          if (e.note && !e.note.includes('best-effort') && !e.note.includes('guard') && !e.note.includes('all-gates-closed')) {
+            // Extract priority from the flow entry
+            const matchedRow = linkRows[el.id]?.find(r => r.note === e.note && r.type === 'flow');
+            if (matchedRow) pcpsUsed.add(matchedRow.priority);
+          }
+        }
+        // Build TC→PCP mapping
+        const pcpToQueue = {};
+        for (const p of pcpsUsed) pcpToQueue[p] = p; // 1:1 PCP→TC mapping
+        ports[el.id] = {
+          to: el.to,
+          rate_mbps: el.rate_mbps,
+          entries: gclEntries,
+          pcps_used: [...pcpsUsed].sort((a, b) => b - a),
+          pcp_to_queue: pcpToQueue
+        };
+      }
+      boardConfigs[swId] = {
+        ports,
+        cycle_time_us: model.cycle_time_us,
+        guard_band_us: model.guard_band_us,
+        no_be: noBe
+      };
+    }
+  }
+
   return {
     method,
     objective: round3(pktRows.filter(p => p.status !== 'BE').reduce((a, p) => a + p.e2e_delay_us, 0)),
-    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl, stats: outStats
+    worst_util_percent: round3(worstUtil), packetRows: pktRows, gcl, stats: outStats,
+    boardConfigs
   };
 }
 

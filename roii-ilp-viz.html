@@ -176,6 +176,61 @@
     /* ── Done Animation ─────────────────────────── */
     @keyframes statPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
     .stat-item.done { animation: statPulse 0.5s ease-in-out 2; }
+
+    /* ── Board Configuration ────────────────────── */
+    .board-section {
+      margin-bottom: 20px; padding: 16px; border-radius: 10px;
+      background: rgba(248,250,252,0.8); border: 1px solid rgba(59,130,246,0.12);
+    }
+    .board-section-title {
+      font-size: 1rem; font-weight: 700; color: var(--blue);
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 2px solid rgba(59,130,246,0.15);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .board-section-title .sw-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .board-port {
+      margin-bottom: 14px; padding: 10px 14px; border-radius: 8px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.08);
+    }
+    .board-port-header {
+      font-size: 0.85rem; font-weight: 600; color: var(--text2);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .board-port-header .rate-badge {
+      font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
+      background: rgba(59,130,246,0.08); color: var(--blue); font-weight: 600;
+    }
+    .gcl-table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+    }
+    .gcl-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
+    }
+    .gcl-table td {
+      padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.04);
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+    }
+    .gcl-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .gate-bits { display: inline-flex; gap: 1px; }
+    .gate-bit {
+      display: inline-block; width: 10px; height: 14px; border-radius: 2px;
+      font-size: 7px; text-align: center; line-height: 14px; font-weight: 700;
+    }
+    .gate-bit.open { background: rgba(5,150,105,0.2); color: var(--green); }
+    .gate-bit.closed { background: rgba(0,0,0,0.06); color: var(--text3); }
+    .pcp-map {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+      font-size: 0.72rem; color: var(--text2);
+    }
+    .pcp-tag {
+      padding: 2px 8px; border-radius: 4px; font-weight: 600;
+      background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.12);
+    }
+    .board-summary {
+      font-size: 0.75rem; color: var(--text3); margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -215,6 +270,7 @@
           <option value="standard">Standard (13N, 9F)</option>
           <option value="reconf" selected>Reconf (14N, 11F)</option>
           <option value="optimal">Optimal Tri-Star</option>
+          <option value="tc8">8-TC Dedicated (13N, 9F)</option>
         </select>
         <div id="status" style="font-size:0.88rem;font-weight:600;color:var(--text3);margin-left:auto;"></div>
         <a href="index.html" class="btn btn-secondary" style="font-size:0.82rem;">Home</a>
@@ -262,6 +318,12 @@
     </div>
     <div id="switchGclArea" class="gcl-switch-grid"></div>
 
+    <!-- Board Configuration (per-switch GCL for LAN9662) -->
+    <div class="card" id="boardConfigCard" style="display:none;">
+      <div class="card-title">Board Configuration (LAN9662 GCL)</div>
+      <div id="boardConfigPanel"></div>
+    </div>
+
     <div class="two-col">
       <div class="card">
         <div class="card-title">Packet E2E Delay</div>
@@ -296,7 +358,7 @@
     renderUtilization, renderTable, renderSwitchGCL
   } from './js/ilp-core.js';
   import {
-    ROII_REAL_STANDARD, ROII_REAL_RECONF, ROII_OPTIMAL,
+    ROII_REAL_STANDARD, ROII_REAL_RECONF, ROII_OPTIMAL, ROII_REAL_8TC,
     getRealPositions, getReconfPositions, getOptimalPositions,
     ROII_REAL_NODE_COLORS, ROII_RECONF_NODE_COLORS, ROII_OPTIMAL_NODE_COLORS,
     ROII_REAL_3D_POSITIONS, ROII_REAL_3D_POSITIONS_RECONF, ROII_OPTIMAL_3D_POSITIONS,
@@ -317,6 +379,8 @@
                 pos3d: ROII_REAL_3D_POSITIONS_RECONF, labels3d: ROII_REAL_3D_LABELS_RECONF, tilts3d: ROII_REAL_3D_TILTS },
     optimal:  { data: ROII_OPTIMAL, pos: getOptimalPositions, colors: ROII_OPTIMAL_NODE_COLORS,
                 pos3d: ROII_OPTIMAL_3D_POSITIONS, labels3d: ROII_OPTIMAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
+    tc8:      { data: ROII_REAL_8TC, pos: getRealPositions, colors: ROII_REAL_NODE_COLORS,
+                pos3d: ROII_REAL_3D_POSITIONS, labels3d: ROII_REAL_3D_LABELS, tilts3d: ROII_REAL_3D_TILTS },
   };
 
   /* ═══════════════════════════════════════
@@ -512,6 +576,87 @@
   }
 
   /* ═══════════════════════════════════════
+     BOARD CONFIG RENDERER
+     ═══════════════════════════════════════ */
+  function renderBoardConfig(boardConfigs) {
+    const card = document.getElementById('boardConfigCard');
+    const panel = document.getElementById('boardConfigPanel');
+    if (!card || !panel) return;
+    if (!boardConfigs) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    panel.innerHTML = '';
+
+    const switchColors = { SW_FL: '#3B82F6', SW_FR: '#3B82F6', SW_REAR: '#06B6D4' };
+    const switchLabels = { SW_FL: 'Front-Left ZC (LAN9692)', SW_FR: 'Front-Right ZC (LAN9692)', SW_REAR: 'Rear Gateway (LAN9692)' };
+
+    for (const [swId, swCfg] of Object.entries(boardConfigs)) {
+      const sec = document.createElement('div');
+      sec.className = 'board-section';
+
+      const color = switchColors[swId] || '#3B82F6';
+      sec.innerHTML = `<div class="board-section-title">
+        <div class="sw-dot" style="background:${color}"></div>
+        ${switchLabels[swId] || swId}
+        <span style="font-size:0.72rem;color:var(--text3);font-weight:400;margin-left:auto;">
+          Cycle: ${swCfg.cycle_time_us} \u00b5s | Guard: ${swCfg.guard_band_us} \u00b5s${swCfg.no_be ? ' | No BE' : ''}
+        </span>
+      </div>`;
+
+      for (const [linkId, portCfg] of Object.entries(swCfg.ports)) {
+        const portDiv = document.createElement('div');
+        portDiv.className = 'board-port';
+
+        // Port header
+        let portHdr = `<div class="board-port-header">
+          Egress: ${swId} \u2192 ${portCfg.to}
+          <span class="rate-badge">${portCfg.rate_mbps} Mbps</span>
+          <span class="board-summary">${portCfg.entries.length} GCL entries</span>
+        </div>`;
+
+        // GCL table
+        let tableHtml = `<table class="gcl-table">
+          <thead><tr><th>#</th><th>Gate Mask</th><th>Start (\u00b5s)</th><th>End (\u00b5s)</th><th>Duration (\u00b5s)</th><th>Note</th></tr></thead><tbody>`;
+
+        for (const e of portCfg.entries) {
+          const bits = e.gate_mask.split('').map((b, i) => {
+            const tc = 7 - i;
+            const cls = b === '1' ? 'open' : 'closed';
+            return `<span class="gate-bit ${cls}" title="TC${tc}">${b}</span>`;
+          }).join('');
+
+          let noteClass = '';
+          if (e.note.includes('guard')) noteClass = 'style="color:var(--orange)"';
+          else if (e.note.includes('all-gates-closed') || e.note.includes('best-effort')) noteClass = 'style="color:var(--text3)"';
+
+          tableHtml += `<tr>
+            <td>${e.index}</td>
+            <td><span class="gate-bits">${bits}</span></td>
+            <td>${e.start_us.toFixed(3)}</td>
+            <td>${e.end_us.toFixed(3)}</td>
+            <td>${e.duration_us.toFixed(3)}</td>
+            <td ${noteClass}>${e.note}</td>
+          </tr>`;
+        }
+        tableHtml += '</tbody></table>';
+
+        // PCP mapping
+        let pcpHtml = '';
+        if (portCfg.pcps_used.length > 0) {
+          pcpHtml = '<div class="pcp-map">';
+          for (const p of portCfg.pcps_used) {
+            pcpHtml += `<span class="pcp-tag">PCP ${p} \u2192 TC${portCfg.pcp_to_queue[p]}</span>`;
+          }
+          pcpHtml += '</div>';
+        }
+
+        portDiv.innerHTML = portHdr + tableHtml + pcpHtml;
+        sec.appendChild(portDiv);
+      }
+      panel.appendChild(sec);
+    }
+  }
+
+  /* ═══════════════════════════════════════
      ANIMATION CONTROLLER
      ═══════════════════════════════════════ */
   let ctrl = null;
@@ -546,6 +691,7 @@
       renderMetrics(stdModel, stdResult);
       renderTopology(stdModel, stdResult, { nodePositions: cfg.pos(W, 520), nodeColors: cfg.colors, height: 520 });
       renderSwitchGCL(stdModel, stdResult, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
+      renderBoardConfig(stdResult.boardConfigs);
       renderDelayChart(stdModel, stdResult, fcopts);
       renderUtilization(stdModel, stdResult, { beColor: '#e2e8f0' });
       renderTable(stdResult, fcopts);
