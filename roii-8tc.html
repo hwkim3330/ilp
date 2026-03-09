@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROii 8-TC Dedicated PCP &mdash; Board GCL Config</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme Override
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(59,130,246,0.2); --border-hi: rgba(59,130,246,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #3B82F6; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #3B82F6; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(59,130,246,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(59,130,246,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner { border-color: rgba(59,130,246,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(59,130,246,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(59,130,246,0.08); }
+    .pkt-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .topo-link { stroke: rgba(59,130,246,0.25); }
+    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag { border: 1px solid rgba(59,130,246,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(59,130,246,0.15); color: var(--text2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px; background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(59,130,246,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
+    }
+    #canvas3d { width: 100%; height: 500px; display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 0.72rem; color: var(--text3);
+      background: rgba(255,255,255,0.85); padding: 4px 10px;
+      border-radius: 8px; backdrop-filter: blur(10px);
+      border: 1px solid rgba(59,130,246,0.1);
+    }
+
+    /* ── PCP Assignment Table ──────────────────── */
+    .pcp-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 10px; }
+    .pcp-table th { text-align: left; padding: 6px 10px; color: var(--text3); font-weight: 600; border-bottom: 2px solid rgba(59,130,246,0.2); }
+    .pcp-table td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .pcp-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .pcp-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 4px; font-weight: 700;
+      font-size: 0.78rem; font-family: 'Courier New', monospace;
+    }
+    .pcp-badge.hi { background: rgba(16,185,129,0.12); color: #10B981; }
+    .pcp-badge.mid { background: rgba(13,148,136,0.12); color: #0D9488; }
+    .pcp-badge.lo { background: rgba(149,42,255,0.12); color: #952aff; }
+
+    /* ── Per-Switch GCL Cards ──────────────────── */
+    .gcl-switch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(59,130,246,0.15);
+      border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 600; }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Board Configuration ────────────────────── */
+    .board-section {
+      margin-bottom: 20px; padding: 16px; border-radius: 10px;
+      background: rgba(248,250,252,0.8); border: 1px solid rgba(59,130,246,0.12);
+    }
+    .board-section-title {
+      font-size: 1rem; font-weight: 700; color: var(--blue);
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 2px solid rgba(59,130,246,0.15);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .board-section-title .sw-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .board-port {
+      margin-bottom: 14px; padding: 10px 14px; border-radius: 8px;
+      background: #fff; border: 1px solid rgba(59,130,246,0.08);
+    }
+    .board-port-header {
+      font-size: 0.85rem; font-weight: 600; color: var(--text2);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .board-port-header .rate-badge {
+      font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
+      background: rgba(59,130,246,0.08); color: var(--blue); font-weight: 600;
+    }
+    .gcl-board-table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+    }
+    .gcl-board-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600;
+    }
+    .gcl-board-table td {
+      padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.04);
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+    }
+    .gcl-board-table tr:hover td { background: rgba(59,130,246,0.03); }
+    .gate-bits { display: inline-flex; gap: 1px; }
+    .gate-bit {
+      display: inline-block; width: 10px; height: 14px; border-radius: 2px;
+      font-size: 7px; text-align: center; line-height: 14px; font-weight: 700;
+    }
+    .gate-bit.open { background: rgba(5,150,105,0.2); color: var(--green); }
+    .gate-bit.closed { background: rgba(0,0,0,0.06); color: var(--text3); }
+    .pcp-map {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+      font-size: 0.72rem; color: var(--text2);
+    }
+    .pcp-tag {
+      padding: 2px 8px; border-radius: 4px; font-weight: 600;
+      background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.12);
+    }
+    .board-summary { font-size: 0.75rem; color: var(--text3); margin-top: 4px; }
+
+    /* ── GCL entry table (existing switch cards) ── */
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th { text-align: left; padding: 4px 8px; color: var(--text3); border-bottom: 1px solid rgba(59,130,246,0.15); font-weight: 600; }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
+    .gate-mask { font-family: 'Courier New', monospace; font-size: 0.75rem; letter-spacing: 1px; font-weight: 700; }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>ROii 8-TC Dedicated PCP</h1>
+        <span class="engine-badge ready" id="engineBadge">&#9679; Greedy Scheduler</span>
+      </div>
+      <div class="sub">All 8 TCs dedicated to sensor flows &mdash; No Best-Effort &mdash; Per-Board GCL Configuration</div>
+    </div>
+
+    <!-- 3D Shuttle -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
+    </div>
+
+    <!-- Scenario Description -->
+    <div class="auto-desc" id="scenarioDesc"></div>
+    <div class="auto-domain-legend" id="domainLegend"></div>
+
+    <!-- PCP Assignment Table -->
+    <div class="card">
+      <div class="card-title">PCP &rarr; TC Assignment (8-TC Dedicated)</div>
+      <table class="pcp-table">
+        <thead><tr>
+          <th>PCP</th><th>TC</th><th>Flow</th><th>Type</th><th>Payload</th><th>Period</th><th>Tx Time</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="pcp-badge hi">7</span></td><td>TC7</td><td>f_lidar_fc</td><td><span style="color:#10B981">LiDAR G32</span></td><td>1248 B</td><td>167 &micro;s</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge hi">6</span></td><td>TC6</td><td>f_lidar_r</td><td><span style="color:#10B981">LiDAR G32</span></td><td>1248 B</td><td>167 &micro;s</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge mid">5</span></td><td>TC5</td><td>f_lidar_fl</td><td><span style="color:#0D9488">LiDAR P40P</span></td><td>1262 B</td><td>536 &micro;s</td><td>10.400 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge mid">4</span></td><td>TC4</td><td>f_lidar_fr</td><td><span style="color:#0D9488">LiDAR P40P</span></td><td>1262 B</td><td>536 &micro;s</td><td>10.400 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge lo">3</span></td><td>TC3</td><td>f_radar_f</td><td><span style="color:#952aff">Radar MRR</span></td><td>64 B</td><td>5000 &micro;s</td><td>0.816 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge lo">2</span></td><td>TC2</td><td>f_radar_flc</td><td><span style="color:#952aff">Radar MRR</span></td><td>64 B</td><td>5000 &micro;s</td><td>0.816 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge lo">1</span></td><td>TC1</td><td>f_radar_frc</td><td><span style="color:#952aff">Radar MRR</span></td><td>64 B</td><td>5000 &micro;s</td><td>0.816 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge lo">0</span></td><td>TC0</td><td>f_radar_rlc + f_radar_rrc</td><td><span style="color:#952aff">Radar MRR &times;2</span></td><td>64 B ea</td><td>5000 &micro;s</td><td>0.816 &micro;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Network Topology -->
+    <div class="card">
+      <div class="card-title">Network Topology &mdash; All 1 Gbps Links</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:520px;"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics" id="metricsArea"></div>
+
+    <!-- Per-Switch GCL (existing renderer) -->
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <!-- Board Configuration (LAN9662) -->
+    <div class="card" id="boardConfigCard">
+      <div class="card-title">Board Configuration (LAN9662 GCL)</div>
+      <div id="boardConfigPanel"></div>
+    </div>
+
+    <!-- GCL Gantt -->
+    <div class="card">
+      <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
+      <div class="legend" id="gclLegend"></div>
+      <div class="svg-container" id="gclContainer"></div>
+    </div>
+
+    <!-- Delay + Utilization -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="resolveBtn">Re-Solve (Greedy)</button>
+        <div id="status" style="font-size:0.82rem;"></div>
+        <a href="roii-real.html" class="btn btn-secondary" style="font-size:0.78rem;">Standard Model</a>
+        <a href="index.html" class="btn btn-secondary" style="margin-left:auto;font-size:0.78rem;">Home</a>
+      </div>
+    </div>
+
+    <!-- Raw GCL JSON -->
+    <div class="card">
+      <div class="card-title collapsible" id="gclJsonToggle">
+        <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
+      </div>
+      <div class="collapse-body">
+        <pre id="jsonOut">-</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import {
+    initTooltip, solveGreedy, renderMetrics, renderTopology,
+    renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
+  } from './js/ilp-core.js';
+  import {
+    ROII_REAL_8TC, ROII_8TC_SCENARIO,
+    getRealPositions, ROII_REAL_NODE_COLORS, ROII_REAL_SWITCHES,
+    realFlowColor, realGetDeviceType,
+    ROII_REAL_3D_POSITIONS, ROII_REAL_3D_TILTS, ROII_REAL_3D_LABELS
+  } from './js/roii-real-data.js';
+
+  const fcopts = { flowColorFn: realFlowColor, beColor: '#e2e8f0', beBorder: 'rgba(59,130,246,0.15)' };
+  const deep = o => JSON.parse(JSON.stringify(o));
+
+  /* ── State ── */
+  let currentModel = null;
+  let currentResult = null;
+
+  /* ── Init ── */
+  initTooltip();
+
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+
+  const statusEl = document.getElementById("status");
+
+  /* ── Scenario Description ── */
+  function renderScenarioDesc() {
+    const sc = ROII_8TC_SCENARIO;
+    document.getElementById("scenarioDesc").innerHTML = `
+      <h3>${sc.title}</h3>
+      <p>${sc.description}</p>
+      <ul class="auto-flow-list">
+        ${sc.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+      </ul>
+    `;
+    document.getElementById("domainLegend").innerHTML = sc.domains.map(d =>
+      `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+    ).join("");
+  }
+
+  /* ── Board Config Renderer ── */
+  function renderBoardConfig(boardConfigs) {
+    const panel = document.getElementById('boardConfigPanel');
+    if (!panel || !boardConfigs) return;
+    panel.innerHTML = '';
+
+    const switchColors = { SW_FL: '#3B82F6', SW_FR: '#3B82F6', SW_REAR: '#06B6D4' };
+    const switchLabels = { SW_FL: 'Front-Left ZC (LAN9692)', SW_FR: 'Front-Right ZC (LAN9692)', SW_REAR: 'Rear Gateway (LAN9692)' };
+
+    for (const [swId, swCfg] of Object.entries(boardConfigs)) {
+      const sec = document.createElement('div');
+      sec.className = 'board-section';
+      const color = switchColors[swId] || '#3B82F6';
+      sec.innerHTML = `<div class="board-section-title">
+        <div class="sw-dot" style="background:${color}"></div>
+        ${switchLabels[swId] || swId}
+        <span style="font-size:0.72rem;color:var(--text3);font-weight:400;margin-left:auto;">
+          Cycle: ${swCfg.cycle_time_us} \u00b5s | Guard: ${swCfg.guard_band_us} \u00b5s${swCfg.no_be ? ' | No BE' : ''}
+        </span>
+      </div>`;
+
+      for (const [linkId, portCfg] of Object.entries(swCfg.ports)) {
+        const portDiv = document.createElement('div');
+        portDiv.className = 'board-port';
+
+        let portHdr = `<div class="board-port-header">
+          Egress: ${swId} \u2192 ${portCfg.to}
+          <span class="rate-badge">${portCfg.rate_mbps} Mbps</span>
+          <span class="board-summary">${portCfg.entries.length} GCL entries</span>
+        </div>`;
+
+        let tableHtml = `<table class="gcl-board-table">
+          <thead><tr><th>#</th><th>Gate Mask</th><th>Start (\u00b5s)</th><th>End (\u00b5s)</th><th>Duration (\u00b5s)</th><th>Note</th></tr></thead><tbody>`;
+
+        for (const e of portCfg.entries) {
+          const bits = e.gate_mask.split('').map((b, i) => {
+            const tc = 7 - i;
+            const cls = b === '1' ? 'open' : 'closed';
+            return `<span class="gate-bit ${cls}" title="TC${tc}">${b}</span>`;
+          }).join('');
+
+          let noteStyle = '';
+          if (e.note.includes('guard')) noteStyle = 'style="color:var(--orange)"';
+          else if (e.note.includes('all-gates-closed') || e.note.includes('best-effort')) noteStyle = 'style="color:var(--text3)"';
+
+          tableHtml += `<tr>
+            <td>${e.index}</td>
+            <td><span class="gate-bits">${bits}</span></td>
+            <td>${e.start_us.toFixed(3)}</td>
+            <td>${e.end_us.toFixed(3)}</td>
+            <td>${e.duration_us.toFixed(3)}</td>
+            <td ${noteStyle}>${e.note}</td>
+          </tr>`;
+        }
+        tableHtml += '</tbody></table>';
+
+        let pcpHtml = '';
+        if (portCfg.pcps_used.length > 0) {
+          pcpHtml = '<div class="pcp-map">';
+          for (const p of portCfg.pcps_used) {
+            pcpHtml += `<span class="pcp-tag">PCP ${p} \u2192 TC${portCfg.pcp_to_queue[p]}</span>`;
+          }
+          pcpHtml += '</div>';
+        }
+
+        portDiv.innerHTML = portHdr + tableHtml + pcpHtml;
+        sec.appendChild(portDiv);
+      }
+      panel.appendChild(sec);
+    }
+  }
+
+  /* ── Solve & Render ── */
+  function runGreedy() {
+    try {
+      const model = deep(ROII_REAL_8TC);
+      const t0 = performance.now();
+      const result = solveGreedy(model);
+      const wallMs = Math.round(performance.now() - t0);
+      currentModel = model;
+      currentResult = result;
+
+      const W = document.getElementById("topoContainer").clientWidth;
+      renderMetrics(model, result);
+      renderTopology(model, result, {
+        nodePositions: getRealPositions(W, 520),
+        nodeColors: ROII_REAL_NODE_COLORS,
+        height: 520
+      });
+      renderSwitchGCL(model, result, { switches: ROII_REAL_SWITCHES, flowColorFn: realFlowColor });
+      renderBoardConfig(result.boardConfigs);
+      renderGCL(model, result, fcopts);
+      renderDelayChart(model, result, fcopts);
+      renderUtilization(model, result, { beColor: '#e2e8f0' });
+      renderTable(result, fcopts);
+      document.getElementById("jsonOut").textContent = JSON.stringify(result.gcl, null, 2);
+
+      statusEl.innerHTML = `<strong style="color:var(--green)">Greedy solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets, ${result.method}`;
+      statusEl.className = "status-ok";
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "status-err";
+      console.error(e);
+    }
+  }
+
+  document.getElementById("resolveBtn").addEventListener("click", runGreedy);
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(runGreedy, 300);
+  });
+
+  /* ═══════════════════════════════════════════════
+     3D Shuttle Visualization
+     ═══════════════════════════════════════════════ */
+  const TMPL = {
+    lidar_g32:    { w:1, h:1, d:1, color:0x10B981 },
+    lidar_pandar: { w:1, h:1, d:1, color:0x0D9488 },
+    radar:        { w:1, h:1, d:1, color:0x952aff },
+    switch_f:     { w:4, h:2, d:4, color:0x3B82F6 },
+    switch_r:     { w:4, h:2, d:4, color:0x06B6D4 },
+    ecu:          { w:4, h:2, d:4, color:0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = realGetDeviceType(nodeId), t = TMPL[type] || TMPL.ecu;
+    const group = new THREE.Group(); let geo;
+    if (type === 'lidar_g32') geo = new THREE.BoxGeometry(t.w,t.h,t.d);
+    else if (type === 'lidar_pandar') geo = new THREE.CylinderGeometry(t.w*0.6,t.w*0.6,t.h*0.8,16);
+    else geo = new THREE.BoxGeometry(t.w,t.h,t.d);
+    const mat = new THREE.MeshPhongMaterial({ color:t.color, emissive:t.color, emissiveIntensity:0.5, specular:0x888888, shininess:30 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow=true; mesh.receiveShadow=true; group.add(mesh);
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({color:0xffffff,linewidth:5})));
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    canvas.width=512; canvas.height=128;
+    ctx.fillStyle='rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle='#FFF'; ctx.font='bold 48px Arial'; ctx.textAlign='center'; ctx.fillText(label,256,75);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas)}));
+    const ls = Math.max(t.w,t.d)*1.2; sprite.scale.set(ls,ls*0.25,1); sprite.position.y=t.h+1; group.add(sprite);
+    group.position.copy(position);
+    if (tilt) { if(tilt.x!==undefined)group.rotation.x=tilt.x; if(tilt.y!==undefined)group.rotation.y=tilt.y; }
+    return { mesh, group };
+  }
+
+  let renderer3d = null;
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60,1,0.1,1000);
+    camera.position.set(50,35,70);
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = new THREE.WebGLRenderer({antialias:true});
+    renderer3d.shadowMap.enabled=true; renderer3d.shadowMap.type=THREE.PCFSoftShadowMap;
+    function updateSize(){ const w=container.clientWidth,h=container.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer3d.setSize(w,h); }
+    updateSize(); container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+    const controls = new THREE.OrbitControls(camera, renderer3d.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05; controls.autoRotate=true; controls.autoRotateSpeed=1.2;
+    controls.minDistance=20; controls.maxDistance=120; controls.target.set(0,0,0);
+
+    scene.add(new THREE.AmbientLight(0xffffff,1.2));
+    const ml=new THREE.DirectionalLight(0xffffff,1.5); ml.position.set(30,50,30);
+    ml.castShadow=true; ml.shadow.mapSize.set(2048,2048);
+    ml.shadow.camera.near=0.5; ml.shadow.camera.far=200;
+    ml.shadow.camera.left=-60; ml.shadow.camera.right=60; ml.shadow.camera.top=60; ml.shadow.camera.bottom=-60;
+    scene.add(ml);
+    scene.add(new THREE.DirectionalLight(0xffffff,1.0)).position.set(0,50,0);
+    scene.add(new THREE.PointLight(0x3B82F6,2,100)).position.set(20,15,20);
+    scene.add(new THREE.PointLight(0x06B6D4,1.5,80)).position.set(-20,15,-20);
+    const grid=new THREE.GridHelper(100,50,0x3B82F6,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
+    const plane=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m=gltf.scene, box=new THREE.Box3().setFromObject(m), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+      const s=40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c=>{ if(!c.isMesh)return; [].concat(c.material).forEach(mt=>{mt.transparent=true;mt.opacity=0.3;mt.side=THREE.DoubleSide;mt.depthWrite=true;if(mt.color)mt.color.multiplyScalar(1.5);mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff);mt.emissiveIntensity=0.4;}); c.castShadow=true;c.receiveShadow=true;});
+      scene.add(m);
+    }, undefined, err => console.warn('GLB:', err));
+
+    const pos3d = ROII_REAL_3D_POSITIONS;
+    const labels3d = ROII_REAL_3D_LABELS;
+    const tilts3d = ROII_REAL_3D_TILTS;
+    const modelData = ROII_REAL_8TC;
+    const nodeMeshes = {};
+
+    for (const [id, pos] of Object.entries(pos3d)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, labels3d[id]||id, tilts3d[id]||null);
+      scene.add(dev.group); nodeMeshes[id]=dev.mesh;
+    }
+    const drawn = new Set();
+    for (const link of modelData.links) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1=pos3d[link.from], p2=pos3d[link.to]; if(!p1||!p2) continue;
+      const v1=new THREE.Vector3(p1.x,p1.y,p1.z), v2=new THREE.Vector3(p2.x,p2.y,p2.z);
+      const curve=new THREE.CatmullRomCurve3([v1,v2]);
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x3B82F6,emissive:0x3B82F6,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x3B82F6,transparent:true,opacity:0.35})));
+    }
+    const clock = new THREE.Clock();
+    (function animate(){ requestAnimationFrame(animate); controls.update();
+      const pulse=Math.sin(clock.elapsedTime*2.5)*0.06;
+      for(const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      renderer3d.render(scene,camera);
+    })();
+  }
+
+  /* ── Boot ── */
+  renderScenarioDesc();
+  runGreedy();
+  try { init3D(); } catch(e) { console.warn('3D:', e); }
+  </script>
+</body>
+</html>
