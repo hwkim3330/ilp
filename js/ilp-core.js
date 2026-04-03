@@ -226,10 +226,11 @@ export function solveGreedy(model) {
     const occ = linkOcc[lid];
     let t = earliest;
     const total = duration + guard;
+    const margin = model.tx_margin_us || 0;
     while (true) {
       let moved = false;
       for (const [s, e] of occ) {
-        if (t < e && t + total > s) { t = e; moved = true; break; }
+        if (t < e + margin && t + total + margin > s) { t = e + margin; moved = true; break; }
       }
       if (!moved) return t;
     }
